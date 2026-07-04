@@ -84,12 +84,13 @@ docker run --rm --env-file .env -v "$(pwd)/logs:/app/logs" hybrid-router-agent
    `main.py` — nothing else should need to change.
 3. **Calibrate the threshold** (the highest-leverage hour of the day): run
    the revealed sample tasks at several thresholds
-   (`--threshold 0.4 / 0.55 / 0.7`), then analyze `logs/usage.jsonl` — each
-   line carries `run_id`, `threshold`, and `confidence`, so you can group by
-   sweep, see which tasks flip at a candidate threshold, and compute the
-   savings of LOWERING it (remote costs of flipped tasks are already logged;
-   raising it needs a rerun). Pick the LOWEST threshold that clears the
-   accuracy bar.
+   (`--threshold 0.4 / 0.55 / 0.7`), then run `python3 scripts/calibrate.py`
+   — it groups `logs/usage.jsonl` by run, tabulates billable tokens vs
+   threshold, and (given `--accuracy grades.json`, a `{task_id: true/false}`
+   file, plus `--min-accuracy`) recommends the LOWEST threshold that clears
+   the accuracy bar. It also replays what LOWERING each threshold would have
+   saved (remote costs of flipped tasks are already logged; raising needs a
+   rerun). Grading answers is task-set-specific and stays manual.
 4. **Add task-specific signals**: extend `_SIGNAL_PATTERNS` in
    `confidence.py`; if tasks carry categories, fill in
    `FORCE_ROUTE_BY_CATEGORY` in `router.py`.

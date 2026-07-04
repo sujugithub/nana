@@ -49,10 +49,20 @@ class Settings:
     local_max_new_tokens: int = 512
 
     # ── Remote model (Fireworks AI) ──────────────────────────────────────
-    remote_model_name: str = "accounts/fireworks/models/llama-v3p3-70b-instruct"
+    # llama-v3p3-70b-instruct (the original placeholder) was retired from
+    # Fireworks serverless — the API 404s on it (verified live 2026-07-04).
+    # deepseek-v4-pro won the available-models bake-off: flagship accuracy
+    # and the FEWEST completion tokens on a trivial prompt (41 vs 48–85 for
+    # gpt-oss-120b / glm-5p1 / glm-5p2 / kimi-k2p6 — every serverless chat
+    # model now bills hidden reasoning tokens into completion usage).
+    remote_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
     fireworks_api_key: str = ""  # set FIREWORKS_API_KEY; never commit a key
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
-    remote_max_tokens: int = 1024
+    # 4096, not 1024: reasoning models spend completion budget on thinking
+    # first — at 1024 the hard sample task came back truncated mid-thought
+    # (billed but useless). Truncation fails accuracy; the router already
+    # sends only hard tasks remote, so the bigger cap only pays when needed.
+    remote_max_tokens: int = 4096
     connect_timeout_s: float = 10.0  # slow handshakes fail fast; safe to retry
     # READ timeout — must cover a full remote generation at remote_max_tokens.
     # Read timeouts are NOT retried (the server may have billed the tokens).

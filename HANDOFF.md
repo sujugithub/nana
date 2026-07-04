@@ -2,9 +2,11 @@
 
 > Paste this file (or point the session at it) when continuing work in a new
 > Claude session. It contains everything needed to take over with zero prior
-> context. **The SCAFFOLD is complete and passes mock tests — don't
-> re-scaffold or restructure it. But the real routing has NEVER run — see
-> §3. Your job is to make it actually work, then tune it.**
+> context. **The SCAFFOLD is complete — don't re-scaffold or restructure it.
+> UPDATE 2026-07-04: the real paths are now PROVEN — real local generation,
+> real Fireworks calls, and the Docker container have all run successfully
+> (see §3). Remaining work: AMD-GPU/ROCm live test + everything blocked on
+> the kickoff reveal (~7 July).**
 
 ## 1. Mission and scoring rules
 
@@ -24,7 +26,10 @@
 
 ## 2. Project location and layout
 
-Project root: `~/Desktop/competition` (flat Python modules, no package).
+Project root: the repo checkout (flat Python modules, no package). On the
+current dev Mac: `~/Desktop/hack/demo`, with deps installed in `.venv/`
+(Python 3.9 — use `.venv/bin/python` for real runs; bare `python3` suffices
+for mock/tests).
 
 | File | Role |
 | --- | --- |
@@ -37,6 +42,7 @@ Project root: `~/Desktop/competition` (flat Python modules, no package).
 | `config.py` | Every knob, env-overridable. The one file to touch on kickoff day. |
 | `schemas.py` | Shared `Task` / `Completion` dataclasses. |
 | `test_harness.py` | Offline end-to-end wiring test. Mock mode, stdlib only, pins its own env. |
+| `scripts/calibrate.py` | Threshold-calibration analysis: groups `logs/usage.jsonl` by run, tabulates billable tokens vs threshold, recommends the lowest threshold clearing an accuracy bar. Stdlib only. |
 | `tasks/sample_tasks.json` | 3 dummy tasks (trivial→local, moderate, complex→remote). |
 | `Dockerfile` / `Makefile` / `.env.example` / `README.md` | Packaging + docs. |
 
@@ -54,89 +60,96 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
 
 ## 3. Current state — READ THIS CAREFULLY
 
-**"Passes tests" here means passes MOCK tests only. Mock mode is a stub** —
-`local_model.py` / `remote_client.py` return hardcoded strings like
-`f"[mock-local] concise answer to: {prompt[:60]}"`. They do NOT load a model
-or call an API. So the green test proves the *plumbing* (decide → route →
-log) connects — and nothing about the part that actually scores points.
+### VERIFIED (safe to rely on) — updated 2026-07-04
+- All modules compile; `python3 test_harness.py` passes offline, zero deps.
+- **Real local model runs** (issue #1 done): Qwen2.5-1.5B generates coherent
+  answers with correct tokenizer counts on the dev Mac — mps: 6.8s load /
+  ~3.7 GB peak; forced-cpu (fp32 guard, no Half crash): 9.5s / ~6.4 GB.
+  Both the chat-template branch (Qwen) and the plain branch (gpt2) work.
+- **Real Fireworks calls work** (issue #2 done): real answers + real `usage`
+  token counts, in a full default-threshold run (easy→local free,
+  hard→remote billed). Error paths proven live: bad key → one clean
+  RemoteError line + local fallback, run continues.
+  - **The original placeholder remote model is RETIRED**: Fireworks 404s on
+    `llama-v3p3-70b-instruct`. Default is now `deepseek-v4-pro` (won a
+    bake-off of the 6 available chat models: flagship quality + fewest
+    completion tokens). Note: **every current serverless chat model bills
+    hidden reasoning tokens into `completion_tokens`** — that's why
+    `REMOTE_MAX_TOKENS` is now 4096 (1024 truncated hard answers
+    mid-thought: billed but useless).
+- **Docker proven** (issue #3 done): CPU-variant image builds (1.66 GB,
+  `torch 2.12.1+cpu`, no CUDA libs), mock runs in-container with correct
+  routing, `logs/usage.jsonl` persists to the host through the volume
+  mount, and a real Fireworks call from inside the container via
+  `--env-file .env` works.
+- **Calibration tooling exists** (issue #5 done): `scripts/calibrate.py`.
+- Deps installed in `.venv/` (torch 2.8.0, transformers 4.57.6, Python 3.9).
+- Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU
+  guard, billing-aware retries, etc.) now regression-checked in REAL runs.
 
-### VERIFIED (safe to rely on)
-- All 9 modules compile; `python3 test_harness.py` passes offline, zero deps.
-- Mock end-to-end run writes `logs/usage.jsonl` with full calibration fields.
-- A multi-agent review (4 lenses + adversarial verify) found 18 issues; the
-  real ones are FIXED and regression-checked *in mock*: per-task error
-  handling (one remote failure no longer kills the run), fp32-on-CPU guard,
-  Dockerfile layer order + `--platform=linux/amd64`, billing-aware retries
-  (429 honors Retry-After), `post_check_min_chars=1`, word-bounded hedge
-  detection, `"metadata": null` handling.
-
-### UNPROVEN — this is the actual remaining work
-1. **No real local model has EVER run.** The `transformers` load + chat
-   template + `generate` + token-count path in `local_model.py` has zero real
-   execution. First real run may break on dtype/device/template/token count.
-2. **No real Fireworks call has EVER run.** Payload, auth header, and `usage`
-   parsing in `remote_client.py` are unvalidated against the live API.
-3. **Deps were never installed** in the dev env (`pip install -r
-   requirements.txt`) — a real run can't even start until they are.
-4. **`docker build` was never executed** — only reasoned about. Build once as
-   a smoke test.
+### REMAINING work
+1. **ROCm on real AMD hardware** (issue #4, half done): ROCm torch is now
+   the Docker DEFAULT (`TORCH_INDEX` build arg, rocm6.4; `make build-cpu`
+   for the small CPU image; `make docker-run-gpu` passes the GPU devices).
+   The ROCm image build + a real generation on an AMD GPU still need to be
+   exercised — needs AMD Developer Cloud access at kickoff. The dev Mac
+   (arm64) cannot run ROCm wheels; it only builds the image via emulation.
+2. **Everything blocked on the reveal**: task format (`load_tasks`), model
+   allow-list, threshold calibration on real tasks, task-specific
+   post_check validator, single-shot vs multi-step decision (see below).
 
 ### ALIGNMENT with Track 1 rules — checked 2026-07-04
 Verified against the live competition rules (lablab.ai / web3voyager): the
 design MATCHES every scored requirement — real-time local-vs-remote routing,
 Fireworks remote, local = 0 tokens, accuracy-threshold-aware, containerized,
-model-agnostic/reconfigurable. Two alignment RISKS remain to resolve:
+model-agnostic/reconfigurable. One alignment RISK remains (the CPU-vs-ROCm
+risk was resolved 2026-07-04 by making ROCm the default):
 
-1. **CPU default vs AMD-GPU/ROCm platform.** The rules say build "on AMD GPUs
-   in the cloud, using AMD Developer Cloud, ROCm, and the Fireworks AI API."
-   But `Dockerfile` installs CPU torch by default and treats ROCm as an
-   optional swap-in comment — so the AMD hardware is currently left on the
-   table, and the ROCm path is the LEAST-tested one (a ROCm build won't even
-   compile on the arm64 dev Mac). If the scoring box has an AMD GPU, make
-   ROCm the DEFAULT, not an afterthought. (See playbook step 7.)
-
-2. **Single-shot router vs "complete tasks autonomously."** The code is a
+1. **Single-shot router vs "complete tasks autonomously."** The code is a
    single-shot router: prompt in → ONE model call → answer out. If Track 1's
    revealed tasks need multi-step work (tool calls, decompose-then-route-
    each-step, react loop), this is **not an agent yet** and needs a task loop
    around `run_task`. Confirm the task shape at kickoff and decide whether
    single-shot is enough.
 
-Deadline: the competition runs to **11 July 2026**.
-
-### Why this got left here
-The dev session ran out of usage credits (a heavy multi-agent review burned
-~460k tokens) before any real run could happen. Everything above is why the
-prior "done" claim was really "scaffold done, real path untested."
+Timeline: kickoff expected **~7 July 2026**; the competition runs to
+**11 July 2026**.
 
 ## 4. Commands
 
 ```bash
-make test        # offline wiring test — run after EVERY change (~50 ms, no deps)
-make mock        # mock run of the sample task file
-make run         # real run: needs pip install -r requirements.txt + FIREWORKS_API_KEY
-make build       # docker build, pinned to linux/amd64
-make docker-run  # containerized run, logs/ mounted out
+make test            # offline wiring test — run after EVERY change (~50 ms, no deps)
+make mock            # mock run of the sample task file
+make run             # real run: needs .venv deps + FIREWORKS_API_KEY exported
+make build           # docker build, linux/amd64, ROCm torch (submission default)
+make build-cpu       # small CPU-torch image (no-GPU environments / fast smoke test)
+make docker-run      # containerized run, logs/ mounted out
+make docker-run-gpu  # same + passes AMD GPU devices into the container
 python3 main.py --tasks X.json --threshold 0.7   # calibration sweep
+python3 scripts/calibrate.py                     # analyze the sweep, pick threshold
 ```
 
-Env: copy `.env.example` → `.env`. `AGENT_MOCK=1` = no weights, no network.
+Env: copy `.env.example` → `.env` (already done on the dev Mac, with a
+working key — **`.env` is gitignored, never commit it; share the key only by
+private message**). main.py does NOT auto-load `.env`: use
+`set -a; source .env; set +a` in the shell, or `--env-file .env` for Docker.
+`AGENT_MOCK=1` = no weights, no network.
 
 ## 5. Kickoff-day playbook (priority order)
 
-0. **FIRST: prove the real path works** (this is the UNPROVEN work in §3).
-   `pip install -r requirements.txt`, set `FIREWORKS_API_KEY`, then a real
-   `make run` on a tiny model to shake out load/template/token-count/API
-   bugs. Then one `make build`. Do NOT tune anything until a real local
-   answer and a real remote answer have each come back once.
+0. ~~FIRST: prove the real path works~~ **DONE 2026-07-04** (see §3): real
+   local + real remote answers verified, Docker built and smoke-tested.
+   Remaining hardware step: one ROCm build + real generation on AMD
+   Developer Cloud once access opens.
 1. Set `LOCAL_MODEL_NAME` / `REMOTE_MODEL_NAME` (env or `config.py`). Prefer
    a pre-quantized local checkpoint (GPTQ/AWQ — bitsandbytes is NVIDIA-only).
 2. If the task format differs, adapt **only** `load_tasks()` in `main.py`.
 3. **Calibrate the threshold** — highest-leverage hour: sweep
-   `--threshold 0.4/0.55/0.7` on revealed samples, group `logs/usage.jsonl`
-   lines by `run_id`, pick the LOWEST threshold that clears the accuracy bar.
-   (Lowering-threshold savings are replayable from the log; raising needs a
-   rerun.)
+   `--threshold 0.4/0.55/0.7` on revealed samples, then
+   `python3 scripts/calibrate.py --accuracy grades.json --min-accuracy <bar>`
+   — it tabulates tokens vs threshold per run and recommends the LOWEST
+   threshold that clears the bar. (Lowering-threshold savings are replayable
+   from the log; raising needs a rerun. Grading answers stays manual.)
 4. If outputs are checkable (exact match / JSON schema / tests), add a
    validator to `router.post_check` — biggest accuracy upgrade available.
 5. Add task-set keywords to `_SIGNAL_PATTERNS` in `confidence.py`; fill
@@ -145,8 +158,9 @@ Env: copy `.env.example` → `.env`. `AGENT_MOCK=1` = no weights, no network.
    as confidence) — local compute is free, costs only latency. Slot into
    `ConfidenceEstimator.scorers`.
 7. Uncomment the model-bake `RUN` line in the Dockerfile so the scoring run
-   downloads nothing. AMD GPU on the scoring box → swap torch index to ROCm
-   (comment in Dockerfile); `_pick_device()` already treats ROCm as `cuda`.
+   downloads nothing. ROCm torch is already the build DEFAULT (rocm6.4 via
+   the `TORCH_INDEX` build arg); `_pick_device()` treats ROCm as `cuda`.
+   CPU-only scoring box → `make build-cpu` instead.
 
 ## 6. Known quirks (accepted, don't "fix" blindly)
 

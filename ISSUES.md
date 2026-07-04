@@ -18,16 +18,23 @@ competitiveness · **P2** = depends on the reveal.
 if it doesn't work, nothing works.
 
 **Tasks**
-- [ ] `pip install -r requirements.txt`
-- [ ] Run a real (non-mock) generation with the placeholder model:
+- [x] `pip install -r requirements.txt` (venv `.venv/`, torch 2.8.0 +
+      transformers 4.57.6 on Python 3.9)
+- [x] Run a real (non-mock) generation with the placeholder model:
       `python3 main.py --tasks tasks/sample_tasks.json` (no `--mock`)
-- [ ] Confirm a coherent answer comes back for `trivial-1`
-- [ ] Confirm `prompt_tokens` / `completion_tokens` are non-zero and match the
-      tokenizer (not word counts)
-- [ ] Sanity-check the chat-template branch vs the plain branch
-- [ ] Note cold-load time + peak RAM on a CPU box
+- [x] Confirm a coherent answer comes back for `trivial-1` ("The capital of
+      France is Paris.")
+- [x] Confirm `prompt_tokens` / `completion_tokens` are non-zero and match the
+      tokenizer (not word counts) — trivial-1 logged 36+8 (chat template
+      included), not the 6-word mock count
+- [x] Sanity-check the chat-template branch vs the plain branch (Qwen used the
+      template; `gpt2` exercised the plain branch — both generate, no crash)
+- [x] Note cold-load time + peak RAM: Qwen2.5-1.5B on the M-series dev Mac —
+      mps: 6.8s load / 0.9s short generate / ~3.7 GB peak; forced-cpu (fp32
+      guard active, no Half crash): 9.5s load / 2.9s / ~6.4 GB peak. First
+      ever run also downloads ~2.9 GB of weights.
 
-**Done when:** a real local answer returns, token counts are correct, no
+**DONE 2026-07-04** — real local answers return, token counts are correct, no
 dtype/device/token_type_ids crash. **Files:** `local_model.py`,
 `requirements.txt`.
 
@@ -38,18 +45,27 @@ dtype/device/token_type_ids crash. **Files:** `local_model.py`,
 parsing in `remote_client.py` have never hit the live API.
 
 **Tasks**
-- [ ] `export FIREWORKS_API_KEY=fw-...` (a working key)
-- [ ] Force everything remote for a test: `python3 main.py --tasks
-      tasks/sample_tasks.json --threshold 1.0`
-- [ ] Confirm a real answer returns and `billable_tokens` reflects the API's
-      real `usage` (not the 0-estimate fallback / no warning printed)
-- [ ] Verify the model name in `config.py` actually resolves on Fireworks
-- [ ] Test failure handling: a bad key should raise a clean `RemoteError`, not
-      a traceback; confirm the run continues (local fallback) on a forced
-      remote failure
+- [x] `export FIREWORKS_API_KEY=fw-...` (a working key) — key in local `.env`
+      (gitignored; share within the team via private message only)
+- [x] Force everything remote for a test (`--threshold 1.01`: conf can equal
+      1.0, and decide() routes local on `>=`, so 1.0 doesn't force remote)
+- [x] Confirm a real answer returns and `billable_tokens` reflects the API's
+      real `usage` — yes, no ESTIMATED warning
+- [x] Verify the model name in `config.py` actually resolves on Fireworks —
+      **it did NOT: `llama-v3p3-70b-instruct` is retired from serverless
+      (live 404, 2026-07-04).** Ran a bake-off across the 6 available chat
+      models; default is now `deepseek-v4-pro` (flagship + fewest completion
+      tokens). NOTE: all current serverless chat models bill hidden
+      reasoning tokens into completion usage — REMOTE_MAX_TOKENS raised to
+      4096 because 1024 truncated the hard sample task mid-thought.
+- [x] Test failure handling: a bad key raises a clean `RemoteError` (live
+      test 2026-07-04: fake key → Fireworks answers 404 "Model not found,
+      inaccessible" — it masks models from bad keys — one clean problems=[]
+      line, no traceback, run continued, local fallback answered correctly)
 
-**Done when:** a real remote call returns text + real token usage, and errors
-are clean. **Files:** `remote_client.py`, `config.py`.
+**DONE 2026-07-04** — full default-threshold run: trivial+moderate local
+(0 billable), complex remote via deepseek-v4-pro (real usage tokens logged).
+**Files:** `remote_client.py`, `config.py`.
 
 ---
 
@@ -57,12 +73,19 @@ are clean. **Files:** `remote_client.py`, `config.py`.
 **Why:** submission must be containerized, and `docker build` has never run —
 only been reasoned about.
 
-**Tasks**
-- [ ] `make build` (pinned to `linux/amd64`)
-- [ ] Run mock in-container: `make docker-run` (with `AGENT_MOCK=1` in `.env`)
-- [ ] Confirm `logs/usage.jsonl` is written to the host via the volume mount
-- [ ] Record the final image size; check the CPU-torch trick actually kept
-      CUDA libs out
+**Tasks** (Docker Desktop installed on the dev Mac 2026-07-04)
+- [x] Build: `make build-cpu` builds clean; `make build` (ROCm default from
+      #4) — see note below for status
+- [x] Run mock in-container (CPU image, `-e AGENT_MOCK=1`): routing correct,
+      same output as host mock run. amd64 image runs on the arm64 Mac via
+      emulation (platform warning is expected and harmless).
+- [x] Confirm `logs/usage.jsonl` is written to the host via the volume mount
+      — verified, host file grew by 3 lines
+- [x] Record the final image size; check the CPU-torch trick kept CUDA libs
+      out — CPU image is 1.66 GB, torch reports `2.12.1+cpu`
+- [x] (Bonus) real Fireworks call from inside the container via
+      `--env-file .env` — answered correctly with real usage tokens, so the
+      key-passing path the submission relies on is proven
 - [ ] (Optional) test the model-bake `RUN` line once the real model is chosen
 
 **Done when:** image builds, container runs, logs persist to host. **Files:**
@@ -77,15 +100,23 @@ the scoring box has an AMD GPU we're leaving it on the table, and the ROCm
 path is currently the least-tested.
 
 **Tasks**
-- [ ] Add a ROCm build variant (build arg or second Dockerfile) using the
-      ROCm torch wheel index
+- [x] Add a ROCm build variant (build arg or second Dockerfile) using the
+      ROCm torch wheel index — done 2026-07-04: `TORCH_INDEX` build arg,
+      **ROCm (rocm6.4) is now the DEFAULT**; `make build-cpu` overrides to
+      the CPU wheel. Verified rocm6.4 serves torch 2.8/2.9 cp311 x86_64
+      wheels. Added `make docker-run-gpu` (--device=/dev/kfd --device=/dev/dri).
 - [ ] Verify `LocalModel._pick_device()` selects `cuda` on a ROCm torch build
-- [ ] Test a real local generation on AMD Developer Cloud
-- [ ] Decide CPU-default vs ROCm-default based on the confirmed scoring env
+      — verified in code + by design (torch.cuda.is_available() is True on
+      ROCm builds), but needs a live check on AMD hardware
+- [ ] Test a real local generation on AMD Developer Cloud — **needs AMD
+      hardware; the dev Mac (arm64) cannot run ROCm wheels at all**
+- [x] Decide CPU-default vs ROCm-default: ROCm-default (a ROCm torch build
+      falls back to CPU cleanly when no GPU is present, so it costs image
+      size, never correctness)
 
 **Done when:** the local model runs on an AMD GPU via ROCm and we know which
-build to submit. **Files:** `Dockerfile`, `local_model.py`. Depends on knowing
-the scoring hardware.
+build to submit. **Files:** `Dockerfile`, `local_model.py`. Remaining live
+test depends on AMD Developer Cloud access.
 
 ---
 
@@ -95,15 +126,17 @@ already carries `run_id`, `threshold`, `confidence`. We need the tool that
 turns a sweep into a decision.
 
 **Tasks**
-- [ ] Add `scripts/calibrate.py` that reads `logs/usage.jsonl`, groups by
+- [x] Add `scripts/calibrate.py` that reads `logs/usage.jsonl`, groups by
       `run_id`, and tabulates billable tokens vs threshold
-- [ ] Given an accuracy signal per task, recommend the LOWEST threshold that
-      clears the bar
-- [ ] Document usage in the README calibration section
+- [x] Given an accuracy signal per task (`--accuracy grades.json`, a
+      `{task_id: true/false or 0..1}` file, + `--min-accuracy`), recommend
+      the LOWEST threshold that clears the bar. Also replays the exact token
+      savings of LOWERING each threshold (already-logged remote costs).
+- [x] Document usage in the README calibration section
 
-**Done when:** running a `--threshold 0.4/0.55/0.7` sweep + the script prints a
-tokens-vs-accuracy table. **Files:** new `scripts/calibrate.py`. Buildable now
-against mock/sample logs; real numbers come at kickoff.
+**DONE 2026-07-04** — tested against a mock `--threshold 0.4/0.55/0.7` sweep:
+table, recommendation, and lowering-replay all print. Grading answers stays a
+manual step (task-set-specific). Real numbers come at kickoff.
 
 ---
 
