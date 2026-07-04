@@ -1,0 +1,133 @@
+"""Wrapper around a small local HuggingFace model.
+
+Design notes:
+- LAZY imports: transformers/torch are only imported when the model actually
+  loads, so mock mode (and therefore the test harness) runs on stdlib alone.
+- Exact token counts come from the tokenizer, not word counts — you want your
+  own accounting to match whatever the judges count.
+- Quantization: for the constrained scoring environment, prefer a
+  PRE-QUANTIZED checkpoint (GPTQ/AWQ, or a -GGUF variant via llama.cpp) over
+  runtime bitsandbytes — bitsandbytes is NVIDIA-only, and the scoring box is
+  AMD/CPU. Swapping checkpoints is just LOCAL_MODEL_NAME; nothing here changes.
+- MOCK mode (AGENT_MOCK=1) returns deterministic canned output so routing and
+  accounting can be tested with zero downloads and zero network.
+"""
+from __future__ import annotations
+
+import time
+from typing import Optional
+
+from config import ROUTE_LOCAL, settings
+from schemas import Completion
+
+
+class LocalModel:
+    def __init__(self, model_name: Optional[str] = None):
+        self.model_name = model_name or settings.local_model_name
+        self._model = None
+        self._tokenizer = None
+        self._device = "cpu"
+
+    @property
+    def loaded(self) -> bool:
+        return self._model is not None
+
+    def load(self) -> None:
+        """Load weights. Call once at startup (or bake into the Docker image)
+        so the first task doesn't pay the cold-start."""
+        if settings.mock_mode or self.loaded:
+            return
+        import torch  # heavy import, deliberately deferred
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self._device = self._pick_device()
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        # On GPU, "auto" keeps fp16/bf16 checkpoints at half memory. On CPU,
+        # torch cannot run fp16 Linear layers ("addmm_impl_cpu_ not
+        # implemented for 'Half'"), and most modern checkpoints ARE fp16/bf16
+        # — so force fp32 there. A 1-3B model in fp32 is ~4-12 GB RAM: fine.
+        dtype = torch.float32 if self._device == "cpu" else "auto"
+        self._model = AutoModelForCausalLM.from_pretrained(
+            self.model_name, torch_dtype=dtype
+        )
+        self._model.to(self._device)
+        self._model.eval()
+
+    @staticmethod
+    def _pick_device() -> str:
+        import torch
+
+        # torch.cuda.is_available() is also True on AMD GPUs with ROCm builds
+        # of torch — relevant for this competition's scoring environment.
+        if torch.cuda.is_available():
+            return "cuda"
+        mps = getattr(torch.backends, "mps", None)
+        if mps is not None and mps.is_available():
+            return "mps"
+        return "cpu"
+
+    def generate(self, prompt: str) -> Completion:
+        started = time.time()
+
+        if settings.mock_mode:
+            text = f"[mock-local] concise answer to: {prompt[:60]}"
+            return Completion(
+                text=text,
+                prompt_tokens=len(prompt.split()),  # fake but deterministic
+                completion_tokens=len(text.split()),
+                source=ROUTE_LOCAL,
+                latency_s=time.time() - started,
+            )
+
+        if not self.loaded:
+            self.load()
+        import torch
+
+        # Instruct models need their chat template or output quality craters.
+        # Render to a string first, then tokenize WITHOUT re-adding special
+        # tokens (the template already contains them).
+        if getattr(self._tokenizer, "chat_template", None):
+            rendered = self._tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            add_special_tokens = False
+        else:
+            rendered = prompt
+            add_special_tokens = True
+
+        encoded = self._tokenizer(
+            rendered, return_tensors="pt", add_special_tokens=add_special_tokens
+        )
+        # Some tokenizers (Falcon family, older conversions) emit
+        # token_type_ids, which model.generate rejects with a ValueError.
+        encoded.pop("token_type_ids", None)
+        encoded = encoded.to(self._device)
+
+        pad_id = self._tokenizer.pad_token_id
+        if pad_id is None:
+            pad_id = self._tokenizer.eos_token_id
+
+        with torch.no_grad():
+            # Greedy decoding: deterministic outputs → reproducible accuracy
+            # in the scoring run, and no sampling-induced flakiness while
+            # debugging live.
+            output_ids = self._model.generate(
+                **encoded,
+                max_new_tokens=settings.local_max_new_tokens,
+                do_sample=False,
+                pad_token_id=pad_id,
+            )
+
+        prompt_len = int(encoded["input_ids"].shape[-1])
+        new_tokens = output_ids[0][prompt_len:]
+        text = self._tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+        return Completion(
+            text=text,
+            prompt_tokens=prompt_len,
+            completion_tokens=int(new_tokens.shape[-1]),
+            source=ROUTE_LOCAL,
+            latency_s=time.time() - started,
+        )

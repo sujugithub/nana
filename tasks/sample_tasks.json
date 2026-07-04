@@ -1,0 +1,15 @@
+[
+  {
+    "task_id": "trivial-1",
+    "prompt": "What is the capital of France?"
+  },
+  {
+    "task_id": "moderate-1",
+    "prompt": "Summarize the following announcement in one sentence: The team released version 2.0 of the toolkit on Tuesday. The release adds support for quantized models and cuts memory usage roughly in half."
+  },
+  {
+    "task_id": "complex-1",
+    "prompt": "Write a Python function that computes the median of a stream of integers, then explain step by step why your approach is efficient, and calculate the expected memory usage for 10 million values.",
+    "metadata": {"category": "code_reasoning"}
+  }
+]

@@ -1,0 +1,18 @@
+# Runtime dependencies.
+#
+# NOTE: mock mode (AGENT_MOCK=1) needs NONE of these — the wiring test
+# (test_harness.py) runs on stdlib alone, anywhere.
+
+requests>=2.31
+
+# Local model stack. torch is the heavy one: the Dockerfile installs the CPU
+# wheel (multi-GB smaller than the default CUDA build). If the scoring
+# environment exposes an AMD GPU, use the ROCm wheel index instead — see the
+# comments in the Dockerfile.
+transformers>=4.44
+torch>=2.2
+
+# Optional — uncomment on kickoff day if the chosen local model needs them:
+# accelerate>=0.33     # device_map="auto", sharded/faster loading
+# sentencepiece        # required by some tokenizers (Llama/T5 families)
+# autoawq              # AWQ pre-quantized checkpoints
