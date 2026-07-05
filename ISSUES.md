@@ -74,8 +74,11 @@ parsing in `remote_client.py` have never hit the live API.
 only been reasoned about.
 
 **Tasks** (Docker Desktop installed on the dev Mac 2026-07-04)
-- [x] Build: `make build-cpu` builds clean; `make build` (ROCm default from
-      #4) — see note below for status
+- [x] Build: `make build-cpu` builds clean (1.66 GB); `make build` (ROCm
+      default from #4) builds clean too — 4.94 GB, `torch 2.9.1+rocm6.4`
+      inside, mock runs correctly in-container. Warning: building the ROCm
+      image on the arm64 dev Mac took ~5.5 h (emulated layer export) —
+      rebuild it on x86 hardware (AMD Dev Cloud) at kickoff instead.
 - [x] Run mock in-container (CPU image, `-e AGENT_MOCK=1`): routing correct,
       same output as host mock run. amd64 image runs on the arm64 Mac via
       emulation (platform warning is expected and harmless).
