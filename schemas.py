@@ -7,7 +7,7 @@ independently swappable on kickoff day.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -31,6 +31,11 @@ class Completion:
     completion_tokens: int
     source: str  # ROUTE_LOCAL or ROUTE_REMOTE
     latency_s: float = 0.0
+    # Model self-confidence: mean per-token probability of the generated
+    # text (0..1), from the model's own logits. Only the LOCAL backend sets
+    # it (remote APIs don't expose logprobs by default; mock mode has no
+    # logits at all) — None means "no signal", never "zero confidence".
+    confidence: Optional[float] = None
 
     @property
     def total_tokens(self) -> int:

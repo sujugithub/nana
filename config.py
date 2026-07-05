@@ -85,6 +85,13 @@ class Settings:
     # escalation on every correct answer. Raise only if the real task set
     # never has short answers.
     post_check_min_chars: int = 1
+    # Draft-and-judge gate: the local model's OWN mean token probability for
+    # its answer (Completion.confidence). Below this → escalate to remote
+    # even if post_check passed — a fluent-but-unsure answer is the failure
+    # mode regexes can't see. 0.4 is a placeholder; CALIBRATE at kickoff by
+    # comparing logged local_confidence against graded answers
+    # (scripts/calibrate.py). Set to 0 to disable the gate.
+    logprob_confidence_threshold: float = 0.4
 
     # ── Infra ────────────────────────────────────────────────────────────
     mock_mode: bool = False  # AGENT_MOCK=1 → no weights, no network (wiring tests)
@@ -105,6 +112,9 @@ class Settings:
         s.confidence_threshold = _env_float("CONFIDENCE_THRESHOLD", s.confidence_threshold)
         s.enable_escalation = _env_bool("ENABLE_ESCALATION", s.enable_escalation)
         s.post_check_min_chars = _env_int("POST_CHECK_MIN_CHARS", s.post_check_min_chars)
+        s.logprob_confidence_threshold = _env_float(
+            "LOGPROB_CONFIDENCE_THRESHOLD", s.logprob_confidence_threshold
+        )
         s.mock_mode = _env_bool("AGENT_MOCK", s.mock_mode)
         s.usage_log_path = _env_str("USAGE_LOG_PATH", s.usage_log_path)
         return s

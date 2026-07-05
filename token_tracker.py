@@ -39,6 +39,10 @@ class UsageRecord:
     threshold: float  # threshold active for this run (calibration sweeps)
     signals: Dict[str, float] = field(default_factory=dict)
     problems: List[str] = field(default_factory=list)  # post-check / fallbacks
+    # The local model's OWN mean token probability for its answer (the
+    # draft-and-judge signal) — distinct from `confidence`, which is the
+    # router's pre-route heuristic. None when local never ran / mock mode.
+    local_confidence: Optional[float] = None
     local_prompt_tokens: int = 0
     local_completion_tokens: int = 0
     remote_prompt_tokens: int = 0
@@ -68,6 +72,7 @@ class TokenTracker:
         threshold: float = 0.0,
         signals: Optional[Dict[str, float]] = None,
         problems: Optional[List[str]] = None,
+        local_confidence: Optional[float] = None,
         latency_s: float = 0.0,
     ) -> UsageRecord:
         rec = UsageRecord(
@@ -78,6 +83,7 @@ class TokenTracker:
             threshold=threshold,
             signals=signals or {},
             problems=problems or [],
+            local_confidence=local_confidence,
             local_prompt_tokens=local.prompt_tokens if local else 0,
             local_completion_tokens=local.completion_tokens if local else 0,
             remote_prompt_tokens=remote.prompt_tokens if remote else 0,

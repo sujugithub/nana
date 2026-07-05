@@ -61,7 +61,20 @@ def run_task(
     if decision.target == ROUTE_LOCAL:
         local_completion = local.generate(task.prompt)
         ok, problems = router.post_check(task.prompt, local_completion.text)
-        if not ok and settings.enable_escalation:
+        # Draft-and-judge: the local model's own mean token probability.
+        # Low self-confidence catches the failure mode post_check's surface
+        # rules can't — a fluent, well-formed, WRONG answer. None (mock mode,
+        # zero-length output) means "no signal": never treated as low.
+        low_confidence = (
+            local_completion.confidence is not None
+            and local_completion.confidence
+            < settings.logprob_confidence_threshold
+        )
+        if low_confidence:
+            problems.append(
+                f"low_confidence:{local_completion.confidence:.2f}"
+            )
+        if (not ok or low_confidence) and settings.enable_escalation:
             # The free local attempt produced something that looks wrong.
             # Pay for a remote retry rather than risk the accuracy penalty —
             # the local attempt itself cost 0 tokens, only latency.
@@ -91,6 +104,9 @@ def run_task(
         threshold=router.threshold,
         signals=decision.signals,
         problems=problems,
+        local_confidence=(
+            local_completion.confidence if local_completion else None
+        ),
         latency_s=time.time() - started,
     )
 
@@ -99,6 +115,9 @@ def run_task(
         "route": final.source,
         "escalated": escalated,
         "confidence": decision.confidence,
+        "local_confidence": (
+            local_completion.confidence if local_completion else None
+        ),
         "signals": decision.signals,
         "reason": decision.reason,
         "post_check_problems": problems,
@@ -176,6 +195,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             if result["post_check_problems"]
             else ""
         )
+        if result.get("local_confidence") is not None:
+            extra = f" local_conf={result['local_confidence']:.2f}" + extra
         preview = result["answer"].replace("\n", " ")[:100]
         print(
             f"[{result['task_id']}] route={result['route']}{escalated} "

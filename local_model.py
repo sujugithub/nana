@@ -113,16 +113,37 @@ class LocalModel:
             # Greedy decoding: deterministic outputs → reproducible accuracy
             # in the scoring run, and no sampling-induced flakiness while
             # debugging live.
-            output_ids = self._model.generate(
+            # output_scores + return_dict_in_generate: keep the per-step
+            # logits so we can compute the model's own confidence in its
+            # answer — the "draft-and-judge" signal. Local compute is FREE
+            # under the scoring rules, so this costs nothing but memory.
+            outputs = self._model.generate(
                 **encoded,
                 max_new_tokens=settings.local_max_new_tokens,
                 do_sample=False,
                 pad_token_id=pad_id,
+                output_scores=True,
+                return_dict_in_generate=True,
             )
 
         prompt_len = int(encoded["input_ids"].shape[-1])
-        new_tokens = output_ids[0][prompt_len:]
+        new_tokens = outputs.sequences[0][prompt_len:]
         text = self._tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+        # Mean per-token probability of the generated answer (0..1).
+        # compute_transition_scores aligns scores to the GENERATED tokens
+        # only (never the prompt); normalize_logits=True is what turns raw
+        # logits into actual log-probabilities. Caveat (accepted): the mean
+        # flatters very short answers — a 3-token reply is "confident"
+        # almost by construction. If the real task set exposes that, switch
+        # to min-token-prob or fraction-below-a-floor; the plumbing is
+        # identical.
+        confidence = None
+        if len(new_tokens) > 0:
+            transition_scores = self._model.compute_transition_scores(
+                outputs.sequences, outputs.scores, normalize_logits=True
+            )
+            confidence = float(transition_scores[0].exp().mean())
 
         return Completion(
             text=text,
@@ -130,4 +151,5 @@ class LocalModel:
             completion_tokens=int(new_tokens.shape[-1]),
             source=ROUTE_LOCAL,
             latency_s=time.time() - started,
+            confidence=round(confidence, 4) if confidence is not None else None,
         )

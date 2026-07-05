@@ -83,6 +83,18 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
   mount, and a real Fireworks call from inside the container via
   `--env-file .env` works.
 - **Calibration tooling exists** (issue #5 done): `scripts/calibrate.py`.
+- **Draft-and-judge confidence gate implemented + live-tested 2026-07-05**:
+  the local model now reports its own mean token probability
+  (`Completion.confidence`, from `compute_transition_scores`), logged as
+  `local_confidence` in usage.jsonl; below `LOGPROB_CONFIDENCE_THRESHOLD`
+  (default 0.4, 0 disables) the task escalates to remote with a
+  `low_confidence:<val>` problem tag. Verified live with
+  Qwen2.5-0.5B-Instruct: gate 0.99 → escalated to remote (57 tokens billed,
+  answer correct); gate 0.4 → stayed local (0 billed). Mock mode
+  unaffected (confidence=None). KNOWN LIMIT: it flags *uncertainty*, not
+  *confident error* — the bat-and-ball trap scored 0.90 while wrong. The
+  0.4 default is a safety net; CALIBRATE against graded answers at kickoff
+  (that's also when min-token-prob may beat the mean).
 - Deps installed in `.venv/` (torch 2.8.0, transformers 4.57.6, Python 3.9).
 - Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU
   guard, billing-aware retries, etc.) now regression-checked in REAL runs.
