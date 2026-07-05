@@ -3,10 +3,13 @@
 > Paste this file (or point the session at it) when continuing work in a new
 > Claude session. It contains everything needed to take over with zero prior
 > context. **The SCAFFOLD is complete — don't re-scaffold or restructure it.
-> UPDATE 2026-07-04: the real paths are now PROVEN — real local generation,
-> real Fireworks calls, and the Docker container have all run successfully
-> (see §3). Remaining work: AMD-GPU/ROCm live test + everything blocked on
-> the kickoff reveal (~7 July).**
+> STATUS 2026-07-05: real local generation, real Fireworks calls, Docker,
+> the calibration tool (audited), and the new draft-and-judge logprob
+> confidence gate are all PROVEN (see §3). The ONLY unproven path is ROCm
+> on real AMD hardware. Everything else open is blocked on the kickoff
+> reveal (~7 July) — see ISSUES.md #4/#6/#7/#8. Team note: Aryan is
+> building the pitch website ("RouteFlow AI") in a SEPARATE repo — it is
+> not part of the scored submission; don't add frontend tooling here.**
 
 ## 1. Mission and scoring rules
 
@@ -99,16 +102,17 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
 - Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU
   guard, billing-aware retries, etc.) now regression-checked in REAL runs.
 
-### REMAINING work
-1. **ROCm on real AMD hardware** (issue #4, half done): ROCm torch is now
-   the Docker DEFAULT (`TORCH_INDEX` build arg, rocm6.4; `make build-cpu`
-   for the small CPU image; `make docker-run-gpu` passes the GPU devices).
-   The ROCm image build + a real generation on an AMD GPU still need to be
-   exercised — needs AMD Developer Cloud access at kickoff. The dev Mac
-   (arm64) cannot run ROCm wheels; it only builds the image via emulation.
-2. **Everything blocked on the reveal**: task format (`load_tasks`), model
-   allow-list, threshold calibration on real tasks, task-specific
-   post_check validator, single-shot vs multi-step decision (see below).
+### REMAINING work (tracked in ISSUES.md — solved items live in its ✅ table)
+1. **#4 ROCm on real AMD hardware** — the ONLY unproven path left. ROCm
+   torch is the Docker default (`TORCH_INDEX` arg, rocm6.4; `make build-cpu`
+   for the CPU image; `make docker-run-gpu` passes the GPU devices), but no
+   generation has ever run on an AMD GPU — needs AMD Developer Cloud at
+   kickoff. The dev Macs (arm64) cannot run ROCm wheels.
+2. **Blocked on the reveal**: task format (`load_tasks`), model allow-list,
+   single-shot vs multi-step decision (#6), task-specific post_check
+   validator (#7), and calibrating BOTH thresholds — the heuristic
+   `CONFIDENCE_THRESHOLD` and the logprob `LOGPROB_CONFIDENCE_THRESHOLD` —
+   from one graded sweep (#8).
 
 ### ALIGNMENT with Track 1 rules — checked 2026-07-04
 Verified against the live competition rules (lablab.ai / web3voyager): the

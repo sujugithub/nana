@@ -16,10 +16,13 @@ a threshold is penalized. Four consequences drive the whole design:
 2. **Detect risk for free.** `confidence.py` scores each query with zero-cost
    heuristics (length, math/code/reasoning/multi-part signals). Only queries
    that look beyond a 1–3B model go remote.
-3. **Bound the accuracy downside.** When local runs, `router.post_check`
-   inspects the output for small-model failure modes (empty output,
-   repetition loops, prompt echo, hedging) and **escalates to remote** if it
-   looks wrong. A failed local attempt costs nothing but latency.
+3. **Bound the accuracy downside.** When local runs, TWO free checks gate
+   the answer: `router.post_check` inspects the output for small-model
+   failure modes (empty output, repetition loops, prompt echo, hedging),
+   and a **draft-and-judge confidence gate** reads the model's own mean
+   token probability (`local_confidence`) — below
+   `LOGPROB_CONFIDENCE_THRESHOLD` (default 0.4) the task **escalates to
+   remote**. A failed local attempt costs nothing but latency.
 4. **Make the bill observable.** `token_tracker.py` writes one JSONL line per
    task — including confidence, the active threshold, per-signal scores, and
    a run_id — so calibration analysis happens on the log, not by rerunning.
@@ -90,7 +93,11 @@ docker run --rm --env-file .env -v "$(pwd)/logs:/app/logs" hybrid-router-agent
    file, plus `--min-accuracy`) recommends the LOWEST threshold that clears
    the accuracy bar. It also replays what LOWERING each threshold would have
    saved (remote costs of flipped tasks are already logged; raising needs a
-   rerun). Grading answers is task-set-specific and stays manual.
+   rerun). Grading answers is task-set-specific and stays manual. The same
+   graded sweep should also calibrate `LOGPROB_CONFIDENCE_THRESHOLD` by
+   comparing each line's `local_confidence` against its grade (ISSUES.md #8
+   — the logprob gate flags *uncertainty*, not *confident error*, so the
+   0.4 default is a safety net until calibrated).
 4. **Add task-specific signals**: extend `_SIGNAL_PATTERNS` in
    `confidence.py`; if tasks carry categories, fill in
    `FORCE_ROUTE_BY_CATEGORY` in `router.py`.
