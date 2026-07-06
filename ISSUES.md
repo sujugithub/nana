@@ -3,8 +3,45 @@
 Copy each open block below into a GitHub issue (title = heading, body = the
 text under it), or batch-create them with the `gh` commands at the bottom.
 
-Tags: **[NOW]** = doable today · **[KICKOFF]** = blocked until the real
-tasks/models are revealed (kickoff ~7 July; competition ends 11 July 2026).
+Tags: **[NOW]** = doable today · **[KICKOFF]** = needs launch-day info.
+Kickoff happened 2026-07-07 (real spec — see HANDOFF.md §0); competition ends
+11 July 2026.
+
+---
+
+## 🚀 KICKOFF — real spec landed: DO THESE FIRST (contract compliance)
+
+Without these the submission scores ZERO regardless of answer quality.
+
+### [P0] #9 I/O adapter — `/input/tasks.json` → `/output/results.json`
+Harness mode: read `/input/tasks.json` (`[{task_id, prompt}]`), write
+`/output/results.json` (`[{task_id, answer}]`, valid JSON). New entrypoint
+that runs this instead of the `--tasks`/stdout dev path. Always write a valid
+file even on partial failure; exit 0 on success, non-zero on failure.
+**Files:** `main.py`, `Dockerfile` (ENTRYPOINT/CMD).
+
+### [P0] #10 Honor `ALLOWED_MODELS` at runtime
+Read `ALLOWED_MODELS` (comma-separated) + `FIREWORKS_BASE_URL` from env; the
+remote client must pick its model from that list (not the hardcoded
+`deepseek-v4-pro`). Fail loudly if none is usable. Verify EVERY remote call
+goes through `FIREWORKS_BASE_URL` (bypass = 0 tokens recorded).
+**Files:** `config.py`, `remote_client.py`.
+
+### [P0] #11 Concurrency — fit the 10-minute cap
+Remote calls run ~27 s each; a sequential loop over N tasks blows 10 min fast.
+Parallelise remote calls (asyncio or a thread pool), with a global deadline
+guard so we always write results before the cap. **Files:** `main.py`.
+
+### [P1] #12 Small/quantized local model + public image ≤ 10 GB
+Pick a local model that fits < 10 GB compressed and loads fast (Q4 GGUF ~1 GB,
+or a 0.5–1.5B checkpoint). Build, then push the image to GHCR (public).
+**Files:** `Dockerfile`, `config.py`, `requirements.txt`.
+
+### [P1] #13 Conservative accuracy-gate tuning + concise remote output
+Accuracy is a pass/fail GATE (below → excluded). Sanity-check the local model
+per category, raise the escalation bar until it clears comfortably, THEN
+minimise tokens (concise-answer prompting + tight per-task `max_tokens`).
+**Files:** `router.py`, `config.py`, `confidence.py`.
 
 ---
 

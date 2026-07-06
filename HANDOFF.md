@@ -2,14 +2,71 @@
 
 > Paste this file (or point the session at it) when continuing work in a new
 > Claude session. It contains everything needed to take over with zero prior
-> context. **The SCAFFOLD is complete — don't re-scaffold or restructure it.
-> STATUS 2026-07-05: real local generation, real Fireworks calls, Docker,
-> the calibration tool (audited), and the new draft-and-judge logprob
-> confidence gate are all PROVEN (see §3). The ONLY unproven path is ROCm
-> on real AMD hardware. Everything else open is blocked on the kickoff
-> reveal (~7 July) — see ISSUES.md #4/#6/#7/#8. Team note: Aryan is
-> building the pitch website ("RouteFlow AI") in a SEPARATE repo — it is
-> not part of the scored submission; don't add frontend tooling here.**
+> context. **The SCAFFOLD is complete and its real paths are PROVEN (§3).
+> STATUS 2026-07-07: KICKOFF HAPPENED — the real spec landed and it changes
+> the contract. READ §0 FIRST, then §3. Team note: Aryan is building the
+> pitch website ("RouteFlow AI") in a SEPARATE repo — not part of the scored
+> submission; don't add frontend tooling here.**
+
+## 0. KICKOFF — the REAL spec landed (2026-07-07). READ FIRST.
+
+Track 1 is now framed as **"General-Purpose AI Agent"** — 8 capability
+categories, judged across ALL of them: factual knowledge, math reasoning,
+sentiment classification, text summarisation, named-entity recognition, code
+debugging, logical/deductive reasoning, code generation.
+
+**The contract (get any of these wrong → score ZERO):**
+- Read `/input/tasks.json` = `[{task_id, prompt}]`; write
+  `/output/results.json` = `[{task_id, answer}]`, VALID JSON (malformed → 0).
+- Env injected by the harness — read from env, NEVER hardcode, NEVER bundle
+  `.env` in the image:
+  - `FIREWORKS_API_KEY` — theirs, not ours.
+  - `FIREWORKS_BASE_URL` — route ALL remote calls through it. Bypassing it =
+    tokens not recorded = the run looks broken.
+  - `ALLOWED_MODELS` — comma-separated model IDs published at launch. Pick
+    the remote model from THIS list at runtime. Our `deepseek-v4-pro`
+    default is now only a dev fallback; calling a model not in the list
+    invalidates the submission.
+- Exit 0 on success / non-zero on failure. **Max runtime 10 MINUTES total.**
+- Submit a Docker image pushed to a PUBLIC registry (GHCR / Docker Hub),
+  compressed size ≤ 10 GB. Rate limit: 10 submissions/hour/team.
+- No hardcoded/cached answers (evaluation uses unseen prompt variants).
+
+**Scoring — this reframes the whole router:**
+1. **Accuracy GATE** — an LLM-Judge scores each answer; a submission below the
+   threshold is EXCLUDED from the leaderboard entirely (not just penalised).
+2. Survivors are ranked ascending by total tokens through the proxy — fewer
+   tokens = higher rank.
+→ **Clear the accuracy gate COMFORTABLY first, THEN minimise tokens.** Route
+  CONSERVATIVELY: a confidently-wrong local answer that fails the gate costs
+  *everything*, not just some tokens. The logprob gate + post_check are the
+  safety mechanism — tune them cautiously until we see where the gate sits.
+
+**What still holds:** a local model run in-container never hits the proxy, so
+its tokens are ZERO. The 8 categories ARE an easy(local)/hard(remote) routing
+problem — the architecture is the right shape. Easy locals: sentiment, simple
+NER, short factual, simple summaries. Hard remotes: math, code debug/gen,
+logic puzzles.
+
+**NEW work the real spec forces** (these WERE "blocked on reveal"):
+- **I/O adapter** — `/input/tasks.json` → `/output/results.json`, new entrypoint.
+- **Honor `ALLOWED_MODELS`** at runtime (remote_client picks from the list).
+- **CONCURRENCY** — remote calls are slow (~27 s observed); a sequential loop
+  blows the 10-min cap on any real task count. Parallelise remote calls.
+- **Small/quantized local model** to stay < 10 GB (ROCm image alone is
+  4.94 GB) — e.g. a Q4 GGUF ~1 GB.
+- **Defensive output** — always write valid results.json even on partial
+  failure; correct exit codes.
+- **Push to GHCR (public).**
+- Input has **NO category label** (`{task_id, prompt}` only) — route on the
+  prompt text; `FORCE_ROUTE_BY_CATEGORY` has nothing to key on.
+
+**CONFIRM with organizers (one line, existential):** local models running
+inside the container are permitted and count as zero. Reading is almost
+certainly YES (they explicitly define local tokens as zero), but the whole
+design rides on it.
+
+Open tasks tracked in ISSUES.md (kickoff section at the top).
 
 ## 1. Mission and scoring rules
 
