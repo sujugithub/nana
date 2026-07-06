@@ -173,6 +173,20 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
   unchanged (but now also concurrent); `run_task` untouched. Wiring test
   extended (`harness_io_check`); `make docker-run-harness` simulates the
   scoring mounts.
+- **Category routing + dual-threshold calibration 2026-07-07** (#8 + the
+  keyword half of #7): `_SIGNAL_PATTERNS` now covers all 8 kickoff
+  categories — hard-remote penalties are DECISIVE at 0.75 (math incl. word
+  problems, code/code_debug, logic) so one hard signal routes even a short
+  prompt remote (the accuracy gate outweighs token savings); easy-local
+  categories get negative-weight BOOSTS (sentiment/NER/summarize) keyed on
+  instruction words so long-but-easy prompts survive the length ramp. All 8
+  route-asserted in the wiring test (tightest margin: code-gen 0.535 vs
+  0.55). `scripts/calibrate.py --accuracy grades.json` now recommends BOTH
+  dials from one graded sweep: the heuristic threshold (as before) plus
+  `LOGPROB_CONFIDENCE_THRESHOLD` (lowest gate whose kept-local answers clear
+  the bar; prints the mean→min-token-prob cue when no gate separates).
+  Remaining in #7: the real output validator — blocked on the revealed
+  output format.
 - **`ALLOWED_MODELS` honored 2026-07-07** (kickoff #10):
   `resolve_remote_model()` in remote_client.py. When the harness sets
   `ALLOWED_MODELS`, the remote model ALWAYS comes from that list, verbatim

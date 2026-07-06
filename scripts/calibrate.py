@@ -25,6 +25,15 @@ What it prints:
    RAISING the threshold is not replayable: tasks that would flip to remote
    never had their remote cost measured. That direction needs a rerun.
 
+4. With --accuracy, BOTH dials from the same graded sweep (ISSUES #8): the
+   heuristic CONFIDENCE_THRESHOLD recommendation above, plus a
+   LOGPROB_CONFIDENCE_THRESHOLD recommendation — graded LOCAL answers are
+   ranked by the model's own local_confidence and the tool picks the lowest
+   gate at which the answers KEPT local clear the accuracy bar (everything
+   below the gate escalates and is paid for). If no gate separates right
+   from wrong, it says so — that's the cue to switch the confidence
+   statistic from mean to min-token-prob (see local_model.py).
+
 Accuracy grades file (--accuracy): a JSON object mapping task_id to either
 true/false or a 0..1 score, e.g. {"trivial-1": true, "complex-1": 0.5}.
 Grading is task-set-specific, so it stays a manual/external step — this tool
@@ -119,6 +128,84 @@ def lowering_replay(rows: List[dict], candidates: List[float]) -> List[tuple]:
     return out
 
 
+def logprob_rows(records: List[dict], grades: Dict[str, float]) -> List[dict]:
+    """One {task_id, conf, grade} per graded task whose FINAL answer was
+    local — those are the answers the logprob gate decides over. Escalated
+    tasks are excluded (their grade judges the remote answer). Greedy
+    decoding makes repeats identical across runs, so keep first-seen."""
+    rows: Dict[str, dict] = {}
+    for rec in records:
+        task_id = rec.get("task_id")
+        if (
+            rec.get("route") == ROUTE_LOCAL
+            and rec.get("local_confidence") is not None
+            and task_id in grades
+            and task_id not in rows
+        ):
+            rows[task_id] = {
+                "task_id": task_id,
+                "conf": float(rec["local_confidence"]),
+                "grade": grades[task_id],
+            }
+    return sorted(rows.values(), key=lambda r: r["conf"])
+
+
+def recommend_logprob_threshold(
+    rows: List[dict], min_accuracy: float
+) -> Optional[tuple]:
+    """(threshold, kept_accuracy, kept_count, wasted_escalations) or None.
+
+    At gate t, answers with conf < t escalate (paid remote retries); the
+    answers KEPT local must clear the accuracy bar. Candidates are 0.0 (gate
+    disabled) plus every observed confidence, ascending — the first that
+    clears is the cheapest (fewest escalations). wasted_escalations counts
+    escalated answers that were graded right (>= 0.5): pure token cost.
+    """
+    for t in [0.0] + sorted({r["conf"] for r in rows}):
+        kept = [r for r in rows if r["conf"] >= t]
+        if not kept:
+            break
+        accuracy = sum(r["grade"] for r in kept) / len(kept)
+        if accuracy >= min_accuracy:
+            wasted = sum(1 for r in rows if r["conf"] < t and r["grade"] >= 0.5)
+            return (t, accuracy, len(kept), wasted)
+    return None
+
+
+def print_logprob_analysis(
+    records: List[dict], grades: Dict[str, float], min_accuracy: float
+) -> None:
+    print("\n──── logprob gate (LOGPROB_CONFIDENCE_THRESHOLD) ────")
+    rows = logprob_rows(records, grades)
+    if not rows:
+        print("no graded LOCAL answers with local_confidence in the log —")
+        print("run real (non-mock) tasks and grade them first.")
+        return
+
+    print(f"{'task_id':<24} {'local_conf':>10} {'grade':>6}")
+    for r in rows:
+        print(f"{r['task_id']:<24} {r['conf']:>10.3f} {r['grade']:>6.2f}")
+
+    rec = recommend_logprob_threshold(rows, min_accuracy)
+    if rec is None:
+        print(f"\nNO gate clears accuracy >= {min_accuracy}: wrong answers "
+              f"score as high as right ones (confident-wrong). Switch the "
+              f"confidence statistic from mean to min-token-prob "
+              f"(local_model.py, noted in its comments) and rerun the sweep.")
+        return
+    t, accuracy, kept, wasted = rec
+    if t == 0.0:
+        print(f"\nRECOMMENDED: LOGPROB_CONFIDENCE_THRESHOLD = 0 (gate off) — "
+              f"all {kept} graded local answers already clear "
+              f"{min_accuracy} (accuracy {accuracy:.2f}).")
+        return
+    escalated = len(rows) - kept
+    print(f"\nRECOMMENDED: LOGPROB_CONFIDENCE_THRESHOLD = {t:.3f} — keeps "
+          f"{kept} local answer(s) at accuracy {accuracy:.2f} >= "
+          f"{min_accuracy}; {escalated} escalate ({wasted} of them graded "
+          f"right = wasted paid retries).")
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Tabulate billable tokens vs threshold from usage.jsonl "
@@ -183,6 +270,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             if partial:
                 print(f"note: runs with ungraded tasks (accuracy is partial): "
                       f"{', '.join(partial)}")
+
+    # ── Logprob gate (the SECOND dial, from the same graded sweep) ───────
+    if grades is not None:
+        print_logprob_analysis(records, grades, args.min_accuracy)
 
     # ── Lowering-threshold replay ────────────────────────────────────────
     printed_header = False

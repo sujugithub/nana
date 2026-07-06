@@ -31,6 +31,8 @@ minimise tokens (concise-answer prompting + tight per-task `max_tokens`).
 | # | Was | Outcome |
 | --- | --- | --- |
 | 9 | I/O adapter (`/input/tasks.json` → `/output/results.json`) | `main.py --input/--output` harness mode, now the Docker CMD (dev `--tasks` path unchanged). results.json ALWAYS written (atomic tmp+rename, every task_id, `""` for unfinished), input order preserved. Exit 0 whenever a valid all-task file landed (partial answers beat voiding the run); exit 1 only on unreadable input / unwritable output. `make docker-run-harness` simulates the mounts. Covered by `test_harness.py` |
+| 8 | Calibrate BOTH thresholds from one graded sweep | `scripts/calibrate.py --accuracy grades.json` now also ranks graded LOCAL answers by `local_confidence` and recommends the lowest `LOGPROB_CONFIDENCE_THRESHOLD` whose kept-local answers clear `--min-accuracy` (reports paid escalations + wasted retries; 0 = gate off). When no gate separates right from wrong it prints the mean→min-token-prob switch cue. Unit-checked in `test_harness.py`; verified on a synthetic graded sweep. The mean→min switch itself stays data-dependent (kickoff) |
+| — | Category keywords for the 8 kickoff categories | `_SIGNAL_PATTERNS` in confidence.py: hard-remote penalties now DECISIVE at 0.75 (math incl. word problems, code + new code_debug stack, new logic patterns) — one hard signal sends even a short prompt remote (accuracy gate > token savings); easy-local BOOSTS (negative weights: sentiment −0.40, ner −0.40, summarize −0.30) key on instruction words so long-but-easy prompts beat the length ramp. All 8 categories route-asserted in `test_harness.py`; tightest margin code-gen 0.535 vs 0.55 |
 | 10 | Honor `ALLOWED_MODELS` at runtime | `resolve_remote_model()` in remote_client.py: allow-list entries used VERBATIM (proxy bills by those IDs), matched on the last path segment so short/full spellings agree. Priority: explicit `REMOTE_MODEL_NAME` if allowed → `REMOTE_MODEL_PREFERENCE` (default deepseek-v4-pro) → list head; unset list = dev fallback; set-but-empty list disables remote per-call (local fallback keeps the run alive). `FIREWORKS_BASE_URL` was already the only HTTP call site. Covered by `test_harness.py` |
 | 11 | Concurrency for the 10-min cap | `run_all` thread pool (`REMOTE_CONCURRENCY`, default 8) around the untouched `run_task`; local generation serializes on a `LocalModel` lock, `TokenTracker` locked. Global deadline `RUN_DEADLINE_S` (540 s from process start, model load included): at the deadline finished-but-uncollected answers are harvested, the rest abandoned, results written, and stuck worker threads bypassed via `os._exit` so the write always lands inside the cap. Proven: 8×2 s remote stubs in 2.0 s wall |
 | 1 | Prove real local model path | Qwen2.5-1.5B generates real answers, exact tokenizer counts, chat-template + plain branches both work |
@@ -88,31 +90,12 @@ turns the escalation cascade from a guess into a check.
 - [ ] Determine the revealed output format (exact-match / JSON schema / unit
       tests / numeric)
 - [ ] Add a validator to `post_check` that escalates local answers failing it
-- [ ] Extend `_SIGNAL_PATTERNS` in `confidence.py` with task-set keywords;
-      fill `FORCE_ROUTE_BY_CATEGORY` if tasks come labeled
+- [x] ~~Extend `_SIGNAL_PATTERNS` in `confidence.py` with task-set keywords~~
+      **done 2026-07-07** — all 8 kickoff categories covered (see ✅ table);
+      `FORCE_ROUTE_BY_CATEGORY` stays empty (input has no category labels)
 
 **Done when:** wrong-but-fluent local answers get caught and escalated. **Files:**
 `router.py`, `confidence.py`. Blocked on the reveal.
-
----
-
-## [P2][KICKOFF] #8 Calibrate BOTH thresholds from one graded sweep
-**Why:** `usage.jsonl` now logs two dials per task — the router's heuristic
-`confidence` (pre-route) and the model's `local_confidence` (logprob gate).
-`scripts/calibrate.py` currently tunes only the first. One graded sweep can
-tune both.
-
-**Tasks**
-- [ ] Extend `scripts/calibrate.py`: given `--accuracy grades.json`, plot/rank
-      graded-wrong vs graded-right tasks by `local_confidence` and recommend
-      the `LOGPROB_CONFIDENCE_THRESHOLD` split point (~30 lines)
-- [ ] If confident-wrong answers are common in the real task set, switch the
-      confidence statistic from mean to min-token-prob (2-line change in
-      `local_model.py`, noted in its comments)
-
-**Done when:** one command recommends both `CONFIDENCE_THRESHOLD` and
-`LOGPROB_CONFIDENCE_THRESHOLD` from the same graded run. **Files:**
-`scripts/calibrate.py`, maybe `local_model.py`. Blocked on graded data.
 
 ---
 

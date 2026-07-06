@@ -38,25 +38,61 @@ class ConfidenceReport:
     signals: Dict[str, float]  # per-scorer sub-scores, for live debugging
 
 
-# Complexity signals: each pattern marks a query family where 1–3B models are
-# known to be weak. Matching a pattern SUBTRACTS its penalty from the
-# complexity score. Tune penalties / add patterns once real tasks are known.
+# Complexity signals: each pattern marks a query family. POSITIVE weight =
+# penalty (a family 1–3B models are weak at — pushes remote); NEGATIVE
+# weight = boost (a family they handle reliably — pushes local, e.g. so the
+# length ramp doesn't send a long-but-easy sentiment prompt remote). The
+# score is clamped to 0..1 after summing. Tuned for the Track-1 kickoff
+# categories (2026-07-07): hard-remote = math, code debug/gen, logic;
+# easy-local = sentiment, NER, summarization, short factual.
+#
+# Why the hard categories weigh 0.75: the kickoff scoring is an accuracy
+# GATE (fail → excluded), so hard categories must go remote even on SHORT
+# prompts — and with length weighted 0.4, a short prompt (length ≈ 0.96)
+# stays local unless its penalties exceed ~0.72. One decisive hard signal
+# beats stacking-and-hoping; the cost of a false positive is a few remote
+# tokens, the cost of a false negative is the whole submission.
 _SIGNAL_PATTERNS = {
-    # multi-step / symbolic math is where small models fail hardest
+    # multi-step / symbolic math is where small models fail hardest;
+    # includes GSM8K-style word problems (how many/much + numbers)
     "math": (
-        0.35,
+        0.75,
         re.compile(
             r"\b(calculate|compute|solve|prove|derivative|integral|equation"
-            r"|probability|theorem)\b|\d+\s*[-+*/^%]\s*\d+",
-            re.I,
+            r"|probability|theorem|remainder|percent(age)?|average of|sum of"
+            r"|product of)\b|\d+\s*[-+*/^%]\s*\d+"
+            r"|\bhow (many|much)\b.*\d|\d.*\bhow (many|much)\b",
+            re.I | re.S,
         ),
     ),
     # code generation/debugging beyond one-liners
     "code": (
-        0.35,
+        0.75,
         re.compile(
             r"\b(function|implement|algorithm|python|javascript|regex|debug"
             r"|refactor|unit test)\b|```",
+            re.I,
+        ),
+    ),
+    # debugging specifically: stacks with "code" so fix-this-bug prompts
+    # (kickoff category: code debugging) clear the remote bar even when short
+    "code_debug": (
+        0.35,
+        re.compile(
+            r"\b(bug|fix (the|this|my)|error|traceback|exception|crash(es)?"
+            r"|stack trace|doesn'?t (work|run)|not working|wrong output)\b",
+            re.I,
+        ),
+    ),
+    # logical/deductive reasoning puzzles (kickoff category): constraint
+    # satisfaction, syllogisms, truth-tellers — reliably beyond small models
+    "logic": (
+        0.75,
+        re.compile(
+            r"\b(deduce|deduction|premises?|syllogism|riddle|puzzle|paradox"
+            r"|logic(al|ally)? (puzzle|reasoning)|must be true"
+            r"|valid (conclusion|argument)|who is (lying|telling the truth)"
+            r"|truth[- ]?tellers?|knights? and knaves)\b|\bif all\b",
             re.I,
         ),
     ),
@@ -73,6 +109,39 @@ _SIGNAL_PATTERNS = {
     "multi_part": (
         0.20,
         re.compile(r"\?.*\?|\b\d\.\s|\bfirst\b.*\bthen\b|\bfinally\b", re.I | re.S),
+    ),
+    # ── Easy-local boosts (negative = ADDS confidence) ──────────────────
+    # These key on INSTRUCTION words, which stay reliable even when the
+    # attached body text accidentally trips a penalty pattern above.
+    # sentiment classification: a category small models nail
+    "sentiment": (
+        -0.40,
+        re.compile(
+            r"\bsentiment\b|\bpositive,? negative,? or neutral\b"
+            r"|\bpositive or negative\b"
+            r"|classify (this|the following) (review|tweet|comment|text)",
+            re.I,
+        ),
+    ),
+    # named-entity recognition / extraction
+    "ner": (
+        -0.40,
+        re.compile(
+            r"named entit|\bentit(y|ies)\b"
+            r"|\b(extract|list|identify|find) (all )?(the )?"
+            r"(names|people|persons?|organi[sz]ations?|locations?|dates"
+            r"|entities)\b",
+            re.I,
+        ),
+    ),
+    # summarization: content length matters less than the length ramp thinks
+    "summarize": (
+        -0.30,
+        re.compile(
+            r"\bsummari[sz]e\b|\bsummary\b|\btl;?dr\b"
+            r"|in (one|a single|1) sentence",
+            re.I,
+        ),
     ),
 }
 
@@ -97,7 +166,9 @@ def complexity_score(prompt: str) -> float:
     for weight, pattern in _SIGNAL_PATTERNS.values():
         if pattern.search(prompt):
             penalty += weight
-    return max(0.0, 1.0 - penalty)
+    # min() clamp: boost weights are negative, and a boosted-only prompt
+    # must not push the score past 1.0.
+    return max(0.0, min(1.0, 1.0 - penalty))
 
 
 # Relative importance of each scorer. Complexity dominates because a short
