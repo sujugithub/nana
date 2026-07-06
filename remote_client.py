@@ -33,6 +33,61 @@ class RemoteError(RuntimeError):
     """Remote call failed in a way this client cannot recover from."""
 
 
+def _model_key(model_id: str) -> str:
+    """Match models on the last path segment, case-insensitive, so
+    "deepseek-v4-pro" == "accounts/fireworks/models/deepseek-v4-pro" —
+    the harness and our config may spell the same model differently."""
+    return model_id.rsplit("/", 1)[-1].strip().lower()
+
+
+def resolve_remote_model() -> Optional[str]:
+    """Pick the remote model, honoring the kickoff ALLOWED_MODELS contract.
+
+    - ALLOWED_MODELS unset/empty → dev mode: settings.remote_model_name.
+    - Otherwise the answer ALWAYS comes from the allow-list, VERBATIM as the
+      harness spells it (its proxy bills by these IDs). Priority: an
+      explicitly configured REMOTE_MODEL_NAME that appears in the list, then
+      the first REMOTE_MODEL_PREFERENCE entry that does, then the list head.
+    - Set-but-unusable list (e.g. " , ") → None. Callers fail per-call
+      (RemoteError) rather than aborting the run: local answers still score.
+    """
+    raw = settings.allowed_models.strip()
+    if not raw:
+        if not settings.mock_mode:  # keep wiring-test output clean
+            print(
+                f"NOTE: ALLOWED_MODELS not set — dev fallback "
+                f"{settings.remote_model_name!r}",
+                file=sys.stderr,
+            )
+        return settings.remote_model_name
+
+    allowed = [m.strip() for m in raw.split(",") if m.strip()]
+    if not allowed:
+        print(
+            "ERROR: ALLOWED_MODELS is set but contains no model IDs — remote "
+            "routing disabled, all tasks will use the local fallback",
+            file=sys.stderr,
+        )
+        return None
+
+    by_key = {}
+    for model in allowed:  # first occurrence wins on duplicates
+        by_key.setdefault(_model_key(model), model)
+
+    candidates = [settings.remote_model_name] + settings.remote_model_preference.split(",")
+    for candidate in candidates:
+        chosen = by_key.get(_model_key(candidate))
+        if chosen:
+            print(f"remote model: {chosen!r} (from ALLOWED_MODELS)", file=sys.stderr)
+            return chosen
+    print(
+        f"remote model: {allowed[0]!r} (first of ALLOWED_MODELS; no "
+        f"preference matched)",
+        file=sys.stderr,
+    )
+    return allowed[0]
+
+
 class _Transient(Exception):
     """Internal marker for retryable HTTP statuses."""
 
@@ -48,8 +103,11 @@ class RemoteClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
-        self.model_name = model_name or settings.remote_model_name
+        self.model_name = model_name or resolve_remote_model()
         self.api_key = api_key or settings.fireworks_api_key
+        # The kickoff harness meters tokens through its proxy: EVERY call
+        # must go through FIREWORKS_BASE_URL (this is the only HTTP call
+        # site in the codebase — keep it that way).
         self.base_url = (base_url or settings.fireworks_base_url).rstrip("/")
 
     def generate(self, prompt: str) -> Completion:
@@ -63,6 +121,14 @@ class RemoteClient:
                 completion_tokens=24,
                 source=ROUTE_REMOTE,
                 latency_s=time.time() - started,
+            )
+
+        if not self.model_name:
+            # ALLOWED_MODELS was set but unusable (see resolve_remote_model).
+            # Per-call failure → run_task's local fallback keeps the run alive.
+            raise RemoteError(
+                "no usable remote model: ALLOWED_MODELS is set but empty — "
+                "check the env the harness injected"
             )
 
         if not self.api_key:

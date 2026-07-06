@@ -56,6 +56,16 @@ class Settings:
     # gpt-oss-120b / glm-5p1 / glm-5p2 / kimi-k2p6 — every serverless chat
     # model now bills hidden reasoning tokens into completion usage).
     remote_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
+    # Kickoff contract: the harness injects ALLOWED_MODELS (comma-separated
+    # model IDs) and the remote model MUST come from it — calling anything
+    # else invalidates the submission. Empty = dev mode, use
+    # remote_model_name. Selection: remote_client.resolve_remote_model().
+    allowed_models: str = ""
+    # Tie-breaker when ALLOWED_MODELS has several entries: first name here
+    # (comma-separated, matched on the ID's last path segment) that appears
+    # in the allow-list wins; otherwise the list's first entry. deepseek won
+    # the 2026-07-04 bake-off (flagship quality, fewest completion tokens).
+    remote_model_preference: str = "deepseek-v4-pro"
     fireworks_api_key: str = ""  # set FIREWORKS_API_KEY; never commit a key
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
     # 4096, not 1024: reasoning models spend completion budget on thinking
@@ -93,6 +103,17 @@ class Settings:
     # (scripts/calibrate.py). Set to 0 to disable the gate.
     logprob_confidence_threshold: float = 0.4
 
+    # ── Harness limits (kickoff spec: 10-minute cap) ─────────────────────
+    # Worker threads for the task pool. Remote calls (~27 s each observed)
+    # parallelize up to this; local generation serializes on the model lock
+    # regardless, so this dial only bounds concurrent Fireworks requests.
+    remote_concurrency: int = 8
+    # Seconds from process start until we stop waiting on unfinished tasks
+    # and write results.json with what we have. The scoring cap is 600 s
+    # TOTAL (container start → exit); 540 leaves slack for model load,
+    # result writing, and container overhead.
+    run_deadline_s: float = 540.0
+
     # ── Infra ────────────────────────────────────────────────────────────
     mock_mode: bool = False  # AGENT_MOCK=1 → no weights, no network (wiring tests)
     usage_log_path: str = "logs/usage.jsonl"
@@ -103,6 +124,10 @@ class Settings:
         s.local_model_name = _env_str("LOCAL_MODEL_NAME", s.local_model_name)
         s.local_max_new_tokens = _env_int("LOCAL_MAX_NEW_TOKENS", s.local_max_new_tokens)
         s.remote_model_name = _env_str("REMOTE_MODEL_NAME", s.remote_model_name)
+        s.allowed_models = _env_str("ALLOWED_MODELS", s.allowed_models)
+        s.remote_model_preference = _env_str(
+            "REMOTE_MODEL_PREFERENCE", s.remote_model_preference
+        )
         s.fireworks_api_key = _env_str("FIREWORKS_API_KEY", s.fireworks_api_key)
         s.fireworks_base_url = _env_str("FIREWORKS_BASE_URL", s.fireworks_base_url)
         s.remote_max_tokens = _env_int("REMOTE_MAX_TOKENS", s.remote_max_tokens)
@@ -115,6 +140,8 @@ class Settings:
         s.logprob_confidence_threshold = _env_float(
             "LOGPROB_CONFIDENCE_THRESHOLD", s.logprob_confidence_threshold
         )
+        s.remote_concurrency = _env_int("REMOTE_CONCURRENCY", s.remote_concurrency)
+        s.run_deadline_s = _env_float("RUN_DEADLINE_S", s.run_deadline_s)
         s.mock_mode = _env_bool("AGENT_MOCK", s.mock_mode)
         s.usage_log_path = _env_str("USAGE_LOG_PATH", s.usage_log_path)
         return s

@@ -75,7 +75,15 @@ python3 main.py --tasks tasks/sample_tasks.json
 
 # 3) Docker (or `make build` / `make docker-run`):
 docker build --platform=linux/amd64 -t hybrid-router-agent .   # scoring host is x86_64
-docker run --rm --env-file .env -v "$(pwd)/logs:/app/logs" hybrid-router-agent
+# dev run (image default CMD is scoring-harness mode — see below):
+docker run --rm --env-file .env -v "$(pwd)/logs:/app/logs" \
+    hybrid-router-agent --tasks tasks/sample_tasks.json
+
+# 4) Scoring-harness mode (the image default: reads /input/tasks.json,
+#    writes /output/results.json = [{task_id, answer}]) — `make docker-run-harness`:
+docker run --rm --env-file .env \
+    -v "$(pwd)/harness/input:/input:ro" -v "$(pwd)/harness/output:/output" \
+    hybrid-router-agent
 ```
 
 ## Kickoff-day checklist

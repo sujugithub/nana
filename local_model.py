@@ -14,6 +14,7 @@ Design notes:
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import Optional
 
@@ -27,6 +28,10 @@ class LocalModel:
         self._model = None
         self._tokenizer = None
         self._device = "cpu"
+        # main.run_all calls generate() from a thread pool. One model
+        # instance + compute-bound generation → serialize the real path;
+        # threads doing remote calls never touch this lock.
+        self._lock = threading.Lock()
 
     @property
     def loaded(self) -> bool:
@@ -79,6 +84,10 @@ class LocalModel:
                 latency_s=time.time() - started,
             )
 
+        with self._lock:
+            return self._generate_locked(prompt, started)
+
+    def _generate_locked(self, prompt: str, started: float) -> Completion:
         if not self.loaded:
             self.load()
         import torch

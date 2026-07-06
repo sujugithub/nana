@@ -49,14 +49,18 @@ NER, short factual, simple summaries. Hard remotes: math, code debug/gen,
 logic puzzles.
 
 **NEW work the real spec forces** (these WERE "blocked on reveal"):
-- **I/O adapter** — `/input/tasks.json` → `/output/results.json`, new entrypoint.
-- **Honor `ALLOWED_MODELS`** at runtime (remote_client picks from the list).
-- **CONCURRENCY** — remote calls are slow (~27 s observed); a sequential loop
-  blows the 10-min cap on any real task count. Parallelise remote calls.
+- ~~**I/O adapter**~~ **DONE 2026-07-07** — `--input/--output` harness mode
+  in main.py, Docker CMD default; results.json always written (atomic, every
+  task_id, `""` for unfinished). See §3.
+- ~~**Honor `ALLOWED_MODELS`**~~ **DONE 2026-07-07** —
+  `resolve_remote_model()` picks from the list at runtime (verbatim IDs,
+  suffix-matched; `REMOTE_MODEL_PREFERENCE` tie-breaker). See §3.
+- ~~**CONCURRENCY**~~ **DONE 2026-07-07** — `run_all` thread pool
+  (`REMOTE_CONCURRENCY`=8) + `RUN_DEADLINE_S` (540 s) deadline guard. See §3.
 - **Small/quantized local model** to stay < 10 GB (ROCm image alone is
   4.94 GB) — e.g. a Q4 GGUF ~1 GB.
-- **Defensive output** — always write valid results.json even on partial
-  failure; correct exit codes.
+- ~~**Defensive output**~~ **DONE 2026-07-07** — part of the I/O adapter
+  (exit 0 iff a valid all-task results.json landed).
 - **Push to GHCR (public).**
 - Input has **NO category label** (`{task_id, prompt}` only) — route on the
   prompt text; `FORCE_ROUTE_BY_CATEGORY` has nothing to key on.
@@ -155,6 +159,32 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
   *confident error* — the bat-and-ball trap scored 0.90 while wrong. The
   0.4 default is a safety net; CALIBRATE against graded answers at kickoff
   (that's also when min-token-prob may beat the mean).
+- **Harness I/O adapter + concurrency implemented 2026-07-07** (kickoff #9 +
+  #11): `python3 main.py --input /input/tasks.json --output
+  /output/results.json` is now the Docker CMD. All tasks run on a thread pool
+  (`REMOTE_CONCURRENCY`, default 8 — remote calls overlap, PROVEN 8×2 s stubs
+  in 2.0 s wall; local generation serializes on a lock in `LocalModel`;
+  `TokenTracker` is thread-safe). Global deadline `RUN_DEADLINE_S` (default
+  540 s from process start, model load included): at the deadline, finished
+  answers are harvested, unfinished tasks get `""`, results.json is written
+  (atomically, every task_id, input order), and stuck workers are bypassed
+  with `os._exit`. Exit 0 whenever a valid all-task results file was written;
+  1 only for unreadable input / unwritable output. Dev `--tasks` path
+  unchanged (but now also concurrent); `run_task` untouched. Wiring test
+  extended (`harness_io_check`); `make docker-run-harness` simulates the
+  scoring mounts.
+- **`ALLOWED_MODELS` honored 2026-07-07** (kickoff #10):
+  `resolve_remote_model()` in remote_client.py. When the harness sets
+  `ALLOWED_MODELS`, the remote model ALWAYS comes from that list, verbatim
+  (the proxy bills by those IDs); entries are matched on the ID's last path
+  segment so "deepseek-v4-pro" and "accounts/fireworks/models/deepseek-v4-pro"
+  agree. Priority: explicit `REMOTE_MODEL_NAME` if allowed →
+  `REMOTE_MODEL_PREFERENCE` (default deepseek-v4-pro, the bake-off winner) →
+  first list entry. Unset = dev fallback to `REMOTE_MODEL_NAME`;
+  set-but-empty = remote disabled per-call (RemoteError → local fallback, run
+  survives). `FIREWORKS_BASE_URL` compliance verified: the POST in
+  remote_client.py is the codebase's only HTTP call site. Covered in the
+  wiring test; live-checked via env in a mock run.
 - Deps installed in `.venv/` (torch 2.8.0, transformers 4.57.6, Python 3.9).
 - Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU
   guard, billing-aware retries, etc.) now regression-checked in REAL runs.
@@ -196,8 +226,9 @@ make mock            # mock run of the sample task file
 make run             # real run: needs .venv deps + FIREWORKS_API_KEY exported
 make build           # docker build, linux/amd64, ROCm torch (submission default)
 make build-cpu       # small CPU-torch image (no-GPU environments / fast smoke test)
-make docker-run      # containerized run, logs/ mounted out
+make docker-run      # containerized dev run (--tasks), logs/ mounted out
 make docker-run-gpu  # same + passes AMD GPU devices into the container
+make docker-run-harness  # simulate the scoring harness (/input + /output mounts)
 python3 main.py --tasks X.json --threshold 0.7   # calibration sweep
 python3 scripts/calibrate.py                     # analyze the sweep, pick threshold
 ```

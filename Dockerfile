@@ -52,4 +52,7 @@ USER agent
 COPY --chown=agent:agent . .
 
 ENTRYPOINT ["python", "main.py"]
-CMD ["--tasks", "tasks/sample_tasks.json"]
+# Scoring-harness contract (kickoff spec): read /input/tasks.json, write
+# /output/results.json. Dev/mock runs override CMD, e.g.:
+#   docker run ... hybrid-router-agent --tasks tasks/sample_tasks.json --mock
+CMD ["--input", "/input/tasks.json", "--output", "/output/results.json"]

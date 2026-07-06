@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
@@ -60,6 +61,8 @@ class TokenTracker:
         self.records: List[UsageRecord] = []
         # One id per process so sweep runs are separable in the shared file.
         self.run_id = time.strftime("%Y%m%d-%H%M%S")
+        # record() is called from main.run_all's worker threads.
+        self._lock = threading.Lock()
 
     def record(
         self,
@@ -93,8 +96,9 @@ class TokenTracker:
             run_id=self.run_id,
             timestamp=time.time(),
         )
-        self.records.append(rec)
-        self._append_jsonl(rec)
+        with self._lock:
+            self.records.append(rec)
+            self._append_jsonl(rec)
         return rec
 
     def _append_jsonl(self, rec: UsageRecord) -> None:

@@ -13,25 +13,6 @@ Kickoff happened 2026-07-07 (real spec — see HANDOFF.md §0); competition ends
 
 Without these the submission scores ZERO regardless of answer quality.
 
-### [P0] #9 I/O adapter — `/input/tasks.json` → `/output/results.json`
-Harness mode: read `/input/tasks.json` (`[{task_id, prompt}]`), write
-`/output/results.json` (`[{task_id, answer}]`, valid JSON). New entrypoint
-that runs this instead of the `--tasks`/stdout dev path. Always write a valid
-file even on partial failure; exit 0 on success, non-zero on failure.
-**Files:** `main.py`, `Dockerfile` (ENTRYPOINT/CMD).
-
-### [P0] #10 Honor `ALLOWED_MODELS` at runtime
-Read `ALLOWED_MODELS` (comma-separated) + `FIREWORKS_BASE_URL` from env; the
-remote client must pick its model from that list (not the hardcoded
-`deepseek-v4-pro`). Fail loudly if none is usable. Verify EVERY remote call
-goes through `FIREWORKS_BASE_URL` (bypass = 0 tokens recorded).
-**Files:** `config.py`, `remote_client.py`.
-
-### [P0] #11 Concurrency — fit the 10-minute cap
-Remote calls run ~27 s each; a sequential loop over N tasks blows 10 min fast.
-Parallelise remote calls (asyncio or a thread pool), with a global deadline
-guard so we always write results before the cap. **Files:** `main.py`.
-
 ### [P1] #12 Small/quantized local model + public image ≤ 10 GB
 Pick a local model that fits < 10 GB compressed and loads fast (Q4 GGUF ~1 GB,
 or a 0.5–1.5B checkpoint). Build, then push the image to GHCR (public).
@@ -45,10 +26,13 @@ minimise tokens (concise-answer prompting + tight per-task `max_tokens`).
 
 ---
 
-## ✅ Done (closed 2026-07-04/05 — details in git history + HANDOFF.md §3)
+## ✅ Done (closed 2026-07-04..07 — details in git history + HANDOFF.md §3)
 
 | # | Was | Outcome |
 | --- | --- | --- |
+| 9 | I/O adapter (`/input/tasks.json` → `/output/results.json`) | `main.py --input/--output` harness mode, now the Docker CMD (dev `--tasks` path unchanged). results.json ALWAYS written (atomic tmp+rename, every task_id, `""` for unfinished), input order preserved. Exit 0 whenever a valid all-task file landed (partial answers beat voiding the run); exit 1 only on unreadable input / unwritable output. `make docker-run-harness` simulates the mounts. Covered by `test_harness.py` |
+| 10 | Honor `ALLOWED_MODELS` at runtime | `resolve_remote_model()` in remote_client.py: allow-list entries used VERBATIM (proxy bills by those IDs), matched on the last path segment so short/full spellings agree. Priority: explicit `REMOTE_MODEL_NAME` if allowed → `REMOTE_MODEL_PREFERENCE` (default deepseek-v4-pro) → list head; unset list = dev fallback; set-but-empty list disables remote per-call (local fallback keeps the run alive). `FIREWORKS_BASE_URL` was already the only HTTP call site. Covered by `test_harness.py` |
+| 11 | Concurrency for the 10-min cap | `run_all` thread pool (`REMOTE_CONCURRENCY`, default 8) around the untouched `run_task`; local generation serializes on a `LocalModel` lock, `TokenTracker` locked. Global deadline `RUN_DEADLINE_S` (540 s from process start, model load included): at the deadline finished-but-uncollected answers are harvested, the rest abandoned, results written, and stuck worker threads bypassed via `os._exit` so the write always lands inside the cap. Proven: 8×2 s remote stubs in 2.0 s wall |
 | 1 | Prove real local model path | Qwen2.5-1.5B generates real answers, exact tokenizer counts, chat-template + plain branches both work |
 | 2 | Prove real Fireworks remote path | Live calls + real `usage` billing; found `llama-v3p3-70b` retired → default now `deepseek-v4-pro`; REMOTE_MAX_TOKENS 4096; clean bad-key error path |
 | 3 | Docker build + smoke test | BOTH images build + run mock correctly in-container: CPU 1.66 GB (`torch 2.12.1+cpu`) and ROCm 4.94 GB (`torch 2.9.1+rocm6.4`); logs persist via mount; real API call works in-container. Only the optional model-bake line untested — needs the final model |
