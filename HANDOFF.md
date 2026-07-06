@@ -57,8 +57,11 @@ logic puzzles.
   suffix-matched; `REMOTE_MODEL_PREFERENCE` tie-breaker). See §3.
 - ~~**CONCURRENCY**~~ **DONE 2026-07-07** — `run_all` thread pool
   (`REMOTE_CONCURRENCY`=8) + `RUN_DEADLINE_S` (540 s) deadline guard. See §3.
-- **Small/quantized local model** to stay < 10 GB (ROCm image alone is
-  4.94 GB) — e.g. a Q4 GGUF ~1 GB.
+- ~~**Small/quantized local model**~~ **MOSTLY DONE 2026-07-07** —
+  Qwen2.5-1.5B-Instruct baked by default (`BAKE_MODEL` arg); CPU image
+  validated at 2.78 GB compressed, offline harness run proven; ROCm build
+  projects ~7.6 GB < 10 GB. Left: x86 ROCm build + GHCR push (see ISSUES
+  #12 checklist).
 - ~~**Defensive output**~~ **DONE 2026-07-07** — part of the I/O adapter
   (exit 0 iff a valid all-task results.json landed).
 - **Push to GHCR (public).**
@@ -275,10 +278,13 @@ private message**). main.py does NOT auto-load `.env`: use
 6. Optional: draft-and-judge scorer (local model drafts, mean token log-prob
    as confidence) — local compute is free, costs only latency. Slot into
    `ConfidenceEstimator.scorers`.
-7. Uncomment the model-bake `RUN` line in the Dockerfile so the scoring run
-   downloads nothing. ROCm torch is already the build DEFAULT (rocm6.4 via
-   the `TORCH_INDEX` build arg); `_pick_device()` treats ROCm as `cuda`.
-   CPU-only scoring box → `make build-cpu` instead.
+7. The model bake is now the build DEFAULT (`BAKE_MODEL` arg,
+   Qwen/Qwen2.5-1.5B-Instruct; `--build-arg BAKE_MODEL=""` for a small dev
+   image) — the scoring run downloads nothing, and `LOCAL_MODEL_NAME` is
+   pinned to the baked model inside the image. ROCm torch is already the
+   build DEFAULT (rocm6.4 via `TORCH_INDEX`); `_pick_device()` treats ROCm
+   as `cuda`. CPU-only scoring box → `make build-cpu` instead. Push:
+   `make ghcr-login` then `make push` (see Makefile GHCR section).
 
 ## 6. Known quirks (accepted, don't "fix" blindly)
 

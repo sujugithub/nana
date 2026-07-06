@@ -112,8 +112,10 @@ docker run --rm --env-file .env \
 5. **Add a real validator** if outputs are checkable (exact match, JSON
    schema, tests): plug it into `router.post_check` — it's the single biggest
    accuracy upgrade available.
-6. **Bake the model into the image**: uncomment the `RUN python -c ...` line
-   in the Dockerfile so the scoring run downloads nothing.
+6. **Model bake is the build default** (`BAKE_MODEL` build arg): the image
+   ships the local model's weights and pins `LOCAL_MODEL_NAME` to them — the
+   scoring run downloads nothing. `--build-arg BAKE_MODEL=""` builds a small
+   dev image instead. Push: `make ghcr-login && make push`.
 7. **AMD GPU in the scoring env?** Switch the torch install to the ROCm wheel
    index (comment in Dockerfile). `LocalModel._pick_device()` already treats
    ROCm as `cuda`.

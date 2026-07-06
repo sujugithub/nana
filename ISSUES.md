@@ -14,9 +14,21 @@ Kickoff happened 2026-07-07 (real spec — see HANDOFF.md §0); competition ends
 Without these the submission scores ZERO regardless of answer quality.
 
 ### [P1] #12 Small/quantized local model + public image ≤ 10 GB
-Pick a local model that fits < 10 GB compressed and loads fast (Q4 GGUF ~1 GB,
-or a 0.5–1.5B checkpoint). Build, then push the image to GHCR (public).
-**Files:** `Dockerfile`, `config.py`, `requirements.txt`.
+**Mostly done 2026-07-07** — remaining steps need x86 hardware + GHCR auth:
+- [x] Model picked: **Qwen2.5-1.5B-Instruct** (proven checkpoint; accuracy
+      gate is existential, so 1.5B > 0.5B; size budget comfortable)
+- [x] Bake implemented: `BAKE_MODEL` build arg (default ON), snapshot into
+      the image's HF cache, `LOCAL_MODEL_NAME` pinned inside the image
+- [x] CPU image built + VALIDATED: **2.78 GB compressed**; harness-mode mock
+      run passes with `--network none` (zero-download local path proven)
+- [x] Makefile: `ghcr-login` / `push` / `push-cpu` / `image-size` targets
+      (registry: `ghcr.io/sujugithub/hybrid-token-routing-agent`)
+- [ ] ROCm submission build on AMD Dev Cloud x86 (`make build`, est.
+      ~7.6 GB compressed = 4.94 ROCm + ~2.7 weights, under the limit)
+- [ ] `gh auth login` + `gh auth refresh -s write:packages`, then
+      `make ghcr-login && make push`; flip the GHCR package to PUBLIC
+      (first push defaults to private!), verify with an anonymous pull
+**Files:** `Dockerfile`, `Makefile`.
 
 ### [P1] #13 Conservative accuracy-gate tuning + concise remote output
 Accuracy is a pass/fail GATE (below → excluded). Sanity-check the local model

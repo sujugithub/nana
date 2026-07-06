@@ -1,5 +1,11 @@
 # Competition shortcuts. `make test` before every commit; it needs no deps.
-.PHONY: test mock run build build-cpu docker-run docker-run-gpu docker-run-harness
+.PHONY: test mock run build build-cpu docker-run docker-run-gpu docker-run-harness \
+	ghcr-login push push-cpu image-size
+
+# Public registry for the submission (must be PUBLIC on GHCR — check the
+# package's visibility settings after the first push).
+IMAGE ?= ghcr.io/sujugithub/hybrid-token-routing-agent
+TAG ?= latest
 
 test:            ## offline wiring test — stdlib only, runs anywhere
 	python3 test_harness.py
@@ -49,3 +55,23 @@ docker-run-harness:
 		-v "$$(pwd)/logs:/app/logs" hybrid-router-agent
 	@echo "── /output/results.json ──"
 	@cat harness/output/results.json; echo
+
+# ── Submission: GHCR (public) ────────────────────────────────────────────
+# Needs `gh auth login` once (with the write:packages scope:
+# `gh auth refresh -s write:packages`).
+ghcr-login:
+	gh auth token | docker login ghcr.io -u sujugithub --password-stdin
+
+push:            ## push the ROCm (submission) image
+	docker tag hybrid-router-agent $(IMAGE):$(TAG)
+	docker push $(IMAGE):$(TAG)
+
+push-cpu:        ## push the CPU fallback image as :cpu
+	docker tag hybrid-router-agent-cpu $(IMAGE):cpu
+	docker push $(IMAGE):cpu
+
+# Compressed size ≈ what the registry stores and the 10 GB limit measures.
+# (docker images shows the UNcompressed size — not the number that counts.)
+image-size:
+	docker save hybrid-router-agent-cpu | gzip | wc -c | \
+		awk '{printf "hybrid-router-agent-cpu compressed: %.2f GB\n", $$1/1e9}'

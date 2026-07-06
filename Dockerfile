@@ -23,6 +23,12 @@ FROM python:3.11-slim
 
 # ROCm (AMD GPU) torch by default — see header comment for the CPU override.
 ARG TORCH_INDEX=https://download.pytorch.org/whl/rocm6.4
+# Local model BAKED into the image (submission default): the scoring run
+# must download nothing — a cold multi-GB pull inside the 10-minute cap is
+# a run-killer. Budget check: ROCm layers ~4.9 GB compressed + ~2.9 GB
+# weights ≈ 7.9 GB, under the 10 GB submission limit. Dev escape hatch:
+#   docker build --build-arg BAKE_MODEL="" ...   (small image, no weights)
+ARG BAKE_MODEL=Qwen/Qwen2.5-1.5B-Instruct
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -39,15 +45,22 @@ COPY requirements.txt .
 RUN pip install torch --index-url ${TORCH_INDEX} \
     && pip install -r requirements.txt
 
-# Only the model-loading import chain before the (optional) bake, so edits to
-# router/main/etc. never invalidate a multi-GB bake layer.
+# Only the model-loading import chain before the bake, so edits to
+# router/main/etc. never invalidate the multi-GB bake layer.
 COPY --chown=agent:agent config.py schemas.py local_model.py ./
 USER agent
 
-# OPTIONAL (kickoff day): bake the local model into the image so the scoring
-# run needs no network and pays no cold-download. Requires network at BUILD
-# time and AGENT_MOCK unset:
-# RUN python -c "from local_model import LocalModel; LocalModel().load()"
+# Pin the runtime default to the baked model, so the image never loads a
+# model it doesn't contain. Empty BAKE_MODEL → empty env → config.py falls
+# back to its own default (dev images download on first use).
+ENV LOCAL_MODEL_NAME=${BAKE_MODEL}
+
+# snapshot_download, not LocalModel().load(): the bake needs the FILES in
+# HF_HOME, not a full weight load — loading costs ~6 GB RAM and minutes
+# under qemu emulation for zero extra benefit at build time.
+RUN if [ -n "${BAKE_MODEL}" ]; then \
+        python -c "from huggingface_hub import snapshot_download; snapshot_download('${BAKE_MODEL}')"; \
+    fi
 
 COPY --chown=agent:agent . .
 
