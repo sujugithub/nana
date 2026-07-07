@@ -47,6 +47,18 @@ minimise tokens.
       samples (real-data recommendation so far: 0.697, n=6, pre-dates the
       concise prompt — redo the sweep)
 - [ ] Optional: tight per-task `max_tokens` if the revealed set allows it
+- [ ] Optional, A/B-test at kickoff (needs graded reps — single runs are
+      inside DeepSeek's ±25% token noise): ponytail-style minimal-code
+      clause appended to SYSTEM_PROMPT (idea from
+      github.com/DietrichGebert/ponytail, MIT). Measured 2026-07-07 n=1:
+      code-debug 646→485, code-gen 450→468 (reasoning-token blowback —
+      longer sys prompt = more billed thinking; their README warns of
+      this). Zero code needed — SYSTEM_PROMPT is env-overridable:
+      `SYSTEM_PROMPT="<current> For coding tasks: write the MINIMAL code
+      that correctly solves the task - prefer the standard library, no
+      unrequested abstractions, classes, or boilerplate. Code first, then
+      at most two short lines of notes. Keep necessary input validation
+      and error handling."`
 **Files:** `router.py`, `config.py`, `confidence.py`.
 
 ---
