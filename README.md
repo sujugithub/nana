@@ -1,15 +1,30 @@
 # Hybrid Token-Efficient Routing Agent
 
-Starter skeleton for **AMD Developer Competition ACT II — Track 1**.
+Submission for **AMD Developer Competition ACT II — Track 1** ("General-Purpose
+AI Agent", 8 capability categories).
 
 An agent that completes tasks autonomously, deciding per task whether to run a
 small **local** model (counts as **zero** tokens under the scoring rules) or
 call a **remote** model via the Fireworks AI API (billable, but accurate).
 
+## Published images (GHCR, public)
+
+| Tag | What | Size (compressed) |
+| --- | --- | --- |
+| `ghcr.io/sujugithub/hybrid-token-routing-agent:latest` | **Submission default** — ROCm torch (AMD GPU, falls back to CPU), Qwen2.5-1.5B baked | ~6–7 GB |
+| `ghcr.io/sujugithub/hybrid-token-routing-agent:cpu` | CPU-torch fallback, same agent + baked model | 2.78 GB |
+
+Both are `linux/amd64` and run the scoring-harness contract by default: read
+`/input/tasks.json` (`[{task_id, prompt}]`), write `/output/results.json`
+(`[{task_id, answer}]`), always-valid JSON, exit 0 on success, all inside the
+10-minute cap (thread-pooled remote calls + a `RUN_DEADLINE_S` guard).
+
 ## Scoring model → design
 
-`score = token count + output accuracy`, local = 0 tokens, and accuracy below
-a threshold is penalized. Four consequences drive the whole design:
+Accuracy is a pass/fail **gate** (an LLM-judge score below the threshold
+excludes the submission entirely); survivors are ranked by fewest tokens
+through the Fireworks proxy, and local tokens count as **zero**. Five
+consequences drive the whole design:
 
 1. **Default local.** Every task the small model can handle is free — so the
    router is biased toward local and treats routing as *risk detection*.

@@ -28,15 +28,26 @@ Without these the submission scores ZERO regardless of answer quality.
       anonymous `docker pull --platform linux/amd64` succeeds. NOTE: the
       package visibility flip is under PACKAGE settings, not repo settings —
       three failed attempts hit the repo page first (repo is now public too)
-- [ ] ROCm submission build on AMD Dev Cloud x86 (`make build`, est.
-      ~7.6 GB compressed = 4.94 ROCm + ~2.7 weights, under the limit), then
-      `make push` (auth + public visibility already sorted)
+- [x] ROCm image BUILT 2026-07-07 (emulated on the Mac, minutes with layer
+      cache): `hybrid-router-agent:latest`, 7.37 GB uncompressed, torch
+      2.9.1+rocm6.4, model baked, `LOCAL_MODEL_NAME` pinned
+- [ ] ROCm `:latest` GHCR push was IN FLIGHT at session end — verify:
+      `docker manifest inspect ghcr.io/sujugithub/hybrid-token-routing-agent:latest`
+      (logged out); if absent, `make ghcr-login && make push` from the Mac
+      (image exists locally) or rebuild+push on the AMD droplet (faster)
 **Files:** `Dockerfile`, `Makefile`.
 
 ### [P1] #13 Conservative accuracy-gate tuning + concise remote output
 Accuracy is a pass/fail GATE (below → excluded). Sanity-check the local model
 per category, raise the escalation bar until it clears comfortably, THEN
-minimise tokens (concise-answer prompting + tight per-task `max_tokens`).
+minimise tokens.
+- [x] Concise-answer `SYSTEM_PROMPT` (both backends) **done 2026-07-07** —
+      real A/B: remote billable −58% on the heaviest tasks, and it FIXED the
+      one wrong local answer ("mixed" → "Negative"). See HANDOFF §3.
+- [ ] Raise `LOGPROB_CONFIDENCE_THRESHOLD` per calibration on revealed
+      samples (real-data recommendation so far: 0.697, n=6, pre-dates the
+      concise prompt — redo the sweep)
+- [ ] Optional: tight per-task `max_tokens` if the revealed set allows it
 **Files:** `router.py`, `config.py`, `confidence.py`.
 
 ---
@@ -58,22 +69,36 @@ minimise tokens (concise-answer prompting + tight per-task `max_tokens`).
 
 ---
 
-## [P1][NOW→KICKOFF] #4 ROCm live test on real AMD hardware — the last unproven path
-**Why:** ROCm torch is already the Docker default (`TORCH_INDEX` build arg,
-rocm6.4; `make build-cpu` for the CPU image; `make docker-run-gpu` passes
-`/dev/kfd` + `/dev/dri`), and the ROCm image now BUILDS clean and runs mock
-in-container (4.94 GB, `torch 2.9.1+rocm6.4`). But no real generation has
-ever run on an AMD GPU — the dev Macs (arm64) cannot execute ROCm wheels.
-This is the only remaining unproven path in the repo.
+## [P1][NOW] #4 ROCm live test on real AMD hardware — the last unproven path
+**Why:** the ROCm image (model baked) now EXISTS — `hybrid-router-agent:latest`,
+torch 2.9.1+rocm6.4 — but no real generation has ever run on an AMD GPU.
+CPU fallback is proven, so the risk is slow-local (10-min-cap pressure),
+not broken.
 
-**Tasks**
-- [ ] On AMD Developer Cloud (access at kickoff): rebuild `make build`
-      natively on x86 first (the arm64 Mac's emulated build took ~5.5 h —
-      do NOT rebuild there) + `make docker-run-gpu`
-- [ ] Confirm `_pick_device()` returns `cuda` and a real local generation runs on the GPU
-- [ ] Time it vs CPU; decide the submission image (ROCm default vs CPU fallback)
+**Status 2026-07-07:** AMD Dev Cloud access GRANTED; an MI300X x1 droplet
+(image "ROCm Software 7.2.4" Quick Start, SSH key = dev Mac's
+`~/.ssh/id_ed25519_github`) was being created when the session ended. July
+GPU capacity is reduced (AMD event) — don't destroy a working droplet
+until completely done.
 
-**Done when:** a real local generation completes on an AMD GPU via ROCm.
+**Tasks (on the droplet)**
+- [ ] `git clone https://github.com/sujugithub/hybrid-token-routing-agent`
+      (public), create `.env` with the Fireworks key
+- [ ] `make build` (native x86 — minutes)
+- [ ] GPU visible through Docker:
+      `docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video
+      --entrypoint python hybrid-router-agent -c "import torch;
+      print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"`
+      → expect `True AMD Instinct MI300X`. Host ROCm is 7.2.4 vs our 6.4
+      wheels — normally fine; if False, rebuild with
+      `--build-arg TORCH_INDEX=https://download.pytorch.org/whl/rocm7.0`
+- [ ] `make docker-run-gpu` → real answers with `local_conf` values (not
+      `[mock-local]`); note per-task latency vs CPU (~10–20 s/task)
+- [ ] `docker login ghcr.io -u sujugithub` (token from the Mac:
+      `gh auth token`) + `make push`
+
+**Done when:** a real local generation completes on an AMD GPU via ROCm and
+the pushed `:latest` is anonymous-pullable.
 **Files:** `Dockerfile`, `Makefile`, `local_model.py` (verify only).
 
 ---

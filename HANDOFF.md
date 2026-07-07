@@ -2,11 +2,15 @@
 
 > Paste this file (or point the session at it) when continuing work in a new
 > Claude session. It contains everything needed to take over with zero prior
-> context. **The SCAFFOLD is complete and its real paths are PROVEN (§3).
-> STATUS 2026-07-07: KICKOFF HAPPENED — the real spec landed and it changes
-> the contract. READ §0 FIRST, then §3. Team note: Aryan is building the
-> pitch website ("RouteFlow AI") in a SEPARATE repo — not part of the scored
-> submission; don't add frontend tooling here.**
+> context. **STATUS 2026-07-07 EVENING: every kickoff P0 is DONE and
+> live-tested; a PUBLIC, working submission image exists on GHCR (`:cpu`
+> tag, anonymous-pull verified). The ROCm image is built (emulated) with
+> the model baked; its GHCR push + the on-GPU generation proof are the only
+> open engineering items — an AMD Dev Cloud MI300X droplet was being
+> provisioned when the last session ended (SSH key = the dev Mac's
+> `~/.ssh/id_ed25519_github`). READ §0 then §3. Team note: Aryan is
+> building the pitch website ("RouteFlow AI") in a SEPARATE repo — not part
+> of the scored submission; don't add frontend tooling here.**
 
 ## 0. KICKOFF — the REAL spec landed (2026-07-07). READ FIRST.
 
@@ -57,14 +61,21 @@ logic puzzles.
   suffix-matched; `REMOTE_MODEL_PREFERENCE` tie-breaker). See §3.
 - ~~**CONCURRENCY**~~ **DONE 2026-07-07** — `run_all` thread pool
   (`REMOTE_CONCURRENCY`=8) + `RUN_DEADLINE_S` (540 s) deadline guard. See §3.
-- ~~**Small/quantized local model**~~ **MOSTLY DONE 2026-07-07** —
+- ~~**Small/quantized local model**~~ **DONE 2026-07-07** —
   Qwen2.5-1.5B-Instruct baked by default (`BAKE_MODEL` arg); CPU image
-  validated at 2.78 GB compressed, offline harness run proven; ROCm build
-  projects ~7.6 GB < 10 GB. Left: x86 ROCm build + GHCR push (see ISSUES
-  #12 checklist).
+  validated at 2.78 GB compressed, offline harness run proven; ROCm image
+  built (emulated on the Mac — took minutes with layer cache, not 5.5 h),
+  7.37 GB uncompressed, torch 2.9.1+rocm6.4, model baked.
 - ~~**Defensive output**~~ **DONE 2026-07-07** — part of the I/O adapter
   (exit 0 iff a valid all-task results.json landed).
-- **Push to GHCR (public).**
+- ~~**Push to GHCR (public)**~~ **DONE for `:cpu` 2026-07-07** —
+  `ghcr.io/sujugithub/hybrid-token-routing-agent:cpu`, PUBLIC, verified by
+  anonymous pull. ROCm `:latest` push was IN FLIGHT at session end —
+  verify with `docker manifest inspect ...:latest` (logged out) before
+  relying on it. GOTCHA that burned an hour: package visibility lives
+  under PACKAGE settings (github.com/users/sujugithub/packages/...), NOT
+  repo settings; the git repo also went public in the confusion (probably
+  required for judging anyway).
 - Input has **NO category label** (`{task_id, prompt}` only) — route on the
   prompt text; `FORCE_ROUTE_BY_CATEGORY` has nothing to key on.
 
@@ -202,21 +213,59 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
   survives). `FIREWORKS_BASE_URL` compliance verified: the POST in
   remote_client.py is the codebase's only HTTP call site. Covered in the
   wiring test; live-checked via env in a mock run.
-- Deps installed in `.venv/` (torch 2.8.0, transformers 4.57.6, Python 3.9).
+- **FULL LIVE BATTERY passed 2026-07-07** — 12 real tasks (all 8 categories
+  + traps) through harness mode with real Qwen-1.5B + real Fireworks
+  (`ALLOWED_MODELS` set): 12/12 answered, valid results.json, exit 0.
+  Routing perfect (6 local/free, 6 remote, all hard tasks correct); the
+  bat-and-ball trap that once fooled the router at 0.90 now routes remote
+  and comes back RIGHT; the hedge trap escalated as designed. Failure
+  drills all passed live: bad key → 401 → local fallback (valid file, exit
+  0); 30 s deadline → clean exit at 30.13 s with 6/12 answered + 6 blank;
+  malformed input → exit 1 + valid `[]`. One real accuracy miss (sentiment
+  answered "mixed" to an options question, self-conf 0.675 — above the 0.4
+  gate) → fixed by the concise prompt AND caught by the calibrate
+  recommendation below.
+- **Concise-answer SYSTEM_PROMPT (both backends) 2026-07-07** (#13 lever):
+  one env-overridable knob, injected as a system message remotely and via
+  the local chat template. Measured on a real A/B: remote billable −58% on
+  the two heaviest tasks (logic 2187→613, code-debug 1009→718, both still
+  correct); sentiment now answers "Negative" (was "mixed"/WRONG) with
+  local_conf 0.67→0.83; the factual rambler tightened to one sentence
+  (0.70→0.94). Note: raises local self-confidence overall — recalibrate
+  the gate AFTER any prompt change.
+- **Calibration proven on REAL data 2026-07-07**: grading the battery and
+  running `calibrate.py --accuracy` recommended
+  `LOGPROB_CONFIDENCE_THRESHOLD = 0.697` (catches the wrong sentiment
+  answer, zero wasted escalations, n=6 graded local answers). Config
+  default left at 0.4 — the sample is tiny and pre-dates the concise
+  prompt; REDO on revealed samples.
+- **Images published 2026-07-07**: `:cpu` on GHCR, PUBLIC,
+  anonymous-pull-verified (2.78 GB compressed) — a valid submission exists
+  TODAY. ROCm `:latest` built (7.37 GB uncompressed, torch 2.9.1+rocm6.4,
+  model baked), push in flight at session end.
+- Deps: system `python3` on the dev Mac has torch 2.8.0 + transformers
+  (no `.venv` in this checkout); Qwen2.5-1.5B is in the local HF cache.
 - Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU
   guard, billing-aware retries, etc.) now regression-checked in REAL runs.
 
 ### REMAINING work (tracked in ISSUES.md — solved items live in its ✅ table)
-1. **#4 ROCm on real AMD hardware** — the ONLY unproven path left. ROCm
-   torch is the Docker default (`TORCH_INDEX` arg, rocm6.4; `make build-cpu`
-   for the CPU image; `make docker-run-gpu` passes the GPU devices), but no
-   generation has ever run on an AMD GPU — needs AMD Developer Cloud at
-   kickoff. The dev Macs (arm64) cannot run ROCm wheels.
-2. **Blocked on the reveal**: task format (`load_tasks`), model allow-list,
-   single-shot vs multi-step decision (#6), task-specific post_check
-   validator (#7), and calibrating BOTH thresholds — the heuristic
-   `CONFIDENCE_THRESHOLD` and the logprob `LOGPROB_CONFIDENCE_THRESHOLD` —
-   from one graded sweep (#8).
+1. **#4 ROCm generation on real AMD hardware** — the ONLY unproven path.
+   The ROCm image exists and CPU fallback is proven, so worst case is
+   slow-local, not broken. AMD Dev Cloud access GRANTED 2026-07-07; an
+   MI300X x1 droplet (image: "ROCm Software 7.2.4" Quick Start, SSH key =
+   dev Mac's `id_ed25519_github`) was being created at session end. On the
+   box: clone the public repo, `make build` (native, fast), the
+   torch-sees-GPU one-liner in ISSUES #4, `make docker-run-gpu`, `make
+   push`. Host ROCm is 7.2.4 vs our rocm6.4 wheels — normally fine; if
+   `cuda: False`, rebuild with `TORCH_INDEX=.../rocm7.0`. NOTE: July GPU
+   capacity is reduced (AMD event) — don't destroy a working droplet until
+   completely done.
+2. **Blocked on the reveal**: recalibrate BOTH thresholds on revealed
+   samples (#8 tooling ready — and required anyway since the concise
+   prompt shifted confidences), task-specific post_check validator (#7),
+   single-shot vs multi-step decision (#6).
+3. **Ask the organizers** (still unasked, existential): local in-container
+   models permitted + count as zero tokens.
 
 ### ALIGNMENT with Track 1 rules — checked 2026-07-04
 Verified against the live competition rules (lablab.ai / web3voyager): the
