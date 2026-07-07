@@ -80,37 +80,31 @@ minimise tokens.
 
 ---
 
-## [P1][NOW] #4 ROCm live test on real AMD hardware — the last unproven path
-**Why:** the ROCm image (model baked) now EXISTS — `hybrid-router-agent:latest`,
-torch 2.9.1+rocm6.4 — but no real generation has ever run on an AMD GPU.
-CPU fallback is proven, so the risk is slow-local (10-min-cap pressure),
-not broken.
+## ✅ #4 ROCm live test on real AMD hardware — DONE 2026-07-07
+Ran on AMD Dev Cloud, single MI300X (VF), ROCm 7.2.4 host, native x86.
+**A real local generation completed on the AMD GPU via ROCm** — the last
+unproven path is now proven.
+- torch `2.9.1+rocm6.4`, `torch.cuda.is_available() == True` on the MI300X
+  (our rocm6.4 wheels run fine on the 7.2.4 host — no rocm7 rebuild needed).
+- GPU latency: model loads on `cuda` in ~14 s, steady-state generation
+  ~0.12 s per short answer (first gen ~3 s warmup) — vs 10–20 s on CPU.
+- 3-task offline run (`--network none`) returned correct answers
+  (Paris / negative / a clean summary), 100% local, valid results.json.
 
-**Status 2026-07-07:** AMD Dev Cloud access GRANTED; an MI300X x1 droplet
-(image "ROCm Software 7.2.4" Quick Start, SSH key = dev Mac's
-`~/.ssh/id_ed25519_github`) was being created when the session ended. July
-GPU capacity is reduced (AMD event) — don't destroy a working droplet
-until completely done.
+**Two real fixes fell out of the live test (committed, both images
+rebuilt + re-pushed public):**
+1. **Offline load** — the baked model still issued a HEAD to huggingface.co
+   on load, so with the HF host unreachable EVERY local task errored. Added
+   `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` to the Dockerfile *after*
+   the bake step (setting it before blocks the build-time download). Baking
+   now downloads nothing at runtime, for real.
+2. **GPU groups** — `/dev/kfd` is group `render`, `/dev/dri` is `video`;
+   `make docker-run-gpu` had only `video` → `cuda:False`. Now adds both,
+   GIDs resolved at runtime.
 
-**Tasks (on the droplet)**
-- [ ] `git clone https://github.com/sujugithub/hybrid-token-routing-agent`
-      (public), create `.env` with the Fireworks key
-- [ ] `make build` (native x86 — minutes)
-- [ ] GPU visible through Docker:
-      `docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video
-      --entrypoint python hybrid-router-agent -c "import torch;
-      print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"`
-      → expect `True AMD Instinct MI300X`. Host ROCm is 7.2.4 vs our 6.4
-      wheels — normally fine; if False, rebuild with
-      `--build-arg TORCH_INDEX=https://download.pytorch.org/whl/rocm7.0`
-- [ ] `make docker-run-gpu` → real answers with `local_conf` values (not
-      `[mock-local]`); note per-task latency vs CPU (~10–20 s/task)
-- [ ] `docker login ghcr.io -u sujugithub` (token from the Mac:
-      `gh auth token`) + `make push`
-
-**Done when:** a real local generation completes on an AMD GPU via ROCm and
-the pushed `:latest` is anonymous-pullable.
-**Files:** `Dockerfile`, `Makefile`, `local_model.py` (verify only).
+Both `:latest` (7.28 GB compressed) and `:cpu` rebuilt from the fixed
+Dockerfile, run offline, pushed, anonymous-pull-verified.
+**Files:** `Dockerfile`, `Makefile` (done); `local_model.py` (no change).
 
 ---
 

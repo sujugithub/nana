@@ -258,27 +258,27 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
   answer, zero wasted escalations, n=6 graded local answers). Config
   default left at 0.4 — the sample is tiny and pre-dates the concise
   prompt; REDO on revealed samples.
-- **Images published 2026-07-07**: `:cpu` on GHCR, PUBLIC,
-  anonymous-pull-verified (2.78 GB compressed) — a valid submission exists
-  TODAY. ROCm `:latest` (7.37 GB uncompressed, torch 2.9.1+rocm6.4, model
-  baked) also PUSHED + verified public (digest a895aac3…).
+- **ROCm PROVEN on real AMD hardware 2026-07-07** (#4 done) — MI300X on AMD
+  Dev Cloud, ROCm 7.2.4 host, our rocm6.4 wheels, `cuda: True`. GPU gen
+  ~0.12 s/answer (14 s load) vs 10–20 s CPU. Fixed two real bugs found live:
+  (1) baked model still hit huggingface.co on load → added `HF_HUB_OFFLINE`/
+  `TRANSFORMERS_OFFLINE` to the image AFTER the bake (before it blocks the
+  build download); (2) `docker-run-gpu` needed the `render` group as well as
+  `video` for `/dev/kfd`.
+- **Images published + re-pushed 2026-07-07**: BOTH `:latest` (ROCm, 7.28 GB
+  compressed) and `:cpu` on GHCR, PUBLIC, built native-x86 from the fixed
+  Dockerfile, run offline (`--network none`), anonymous-pull-verified. The
+  submission image is `ghcr.io/sujugithub/hybrid-token-routing-agent:latest`.
 - Deps: system `python3` on the dev Mac has torch 2.8.0 + transformers
   (no `.venv` in this checkout); Qwen2.5-1.5B is in the local HF cache.
 - Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU
   guard, billing-aware retries, etc.) now regression-checked in REAL runs.
 
 ### REMAINING work (tracked in ISSUES.md — solved items live in its ✅ table)
-1. **#4 ROCm generation on real AMD hardware** — the ONLY unproven path.
-   The ROCm image exists and CPU fallback is proven, so worst case is
-   slow-local, not broken. AMD Dev Cloud access GRANTED 2026-07-07; an
-   MI300X x1 droplet (image: "ROCm Software 7.2.4" Quick Start, SSH key =
-   dev Mac's `id_ed25519_github`) was being created at session end. On the
-   box: clone the public repo, `make build` (native, fast), the
-   torch-sees-GPU one-liner in ISSUES #4, `make docker-run-gpu`, `make
-   push`. Host ROCm is 7.2.4 vs our rocm6.4 wheels — normally fine; if
-   `cuda: False`, rebuild with `TORCH_INDEX=.../rocm7.0`. NOTE: July GPU
-   capacity is reduced (AMD event) — don't destroy a working droplet until
-   completely done.
+1. ~~**#4 ROCm generation on real AMD hardware**~~ **DONE 2026-07-07** — no
+   unproven paths left in the repo (see the ROCm-proven note above). If you
+   still have the MI300X droplet: it's only needed now to re-verify after a
+   Dockerfile change; otherwise destroy it to stop billing.
 2. **Blocked on the reveal**: recalibrate BOTH thresholds on revealed
    samples (#8 tooling ready — and required anyway since the concise
    prompt shifted confidences), task-specific post_check validator (#7),
