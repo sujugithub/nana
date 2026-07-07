@@ -17,6 +17,8 @@ TokenTracker(log_path="") — demos never pollute logs/usage.jsonl, which is
 the threshold-calibration audit trail.
 """
 import argparse
+import contextlib
+import io
 import json
 import os
 import sys
@@ -94,13 +96,44 @@ def bold(s):
     return _c("1", s)
 
 
+# Figlet-style wordmark — printed line by line so each gets its own color.
+_WORDMARK = [
+    r"  _                                    ",
+    r" | |__   __ _ _ __   __ _ _ __   __ _  ",
+    r" | '_ \ / _` | '_ \ / _` | '_ \ / _` | ",
+    r" | |_) | (_| | | | | (_| | | | | (_| | ",
+    r" |_.__/ \__,_|_| |_|\__,_|_| |_|\__,_| ",
+]
+
+
+def print_banner():
+    print()
+    for i, line in enumerate(_WORDMARK):
+        suffix = "  🍌" if i == 1 else ""
+        print(yellow(bold(line)) + suffix)
+    print(dim(" token-efficient routing agent · team banana"))
+    print()
+    local_name = settings.local_model_name.rsplit("/", 1)[-1]
+    with contextlib.redirect_stderr(io.StringIO()):  # mute the dev-fallback NOTE
+        remote_name = (RemoteClient().model_name or "none").rsplit("/", 1)[-1]
+    print("   {} {}".format(dim("models "),
+          green(local_name + " (local · free)") + dim("  →  ")
+          + yellow(remote_name + " (remote · billed)")))
+    print("   {} {}".format(dim("router "),
+          dim("confidence ≥ {:.2f} stays local · self-check gate {:.2f}".format(
+              settings.confidence_threshold,
+              settings.logprob_confidence_threshold))))
+    print()
+
+
 class Session:
     """One warm agent: model loaded once, totals accumulated across asks."""
 
     def __init__(self):
         self.router = Router()
         self.local = LocalModel()
-        self.remote = RemoteClient()
+        with contextlib.redirect_stderr(io.StringIO()):  # mute model-pick notes
+            self.remote = RemoteClient()
         self.tracker = TokenTracker(log_path="")  # never touch usage.jsonl
         self.asked = 0
         self.local_n = 0
@@ -156,10 +189,40 @@ def print_answer(result):
                             subsequent_indent="  ") if para.strip() else "")
 
 
+def session_graph(session):
+    """ANSI bar graph of the session so far — shared by --demo, the :stats
+    command, and the end-of-session summary."""
+    remote_n = session.asked - session.local_n
+    billed = session.billable
+    free = session.free_tokens
+    max_count = max(session.local_n, remote_n, 1)
+    print("  routing   {} {} {}".format(
+        "local ".ljust(7), green(_bar(session.local_n, max_count)), session.local_n))
+    print("            {} {} {}".format(
+        "remote".ljust(7), yellow(_bar(remote_n, max_count)), remote_n))
+    max_tok = max(billed, free, 1)
+    print("  tokens    {} {} {:,}".format(
+        "billed".ljust(7), yellow(_bar(billed, max_tok)), billed))
+    print("            {} {} {:,}  {}".format(
+        "free  ".ljust(7), green(_bar(free, max_tok)), free,
+        dim("(local — costs nothing)")))
+    print()
+    print("  " + bold("{} of {} tasks answered free".format(
+        session.local_n, session.asked)))
+    # All-remote comparison: mean billable of the REMOTE-answered tasks in
+    # THIS session, applied to every task. Clearly an estimate — the local
+    # tasks' remote cost was never measured (that's the point of the agent).
+    if remote_n and session.asked > remote_n:
+        est = int(round(billed / remote_n * session.asked))
+        if est > billed:
+            saved = 100.0 * (1 - billed / est)
+            print("  all-remote agent: ~{:,} tokens {} → banana billed {:,}, "
+                  "saved ~{:.0f}%".format(est, dim("(estimate)"), billed, saved))
+
+
 def interactive():
-    print(bold("🍌 banana") + dim(" — token-efficient routing agent  (team banana)"))
-    print(dim("local model answers for FREE; hard questions go remote and bill tokens"))
-    print(dim("type a question · exit/quit/:q to leave"))
+    print_banner()
+    print(dim(" type a question · :stats for the session graph · exit to quit"))
     print()
     try:
         import readline  # noqa: F401  (line editing / history for the demo)
@@ -167,6 +230,7 @@ def interactive():
         pass
     session = Session()
     session.warm()
+    print()
     while True:
         try:
             line = input("banana › ")
@@ -178,11 +242,23 @@ def interactive():
             continue
         if line.lower() in ("exit", "quit", ":q"):
             break
+        if line.lower() in (":stats", ":s"):
+            if session.asked:
+                print()
+                session_graph(session)
+            else:
+                print(dim("  nothing asked yet"))
+            print()
+            continue
         result = session.ask(line)
         print("  " + route_tag(result) + dim("   confidence {:.2f}".format(
             result["confidence"])))
         print_answer(result)
         print("  " + session.footer())
+        print()
+    if session.asked:
+        print()
+        session_graph(session)
         print()
     print("bye 🍌")
 
@@ -206,7 +282,8 @@ def _bar(value, max_value, width=24):
 
 
 def demo():
-    print(bold("🍌 banana — demo") + dim("  (8 tasks, one per Track-1 category)"))
+    print_banner()
+    print(dim(" demo: 8 tasks, one per Track-1 category"))
     print()
     session = Session()
     session.warm()
@@ -220,36 +297,8 @@ def demo():
         print("  {} {} {}".format(
             item["task_id"].ljust(12), route_tag(result, pad=22), dim(preview)))
 
-    total = session.asked
-    remote_n = total - session.local_n
-    billed = session.billable
-    free = session.free_tokens
-
-    # All-remote comparison: mean billable of the REMOTE-answered tasks in
-    # THIS run, applied to every task. Clearly an estimate — the local
-    # tasks' remote cost was never measured (that's the point of the agent).
-    est = None
-    if remote_n:
-        est = int(round(billed / remote_n * total))
-
     print()
-    max_count = max(session.local_n, remote_n, 1)
-    print("  routing   {} {} {}".format(
-        "local ".ljust(7), green(_bar(session.local_n, max_count)), session.local_n))
-    print("            {} {} {}".format(
-        "remote".ljust(7), yellow(_bar(remote_n, max_count)), remote_n))
-    max_tok = max(billed, free, 1)
-    print("  tokens    {} {} {:,}".format(
-        "billed".ljust(7), yellow(_bar(billed, max_tok)), billed))
-    print("            {} {} {:,}  {}".format(
-        "free  ".ljust(7), green(_bar(free, max_tok)), free,
-        dim("(local — costs nothing)")))
-    print()
-    print("  " + bold("{} of {} tasks answered free".format(session.local_n, total)))
-    if est and est > billed:
-        saved = 100.0 * (1 - billed / est)
-        print("  all-remote agent: ~{:,} tokens {} → banana billed {:,}, "
-              "saved ~{:.0f}%".format(est, dim("(estimate)"), billed, saved))
+    session_graph(session)
     return 0
 
 
