@@ -79,6 +79,20 @@ class Settings:
     request_timeout_s: float = 120.0
     max_retries: int = 3  # retries for connect errors / 429 / 5xx only
 
+    # ── Answer style (accuracy gate + token rank) ────────────────────────
+    # System prompt for BOTH backends. The judge scores the ANSWER and the
+    # rank counts remote completion tokens, so demand directness. The
+    # "exactly one of the options" clause targets an observed live failure
+    # (2026-07-07: local answered "mixed" to a positive/negative/neutral
+    # sentiment question). Empty disables. Costs ~30 prompt tokens per
+    # remote call; buys back far more in completions.
+    system_prompt: str = (
+        "Answer directly and concisely. If the question offers answer "
+        "options, reply with exactly one of them. Give the final answer "
+        "with only the essential reasoning - no filler, no restating the "
+        "question, no extra background."
+    )
+
     # ── Routing: the dials that decide the score ─────────────────────────
     # Queries whose confidence >= threshold go LOCAL (free tokens).
     # Lower threshold  = more local = fewer billable tokens, more accuracy risk.
@@ -134,6 +148,7 @@ class Settings:
         s.connect_timeout_s = _env_float("CONNECT_TIMEOUT_S", s.connect_timeout_s)
         s.request_timeout_s = _env_float("REQUEST_TIMEOUT_S", s.request_timeout_s)
         s.max_retries = _env_int("MAX_RETRIES", s.max_retries)
+        s.system_prompt = _env_str("SYSTEM_PROMPT", s.system_prompt)
         s.confidence_threshold = _env_float("CONFIDENCE_THRESHOLD", s.confidence_threshold)
         s.enable_escalation = _env_bool("ENABLE_ESCALATION", s.enable_escalation)
         s.post_check_min_chars = _env_int("POST_CHECK_MIN_CHARS", s.post_check_min_chars)

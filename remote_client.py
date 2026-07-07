@@ -144,9 +144,14 @@ class RemoteClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+        messages = []
+        if settings.system_prompt:
+            # Concise-answer directive: rank counts completion tokens.
+            messages.append({"role": "system", "content": settings.system_prompt})
+        messages.append({"role": "user", "content": prompt})
         payload = {
             "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "max_tokens": settings.remote_max_tokens,
             "temperature": 0,
         }

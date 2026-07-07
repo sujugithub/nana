@@ -96,8 +96,17 @@ class LocalModel:
         # Render to a string first, then tokenize WITHOUT re-adding special
         # tokens (the template already contains them).
         if getattr(self._tokenizer, "chat_template", None):
+            # Same concise-answer directive as the remote side: local tokens
+            # are free, but a rambling answer risks the accuracy judge (live
+            # failure 2026-07-07: "mixed" to an options question).
+            messages = []
+            if settings.system_prompt:
+                messages.append(
+                    {"role": "system", "content": settings.system_prompt}
+                )
+            messages.append({"role": "user", "content": prompt})
             rendered = self._tokenizer.apply_chat_template(
-                [{"role": "user", "content": prompt}],
+                messages,
                 tokenize=False,
                 add_generation_prompt=True,
             )
