@@ -23,11 +23,14 @@ Without these the submission scores ZERO regardless of answer quality.
       run passes with `--network none` (zero-download local path proven)
 - [x] Makefile: `ghcr-login` / `push` / `push-cpu` / `image-size` targets
       (registry: `ghcr.io/sujugithub/hybrid-token-routing-agent`)
+- [x] CPU image PUSHED + PUBLIC + verified 2026-07-07:
+      `ghcr.io/sujugithub/hybrid-token-routing-agent:cpu` (digest e0d02346…),
+      anonymous `docker pull --platform linux/amd64` succeeds. NOTE: the
+      package visibility flip is under PACKAGE settings, not repo settings —
+      three failed attempts hit the repo page first (repo is now public too)
 - [ ] ROCm submission build on AMD Dev Cloud x86 (`make build`, est.
-      ~7.6 GB compressed = 4.94 ROCm + ~2.7 weights, under the limit)
-- [ ] `gh auth login` + `gh auth refresh -s write:packages`, then
-      `make ghcr-login && make push`; flip the GHCR package to PUBLIC
-      (first push defaults to private!), verify with an anonymous pull
+      ~7.6 GB compressed = 4.94 ROCm + ~2.7 weights, under the limit), then
+      `make push` (auth + public visibility already sorted)
 **Files:** `Dockerfile`, `Makefile`.
 
 ### [P1] #13 Conservative accuracy-gate tuning + concise remote output
