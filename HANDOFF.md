@@ -79,10 +79,10 @@ logic puzzles.
 - Input has **NO category label** (`{task_id, prompt}` only) — route on the
   prompt text; `FORCE_ROUTE_BY_CATEGORY` has nothing to key on.
 
-**CONFIRM with organizers (one line, existential):** local models running
-inside the container are permitted and count as zero. Reading is almost
-certainly YES (they explicitly define local tokens as zero), but the whole
-design rides on it.
+**~~CONFIRM with organizers~~ CONFIRMED 2026-07-07:** local models running
+inside the container are permitted and count as ZERO tokens (organizer
+answer: yes). The design bet is officially safe — route local aggressively
+wherever accuracy allows.
 
 Open tasks tracked in ISSUES.md (kickoff section at the top).
 
@@ -264,8 +264,8 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
    samples (#8 tooling ready — and required anyway since the concise
    prompt shifted confidences), task-specific post_check validator (#7),
    single-shot vs multi-step decision (#6).
-3. **Ask the organizers** (still unasked, existential): local in-container
-   models permitted + count as zero tokens.
+3. ~~Ask the organizers~~ **CONFIRMED 2026-07-07: local in-container models
+   permitted, count as ZERO tokens.**
 
 ### ALIGNMENT with Track 1 rules — checked 2026-07-04
 Verified against the live competition rules (lablab.ai / web3voyager): the
