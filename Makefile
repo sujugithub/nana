@@ -41,10 +41,16 @@ docker-run:
 
 # On an AMD-GPU host (e.g. AMD Developer Cloud): expose the GPU devices to
 # the container. _pick_device() then sees torch.cuda.is_available() == True.
+# /dev/kfd is group-owned by `render`, /dev/dri/card* by `video` — the
+# container process must be in BOTH or torch.cuda.is_available() is False
+# (verified 2026-07-07: `--group-add video` alone → cuda:False). GIDs vary by
+# host, so resolve them at run time rather than hardcoding.
 docker-run-gpu:
 	mkdir -p logs
 	docker run --rm --env-file .env -v "$$(pwd)/logs:/app/logs" \
-		--device=/dev/kfd --device=/dev/dri --group-add video \
+		--device=/dev/kfd --device=/dev/dri \
+		--group-add "$$(getent group render | cut -d: -f3)" \
+		--group-add "$$(getent group video | cut -d: -f3)" \
 		hybrid-router-agent --tasks tasks/sample_tasks.json
 
 # Simulate the scoring harness locally: /input + /output mounts, default CMD.

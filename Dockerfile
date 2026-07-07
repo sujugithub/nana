@@ -33,7 +33,16 @@ ARG BAKE_MODEL=Qwen/Qwen2.5-1.5B-Instruct
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/app/.cache/huggingface
+    HF_HOME=/app/.cache/huggingface \
+    # The model is baked in (below); load it from the local cache and NEVER
+    # phone home. Without this, transformers issues a HEAD to huggingface.co
+    # on every load — verified 2026-07-07 on AMD Dev Cloud: with the HF host
+    # unreachable the tokenizer load raises and EVERY local task errors. The
+    # remote path uses plain `requests` to FIREWORKS_BASE_URL, unaffected.
+    # Override at runtime with -e HF_HUB_OFFLINE=0 if you swap in an
+    # un-baked LOCAL_MODEL_NAME that must download.
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
 
 RUN useradd --create-home agent && mkdir -p /app && chown agent:agent /app
 WORKDIR /app
