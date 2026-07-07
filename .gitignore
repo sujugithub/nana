@@ -9,3 +9,4 @@ logs/
 .DS_Store
 harness/
 .claude/
+banana_out/

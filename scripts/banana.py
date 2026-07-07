@@ -12,6 +12,13 @@ Modes:
     banana "a question"     answer one question and exit
     banana --demo           run tasks/demo_tasks.json + ANSI summary graph
 
+Interactive extras (demo conveniences, NOT scored behavior — the harness
+sends independent tasks, so main.py has no history):
+    follow-ups              the last 3 exchanges ride along as context
+    /save [name]            write the last answer's code block to banana_out/
+    /clear                  forget the conversation context
+    :stats                  session bar graph without leaving
+
 Stdlib only, on purpose (the video machine needs nothing extra installed).
 TokenTracker(log_path="") — demos never pollute logs/usage.jsonl, which is
 the threshold-calibration audit trail.
@@ -21,6 +28,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import sys
 import textwrap
 import time
@@ -129,6 +137,13 @@ def print_banner():
 class Session:
     """One warm agent: model loaded once, totals accumulated across asks."""
 
+    # Context is an INTERACTIVE-ONLY convenience: the scored contract is
+    # independent {task_id, prompt} pairs, so main.py has no history and
+    # never will. Kept small on purpose — a long history drags the length
+    # score down and routes follow-ups remote (billed).
+    MAX_TURNS = 3          # exchanges carried into the next prompt
+    MAX_CTX_ANSWER = 400   # chars of each past answer kept in context
+
     def __init__(self):
         self.router = Router()
         self.local = LocalModel()
@@ -139,6 +154,8 @@ class Session:
         self.local_n = 0
         self.billable = 0
         self.free_tokens = 0
+        self.history = []      # [(question, answer)] — last MAX_TURNS kept
+        self.last_answer = ""
 
     def warm(self):
         if settings.mock_mode or self.local.loaded:
@@ -149,8 +166,24 @@ class Session:
         print(dim("ready in {:.1f}s — model stays warm for this session".format(
             time.time() - started)))
 
-    def ask(self, prompt, task_id=None):
-        task = Task(task_id or "q{}".format(self.asked + 1), prompt)
+    def _contextual(self, question):
+        """Prepend recent exchanges so follow-ups ("how old is he?") resolve.
+        The router then decides on the WHOLE contextual prompt — a follow-up
+        to a code discussion carrying code context routes remote, which is
+        the safe direction."""
+        if not self.history:
+            return question
+        lines = ["Previous conversation (context only):"]
+        for q, a in self.history[-self.MAX_TURNS:]:
+            lines.append("user: " + q)
+            lines.append("assistant: " + a[: self.MAX_CTX_ANSWER])
+        lines.append("")
+        lines.append("Answer only this new question: " + question)
+        return "\n".join(lines)
+
+    def ask(self, prompt, task_id=None, use_context=False):
+        sent = self._contextual(prompt) if use_context else prompt
+        task = Task(task_id or "q{}".format(self.asked + 1), sent)
         result = run_task(task, self.router, self.local, self.remote, self.tracker)
         self.asked += 1
         if result["route"] == ROUTE_LOCAL:
@@ -158,6 +191,10 @@ class Session:
         self.billable += result["billable_tokens"]
         rec = self.tracker.records[-1]
         self.free_tokens += rec.local_prompt_tokens + rec.local_completion_tokens
+        if use_context:
+            self.history.append((prompt, result["answer"]))
+            self.history = self.history[-self.MAX_TURNS:]
+        self.last_answer = result["answer"]
         return result
 
     def footer(self):
@@ -187,6 +224,33 @@ def print_answer(result):
     for para in body.splitlines():
         print(textwrap.fill(para, width=76, initial_indent="  ",
                             subsequent_indent="  ") if para.strip() else "")
+
+
+_EXT = {"python": ".py", "py": ".py", "javascript": ".js", "js": ".js",
+        "typescript": ".ts", "html": ".html", "css": ".css", "bash": ".sh",
+        "sh": ".sh", "json": ".json", "sql": ".sql", "c": ".c", "cpp": ".cpp",
+        "java": ".java", "go": ".go", "rust": ".rs"}
+
+
+def save_code(answer, name=None):
+    """Write the LAST fenced code block of `answer` to banana_out/<name>.
+    Returns the path, or None if there is no code block. This is the whole
+    'it can code' feature: the model writes code as text, banana puts it on
+    disk — no agentic tool-calling is claimed or implemented."""
+    blocks = re.findall(r"```(\w*)\n(.*?)```", answer, re.S)
+    if not blocks:
+        return None
+    lang, code = blocks[-1]
+    out_dir = os.path.join(os.getcwd(), "banana_out")
+    os.makedirs(out_dir, exist_ok=True)
+    if not name:
+        name = "snippet" + _EXT.get(lang.lower(), ".txt")
+    elif "." not in name:
+        name += _EXT.get(lang.lower(), ".txt")
+    path = os.path.join(out_dir, os.path.basename(name))
+    with open(path, "w") as fh:
+        fh.write(code.rstrip() + "\n")
+    return path
 
 
 def session_graph(session):
@@ -222,7 +286,10 @@ def session_graph(session):
 
 def interactive():
     print_banner()
-    print(dim(" type a question · :stats for the session graph · exit to quit"))
+    print(dim(" type a question (follow-ups remember the last {} turns)".format(
+        Session.MAX_TURNS)))
+    print(dim(" /save [name] writes the last code block to banana_out/ · "
+              "/clear forgets context · :stats graph · exit"))
     print()
     try:
         import readline  # noqa: F401  (line editing / history for the demo)
@@ -240,9 +307,10 @@ def interactive():
         line = line.strip()
         if not line:
             continue
-        if line.lower() in ("exit", "quit", ":q"):
+        low = line.lower()
+        if low in ("exit", "quit", ":q"):
             break
-        if line.lower() in (":stats", ":s"):
+        if low in (":stats", ":s"):
             if session.asked:
                 print()
                 session_graph(session)
@@ -250,7 +318,21 @@ def interactive():
                 print(dim("  nothing asked yet"))
             print()
             continue
-        result = session.ask(line)
+        if low == "/clear":
+            session.history = []
+            print(dim("  context cleared — next question starts fresh"))
+            print()
+            continue
+        if low == "/save" or low.startswith("/save "):
+            name = line[6:].strip() or None
+            path = save_code(session.last_answer, name)
+            if path:
+                print(green("  saved → {}".format(os.path.relpath(path))))
+            else:
+                print(dim("  no code block in the last answer"))
+            print()
+            continue
+        result = session.ask(line, use_context=True)
         print("  " + route_tag(result) + dim("   confidence {:.2f}".format(
             result["confidence"])))
         print_answer(result)

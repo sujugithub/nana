@@ -90,7 +90,12 @@ reimplementation, `TokenTracker(log_path="")` so demos never pollute the
 calibration log; loads `.env` itself). Three modes: `banana` = INTERACTIVE
 session (branded header, model loaded once and kept warm, `banana ›` loop,
 green LOCAL·free / yellow REMOTE·N-tok tags, running session footer, exits
-on exit/quit/:q/Ctrl-D with "bye 🍌"); `banana "question"` = one-shot;
+on exit/quit/:q/Ctrl-D with "bye 🍌"; interactive extras added later that
+day: follow-ups carry the last 3 exchanges as context, `/clear` resets,
+`/save [name]` writes the last answer's code block to `banana_out/`
+(gitignored) — context/saving are DEMO conveniences only, the scored
+harness sends independent tasks and main.py has no history);
+`banana "question"` = one-shot;
 `banana --demo` (= `make demo`) = runs `tasks/demo_tasks.json` with per-task
 lines + ANSI bar graph (local vs remote counts, billed vs free tokens,
 "X of Y free", all-remote figure labeled "(estimate)"). Verified live:
