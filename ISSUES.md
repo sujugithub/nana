@@ -138,6 +138,15 @@ turns the escalation cascade from a guess into a check.
 
 ---
 
+## ✅ Presentation tooling (not scored): 🍌 banana CLI — done 2026-07-07
+
+`scripts/banana.py` + `make demo` + `banana()` in `~/.zshrc`. Interactive
+warm-model session / one-shot / `--demo` graph mode for the pitch video.
+Imports the scored modules directly (no reimplementation); never writes
+`logs/usage.jsonl`; scored path byte-identical. Details in HANDOFF §0.
+
+---
+
 ## Out of repo: pitch website (Aryan)
 
 The "RouteFlow AI" marketing/pitch site is being built separately and is NOT

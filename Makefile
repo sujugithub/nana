@@ -1,5 +1,5 @@
 # Competition shortcuts. `make test` before every commit; it needs no deps.
-.PHONY: test mock run build build-cpu docker-run docker-run-gpu docker-run-harness \
+.PHONY: test mock run demo build build-cpu docker-run docker-run-gpu docker-run-harness \
 	ghcr-login push push-cpu image-size
 
 # Public registry for the submission (must be PUBLIC on GHCR — check the
@@ -9,6 +9,9 @@ TAG ?= latest
 
 test:            ## offline wiring test — stdlib only, runs anywhere
 	python3 test_harness.py
+
+demo:            ## 🍌 banana demo: 8-category run + summary graph (real models)
+	python3 scripts/banana.py --demo
 
 mock:            ## run the sample task file in mock mode
 	python3 main.py --tasks tasks/sample_tasks.json --mock

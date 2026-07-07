@@ -84,15 +84,24 @@ inside the container are permitted and count as ZERO tokens (organizer
 answer: yes). The design bet is officially safe — route local aggressively
 wherever accuracy allows.
 
-**PRESENTATION (not scored):** a demo CLI (`scripts/demo.py`) is being built
-for the pitch VIDEO — it runs `tasks/demo_tasks.json`, prints clean colored
-per-task routing lines, and draws a terminal bar graph of local(free) vs
-remote(paid) tokens. It is presentation-only: it MUST NOT change the scored
-container, `main.py`, the Dockerfile, or the `/input→/output` contract. Extra
-tooling in the repo is allowed; only the container is scored. `demo_tasks.json`
-holds 8 tasks, one per category, chosen so the routing splits visibly on
-camera (entities uses "Elon Musk founded SpaceX in California" — the local
-model gets it clean; the earlier Tim-Cook example mis-labeled Microsoft).
+**PRESENTATION (not scored) — 🍌 banana CLI DONE 2026-07-07:**
+`scripts/banana.py` (stdlib only, imports the scored modules — zero routing
+reimplementation, `TokenTracker(log_path="")` so demos never pollute the
+calibration log; loads `.env` itself). Three modes: `banana` = INTERACTIVE
+session (branded header, model loaded once and kept warm, `banana ›` loop,
+green LOCAL·free / yellow REMOTE·N-tok tags, running session footer, exits
+on exit/quit/:q/Ctrl-D with "bye 🍌"); `banana "question"` = one-shot;
+`banana --demo` (= `make demo`) = runs `tasks/demo_tasks.json` with per-task
+lines + ANSI bar graph (local vs remote counts, billed vs free tokens,
+"X of Y free", all-remote figure labeled "(estimate)"). Verified live:
+demo routing matches `main.py --input tasks/demo_tasks.json` exactly
+(4 local / 4 remote; billable 1,756 vs 1,747 — provider token wobble, <1%).
+`~/.zshrc` has `banana()` forwarding to the script. Presentation-only: the
+scored container, `main.py`, Dockerfile, and `/input→/output` contract are
+untouched. `demo_tasks.json` holds 8 tasks, one per category, chosen so the
+routing splits visibly on camera (entities uses "Elon Musk founded SpaceX
+in California" — the local model gets it clean; the earlier Tim-Cook
+example mis-labeled Microsoft).
 
 Open tasks tracked in ISSUES.md (kickoff section at the top).
 
