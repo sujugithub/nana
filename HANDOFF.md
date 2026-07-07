@@ -70,9 +70,9 @@ logic puzzles.
   (exit 0 iff a valid all-task results.json landed).
 - ~~**Push to GHCR (public)**~~ **DONE for `:cpu` 2026-07-07** —
   `ghcr.io/sujugithub/hybrid-token-routing-agent:cpu`, PUBLIC, verified by
-  anonymous pull. ROCm `:latest` push was IN FLIGHT at session end —
-  verify with `docker manifest inspect ...:latest` (logged out) before
-  relying on it. GOTCHA that burned an hour: package visibility lives
+  anonymous pull. ROCm `:latest` PUSHED + verified public 2026-07-07
+  (digest a895aac3…) — BOTH images live. GOTCHA that burned an hour:
+  package visibility lives
   under PACKAGE settings (github.com/users/sujugithub/packages/...), NOT
   repo settings; the git repo also went public in the confusion (probably
   required for judging anyway).
@@ -241,8 +241,8 @@ answer. Escalation failure → keep flagged local answer; remote-route failure
   prompt; REDO on revealed samples.
 - **Images published 2026-07-07**: `:cpu` on GHCR, PUBLIC,
   anonymous-pull-verified (2.78 GB compressed) — a valid submission exists
-  TODAY. ROCm `:latest` built (7.37 GB uncompressed, torch 2.9.1+rocm6.4,
-  model baked), push in flight at session end.
+  TODAY. ROCm `:latest` (7.37 GB uncompressed, torch 2.9.1+rocm6.4, model
+  baked) also PUSHED + verified public (digest a895aac3…).
 - Deps: system `python3` on the dev Mac has torch 2.8.0 + transformers
   (no `.venv` in this checkout); Qwen2.5-1.5B is in the local HF cache.
 - Earlier multi-agent-review fixes (per-task error handling, fp32-on-CPU

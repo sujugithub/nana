@@ -31,10 +31,9 @@ Without these the submission scores ZERO regardless of answer quality.
 - [x] ROCm image BUILT 2026-07-07 (emulated on the Mac, minutes with layer
       cache): `hybrid-router-agent:latest`, 7.37 GB uncompressed, torch
       2.9.1+rocm6.4, model baked, `LOCAL_MODEL_NAME` pinned
-- [ ] ROCm `:latest` GHCR push was IN FLIGHT at session end — verify:
-      `docker manifest inspect ghcr.io/sujugithub/hybrid-token-routing-agent:latest`
-      (logged out); if absent, `make ghcr-login && make push` from the Mac
-      (image exists locally) or rebuild+push on the AMD droplet (faster)
+- [x] ROCm `:latest` PUSHED + PUBLIC + verified 2026-07-07 (digest
+      a895aac3…, anonymous manifest fetch HTTP 200) — the submission image
+      is live. Still pending: on-GPU generation proof (#4)
 **Files:** `Dockerfile`, `Makefile`.
 
 ### [P1] #13 Conservative accuracy-gate tuning + concise remote output
