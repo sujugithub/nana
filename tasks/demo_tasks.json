@@ -1,0 +1,10 @@
+[
+  { "task_id": "factual",    "prompt": "What is the capital of France?" },
+  { "task_id": "sentiment",  "prompt": "Classify the sentiment of this review as positive, negative, or neutral: The screen is gorgeous and the keyboard feels great, but the battery barely lasts three hours and customer support took two weeks to reply with a useless checklist." },
+  { "task_id": "entities",   "prompt": "List the people, organizations, and locations in this sentence, grouped by type: Elon Musk founded SpaceX in California." },
+  { "task_id": "summary",    "prompt": "Summarize the following in one sentence: The city council voted Tuesday to approve a new transit plan, allocating two hundred million dollars to expand light rail, add forty electric buses, and build protected bike lanes downtown, over objections that the money should fund road repairs instead." },
+  { "task_id": "math",       "prompt": "A bakery sells muffins for 3 dollars each and cookies for 2 dollars each. Maria bought 4 muffins and some cookies, spending 20 dollars in total. How many cookies did she buy?" },
+  { "task_id": "logic",      "prompt": "If all bloops are razzies and all razzies are lazzies, are all bloops definitely lazzies? Alice says yes, Bob says no, and exactly one of them is telling the truth. Deduce step by step who is right." },
+  { "task_id": "code-debug", "prompt": "Debug this Python function — it crashes with an IndexError on empty lists and returns the wrong output for lists with duplicate values. Fix it: def second_largest(xs): return sorted(xs)[-2]" },
+  { "task_id": "code-gen",   "prompt": "Write a Python function that merges two sorted linked lists into one sorted linked list without using extra memory." }
+]

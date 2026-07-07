@@ -84,6 +84,16 @@ inside the container are permitted and count as ZERO tokens (organizer
 answer: yes). The design bet is officially safe — route local aggressively
 wherever accuracy allows.
 
+**PRESENTATION (not scored):** a demo CLI (`scripts/demo.py`) is being built
+for the pitch VIDEO — it runs `tasks/demo_tasks.json`, prints clean colored
+per-task routing lines, and draws a terminal bar graph of local(free) vs
+remote(paid) tokens. It is presentation-only: it MUST NOT change the scored
+container, `main.py`, the Dockerfile, or the `/input→/output` contract. Extra
+tooling in the repo is allowed; only the container is scored. `demo_tasks.json`
+holds 8 tasks, one per category, chosen so the routing splits visibly on
+camera (entities uses "Elon Musk founded SpaceX in California" — the local
+model gets it clean; the earlier Tim-Cook example mis-labeled Microsoft).
+
 Open tasks tracked in ISSUES.md (kickoff section at the top).
 
 ## 1. Mission and scoring rules

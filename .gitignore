@@ -7,3 +7,5 @@ venv/
 logs/
 .cache/
 .DS_Store
+harness/
+.claude/
