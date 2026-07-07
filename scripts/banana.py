@@ -191,9 +191,20 @@ class Session:
         lines.append("Answer only this new question: " + question)
         return "\n".join(lines)
 
-    def ask(self, prompt, task_id=None, use_context=False):
-        sent = self._contextual(prompt) if use_context else prompt
-        task = Task(task_id or "q{}".format(self.asked + 1), sent)
+    # Referring words that signal the question leans on the conversation.
+    # Standalone questions go in WITHOUT history — a transcript tempts the
+    # small model to parrot old lines (fluently, so the confidence gate
+    # can't see it): live failure 2026-07-07, "ily" answered with an echoed
+    # greeting at 0.90 confidence instead of escalating.
+    _FOLLOWUP = re.compile(
+        r"\b(he|she|they|him|her|them|it|its|his|hers|their|that|this|those"
+        r"|these|my|mine|me|i|we|our|us|you|your|again|earlier|before"
+        r"|previous|last|same|above|also|too)\b",
+        re.I,
+    )
+
+    def _run(self, prompt, sent, task_id):
+        task = Task(task_id, sent)
         result = run_task(task, self.router, self.local, self.remote, self.tracker)
         self.asked += 1
         if result["route"] == ROUTE_LOCAL:
@@ -201,6 +212,26 @@ class Session:
         self.billable += result["billable_tokens"]
         rec = self.tracker.records[-1]
         self.free_tokens += rec.local_prompt_tokens + rec.local_completion_tokens
+        return result
+
+    def _is_echo(self, answer):
+        norm = answer.strip().lower()
+        return bool(norm) and any(
+            norm == a.strip().lower() for _, a in self.history
+        )
+
+    def ask(self, prompt, task_id=None, use_context=False):
+        tid = task_id or "q{}".format(self.asked + 1)
+        attach = bool(use_context and self.history
+                      and self._FOLLOWUP.search(prompt))
+        sent = self._contextual(prompt) if attach else prompt
+        result = self._run(prompt, sent, tid)
+        # Echo guard: a contextual answer that just repeats an earlier
+        # answer is the transcript-parroting failure — retry fresh (the
+        # local retry is free) and let the confidence gate judge THAT.
+        if attach and self._is_echo(result["answer"]):
+            result = self._run(prompt, prompt, tid + "-retry")
+            result["echo_retry"] = True
         if use_context:
             self.history.append((prompt, result["answer"]))
         self.last_answer = result["answer"]
@@ -341,6 +372,9 @@ def interactive():
             print()
             continue
         result = session.ask(line, use_context=True)
+        if result.get("echo_retry"):
+            print(dim("  (context made the model echo an old answer — "
+                      "retried fresh)"))
         print("  " + route_tag(result) + dim("   confidence {:.2f}".format(
             result["confidence"])))
         print_answer(result)
