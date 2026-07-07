@@ -91,7 +91,9 @@ calibration log; loads `.env` itself). Three modes: `banana` = INTERACTIVE
 session (branded header, model loaded once and kept warm, `banana ›` loop,
 green LOCAL·free / yellow REMOTE·N-tok tags, running session footer, exits
 on exit/quit/:q/Ctrl-D with "bye 🍌"; interactive extras added later that
-day: follow-ups carry the last 3 exchanges as context, `/clear` resets,
+day: follow-ups carry the WHOLE conversation as context (oldest turns trim
+past `BANANA_CTX_CHARS`, default 8000 — long sessions drift remote via the
+length signal; `/clear` resets),
 `/save [name]` writes the last answer's code block to `banana_out/`
 (gitignored) — context/saving are DEMO conveniences only, the scored
 harness sends independent tasks and main.py has no history);

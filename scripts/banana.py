@@ -14,7 +14,8 @@ Modes:
 
 Interactive extras (demo conveniences, NOT scored behavior — the harness
 sends independent tasks, so main.py has no history):
-    follow-ups              the last 3 exchanges ride along as context
+    follow-ups              the whole conversation rides along as context
+                            (oldest turns trimmed past BANANA_CTX_CHARS)
     /save [name]            write the last answer's code block to banana_out/
     /clear                  forget the conversation context
     :stats                  session bar graph without leaving
@@ -139,10 +140,11 @@ class Session:
 
     # Context is an INTERACTIVE-ONLY convenience: the scored contract is
     # independent {task_id, prompt} pairs, so main.py has no history and
-    # never will. Kept small on purpose — a long history drags the length
-    # score down and routes follow-ups remote (billed).
-    MAX_TURNS = 3          # exchanges carried into the next prompt
-    MAX_CTX_ANSWER = 400   # chars of each past answer kept in context
+    # never will. The WHOLE chat is carried, newest-first, within a char
+    # budget (the local model's window is finite, and history drags the
+    # router's length score down → long sessions drift remote/billed —
+    # /clear resets). Override the budget with BANANA_CTX_CHARS.
+    CTX_CHARS = int(os.environ.get("BANANA_CTX_CHARS", "8000"))
 
     def __init__(self):
         self.router = Router()
@@ -154,7 +156,7 @@ class Session:
         self.local_n = 0
         self.billable = 0
         self.free_tokens = 0
-        self.history = []      # [(question, answer)] — last MAX_TURNS kept
+        self.history = []      # [(question, answer)] — the whole session
         self.last_answer = ""
 
     def warm(self):
@@ -167,16 +169,24 @@ class Session:
             time.time() - started)))
 
     def _contextual(self, question):
-        """Prepend recent exchanges so follow-ups ("how old is he?") resolve.
-        The router then decides on the WHOLE contextual prompt — a follow-up
-        to a code discussion carrying code context routes remote, which is
-        the safe direction."""
+        """Prepend the conversation so follow-ups ("how old is he?") resolve.
+        Whole chat, newest-first selection within CTX_CHARS, then restored to
+        chronological order — when a long session exceeds the budget it's the
+        OLDEST turns that fall off. The router decides on the full contextual
+        prompt — context-heavy follow-ups routing remote is the safe
+        direction."""
         if not self.history:
             return question
+        picked = []
+        used = 0
+        for q, a in reversed(self.history):
+            turn = "user: " + q + "\nassistant: " + a
+            if used + len(turn) > self.CTX_CHARS and picked:
+                break
+            picked.append(turn)
+            used += len(turn)
         lines = ["Previous conversation (context only):"]
-        for q, a in self.history[-self.MAX_TURNS:]:
-            lines.append("user: " + q)
-            lines.append("assistant: " + a[: self.MAX_CTX_ANSWER])
+        lines.extend(reversed(picked))
         lines.append("")
         lines.append("Answer only this new question: " + question)
         return "\n".join(lines)
@@ -193,7 +203,6 @@ class Session:
         self.free_tokens += rec.local_prompt_tokens + rec.local_completion_tokens
         if use_context:
             self.history.append((prompt, result["answer"]))
-            self.history = self.history[-self.MAX_TURNS:]
         self.last_answer = result["answer"]
         return result
 
@@ -286,8 +295,7 @@ def session_graph(session):
 
 def interactive():
     print_banner()
-    print(dim(" type a question (follow-ups remember the last {} turns)".format(
-        Session.MAX_TURNS)))
+    print(dim(" type a question — follow-ups remember the whole conversation"))
     print(dim(" /save [name] writes the last code block to banana_out/ · "
               "/clear forgets context · :stats graph · exit"))
     print()
