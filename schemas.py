@@ -2,7 +2,7 @@
 
 Kept in one tiny file so local_model / remote_client / main all agree on the
 same shapes WITHOUT importing each other — that keeps each backend
-independently swappable on kickoff day.
+independently swappable.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class Task:
 
     task_id: str
     prompt: str
-    # Free-form bag for anything the organizers attach (category, expected
+    # Free-form bag for any per-task metadata (category, expected
     # format, difficulty tag, ...). The router may use it; nothing else
     # should depend on it.
     metadata: Dict[str, Any] = field(default_factory=dict)

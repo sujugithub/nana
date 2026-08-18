@@ -1,8 +1,8 @@
 """Decision layer: given a task, choose LOCAL or REMOTE — and double-check
 local outputs after the fact.
 
-The two-stage design (this is the part being judged)
-----------------------------------------------------
+The two-stage design (the core of the router)
+---------------------------------------------
 1. PRE-ROUTE (decide): zero-cost heuristics from confidence.py score the
    query. High confidence → local (free tokens). Low confidence → straight to
    remote: a doomed local attempt would only add latency and then get
@@ -31,7 +31,7 @@ from config import ROUTE_LOCAL, ROUTE_REMOTE, settings
 from confidence import ConfidenceEstimator
 from schemas import Task
 
-# Kickoff-day shortcut: once task categories are known, hard-route entire
+# Shortcut: once task categories are known, hard-route entire
 # categories and skip the heuristics for them. e.g.:
 #   "long_form_reasoning": ROUTE_REMOTE,
 #   "classification": ROUTE_LOCAL,

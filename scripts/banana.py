@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""banana — team banana's interactive CLI for the hybrid routing agent.
+"""banana — interactive CLI for the hybrid routing agent.
 
-Demo + local-use tooling ONLY (the pitch video, live Q&A). The SCORED
-submission path (main.py entrypoint, Dockerfile, /input → /output contract)
-is deliberately untouched: this script IMPORTS the exact modules the scored
-run executes — run_task, Router, LocalModel, RemoteClient — so what a banana
-session shows is literally the submission's routing, not a reimplementation.
+Demo + local-use tooling ONLY. The batch path (main.py entrypoint, Dockerfile,
+/input → /output contract) is deliberately untouched: this script IMPORTS the
+exact modules a batch run executes — run_task, Router, LocalModel,
+RemoteClient — so what a banana session shows is the real routing, not a
+reimplementation.
 
 Modes:
     banana                  interactive session (model loads once, stays warm)
     banana "a question"     answer one question and exit
     banana --demo           run tasks/demo_tasks.json + ANSI summary graph
 
-Interactive extras (demo conveniences, NOT scored behavior — the harness
-sends independent tasks, so main.py has no history):
+Interactive extras (convenience only, NOT batch behavior — batch mode treats
+tasks as independent, so main.py keeps no history):
     follow-ups              the whole conversation rides along as context
                             (oldest turns trimmed past BANANA_CTX_CHARS)
     /save [name]            write the last answer's code block to banana_out/
@@ -138,7 +138,7 @@ def print_banner():
 class Session:
     """One warm agent: model loaded once, totals accumulated across asks."""
 
-    # Context is an INTERACTIVE-ONLY convenience: the scored contract is
+    # Context is an INTERACTIVE-ONLY convenience: the batch contract is
     # independent {task_id, prompt} pairs, so main.py has no history and
     # never will. The WHOLE chat is carried, newest-first, within a char
     # budget (the local model's window is finite, and history drags the
@@ -407,7 +407,7 @@ def _bar(value, max_value, width=24):
 
 def demo():
     print_banner()
-    print(dim(" demo: 8 tasks, one per Track-1 category"))
+    print(dim(" demo: 8 tasks, one per capability category"))
     print()
     session = Session()
     session.warm()
@@ -430,7 +430,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="banana",
         description="team banana's CLI for the hybrid routing agent "
-                    "(demo tooling — the scored path lives in main.py)",
+                    "(demo tooling — the batch path lives in main.py)",
     )
     parser.add_argument("--demo", action="store_true",
                         help="run tasks/demo_tasks.json and print the summary graph")

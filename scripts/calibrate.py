@@ -1,6 +1,6 @@
 """Threshold-calibration analysis over logs/usage.jsonl.
 
-The workflow this tool completes (README "kickoff-day checklist" step 3):
+The workflow this tool completes (threshold calibration, see EVALUATION.md):
 
     python3 main.py --tasks revealed_tasks.json --threshold 0.4
     python3 main.py --tasks revealed_tasks.json --threshold 0.55

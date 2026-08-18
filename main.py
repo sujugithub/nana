@@ -8,8 +8,8 @@ Flow per task (see README for the diagram):
                          └─ remote? ─────────────▶ RemoteClient.generate
     every step ──▶ TokenTracker (logs/usage.jsonl + summary)
 
-Failure policy — scoring = tokens + accuracy, so an ANSWER always beats no
-answer, and one bad task must never kill the run:
+Failure policy — an ANSWER always beats no answer, and one bad task must
+never kill the run:
 - escalation's remote call fails → keep the flagged local answer;
 - a remote-routed call fails → fall back to a local attempt (some chance of
   being right beats none);
@@ -20,13 +20,13 @@ Usage:
     python3 main.py --tasks tasks/sample_tasks.json          # real models
     python3 main.py --tasks real_tasks.json --threshold 0.7  # calibration sweep
     python3 main.py --input /input/tasks.json --output /output/results.json
-                                                             # scoring harness mode
+                                                             # batch mode
 
-Harness contract (kickoff spec): read [{task_id, prompt}] from --input, write
-[{task_id, answer}] valid JSON to --output — ALWAYS, even on partial failure
-(malformed/missing output scores ZERO; a blank answer loses only that task).
-All tasks run on a thread pool (REMOTE_CONCURRENCY workers) with a global
-deadline (RUN_DEADLINE_S) so results land inside the 10-minute cap.
+Batch contract: read [{task_id, prompt}] from --input, write [{task_id, answer}]
+valid JSON to --output — ALWAYS, even on partial failure (malformed or missing
+output is unusable; a blank answer loses only that task). All tasks run on a
+thread pool (REMOTE_CONCURRENCY workers) with a global deadline
+(RUN_DEADLINE_S) so results land before any wall-clock limit.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def run_task(
     """Run one task through decide → execute → post-check → account.
 
     Returns a plain dict so results are trivially JSON-serializable. This is
-    the function to adapt if the competition hands tasks over a different
+    the function to adapt if tasks arrive over a different
     interface (HTTP endpoint, stdin stream, ...): everything above it is I/O,
     everything below it is policy.
     """
@@ -100,7 +100,7 @@ def run_task(
             remote_completion = remote.generate(task.prompt)
         except RemoteError as err:
             # Last resort: a low-confidence local attempt has SOME chance of
-            # scoring; an unanswered task has none.
+            # being right; an unanswered task has none.
             problems.append(f"remote_failed_local_fallback: {err}")
             local_completion = local.generate(task.prompt)
 
@@ -140,7 +140,7 @@ def run_task(
 def load_tasks(path: str) -> List[Task]:
     """Expected file format: JSON list of {task_id, prompt, metadata?}.
 
-    If kickoff reveals a different format, adapt ONLY this function.
+    If the task format differs, adapt ONLY this function.
     """
     with open(path) as fh:
         raw = json.load(fh)
@@ -197,7 +197,7 @@ def run_all(
     def _guarded(task: Task) -> dict:
         try:
             return run_task(task, router, local, remote, tracker)
-        except Exception as err:  # one bad task must not kill the scoring run
+        except Exception as err:  # one bad task must not kill the whole run
             print(f"[{task.task_id}] ERROR: {err}", file=sys.stderr)
             tracker.record(task_id=task.task_id, route=ROUTE_ERROR)
             return {

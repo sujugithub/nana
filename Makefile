@@ -1,9 +1,9 @@
-# Competition shortcuts. `make test` before every commit; it needs no deps.
+# Project shortcuts. `make test` before every commit; it needs no deps.
 .PHONY: test mock run demo build build-cpu docker-run docker-run-gpu docker-run-harness \
 	ghcr-login push push-cpu image-size
 
-# Public registry for the submission (must be PUBLIC on GHCR — check the
-# package's visibility settings after the first push).
+# Public container registry (check the package's visibility settings on GHCR
+# after the first push).
 IMAGE ?= ghcr.io/sujugithub/hybrid-token-routing-agent
 TAG ?= latest
 
@@ -19,11 +19,11 @@ mock:            ## run the sample task file in mock mode
 run:             ## real run — needs pip deps + FIREWORKS_API_KEY
 	python3 main.py --tasks tasks/sample_tasks.json
 
-# --platform pin: the scoring host is x86_64; without it, a build on an
+# --platform pin: the deployment target is x86_64; without it, a build on an
 # Apple Silicon Mac silently produces an arm64 image that dies with "exec
 # format error" when shipped (and ROCm torch wheels are x86_64-only anyway).
-# Default build = ROCm torch (the scoring env is AMD GPU); it still runs
-# fine on CPU-only hosts, just bigger. `make build-cpu` for the small image.
+# Default build = ROCm torch (for AMD GPU hosts); it still runs fine on
+# CPU-only hosts, just bigger. `make build-cpu` for the small image.
 build:
 	docker build --platform=linux/amd64 -t hybrid-router-agent .
 
@@ -39,7 +39,7 @@ docker-run:
 	docker run --rm --env-file .env -v "$$(pwd)/logs:/app/logs" \
 		hybrid-router-agent --tasks tasks/sample_tasks.json
 
-# On an AMD-GPU host (e.g. AMD Developer Cloud): expose the GPU devices to
+# On an AMD-GPU host: expose the GPU devices to
 # the container. _pick_device() then sees torch.cuda.is_available() == True.
 # /dev/kfd is group-owned by `render`, /dev/dri/card* by `video` — the
 # container process must be in BOTH or torch.cuda.is_available() is False
@@ -53,8 +53,8 @@ docker-run-gpu:
 		--group-add "$$(getent group video | cut -d: -f3)" \
 		hybrid-router-agent --tasks tasks/sample_tasks.json
 
-# Simulate the scoring harness locally: /input + /output mounts, default CMD.
-# The real harness injects FIREWORKS_* env itself; locally .env stands in.
+# Run batch mode in-container: /input + /output mounts, default CMD.
+# Env comes from .env locally; inject it however your deployment does.
 docker-run-harness:
 	mkdir -p logs harness/input harness/output
 	cp tasks/sample_tasks.json harness/input/tasks.json
@@ -71,7 +71,7 @@ docker-run-harness:
 ghcr-login:
 	gh auth token | docker login ghcr.io -u sujugithub --password-stdin
 
-push:            ## push the ROCm (submission) image
+push:            ## push the ROCm image
 	docker tag hybrid-router-agent $(IMAGE):$(TAG)
 	docker push $(IMAGE):$(TAG)
 
@@ -79,7 +79,7 @@ push-cpu:        ## push the CPU fallback image as :cpu
 	docker tag hybrid-router-agent-cpu $(IMAGE):cpu
 	docker push $(IMAGE):cpu
 
-# Compressed size ≈ what the registry stores and the 10 GB limit measures.
+# Compressed size ≈ what the registry actually stores.
 # (docker images shows the UNcompressed size — not the number that counts.)
 image-size:
 	docker save hybrid-router-agent-cpu | gzip | wc -c | \

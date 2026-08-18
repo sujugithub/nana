@@ -1,28 +1,28 @@
 """Confidence estimation: "can the LOCAL model answer this accurately?"
 
-Why this module is the heart of the submission
-----------------------------------------------
-Scoring = token count + output accuracy, and LOCAL tokens count as ZERO.
-So the optimal policy is: answer locally whenever the small model is accurate
-enough, and pay remote tokens only when accuracy is genuinely at risk.
+Why this module is the heart of the router
+-----------------------------------------
+Local inference is far cheaper per token than a frontier API, so the optimal
+policy is: answer locally whenever the small model is accurate enough, and pay
+for the remote model only when accuracy is genuinely at risk.
 Confidence estimation is therefore framed as *risk detection*: cheap signals
 that a query exceeds what a 1–3B model handles reliably.
 
-Design choices (deliberate, and worth defending to judges):
+Design choices, deliberate:
 - Pure-Python heuristics (regex + arithmetic). They run in microseconds, cost
-  zero tokens, and are trivial to debug live: "why did task 7 go remote?" →
+  no API spend, and are trivial to debug: "why did task 7 go remote?" →
   print the per-signal breakdown that every decision carries.
 - Every scorer returns 0..1 where 1 = "local can handle it". The estimator
-  combines them with weights, so on kickoff day you tune ONE dict.
+  combines them with weights, so retuning means editing ONE dict.
 - Deliberately OPTIMISTIC: borderline queries go local, because
   router.post_check() gives a second line of defense on the local OUTPUT and
-  escalates to remote if it looks wrong. Optimism here maximizes free tokens;
-  the post-check bounds the accuracy downside.
+  escalates to remote if it looks wrong. Optimism here maximizes the local
+  share; the post-check bounds the accuracy downside.
 
-Kickoff-day extension point: a model-based scorer — e.g. have the local model
-draft an answer and use its mean token log-prob as confidence. Local compute
-is FREE under the scoring rules, so its only cost is latency. If the
-heuristics misroute the real task set, add such a scorer as one more entry in
+Extension point: a model-based scorer — e.g. have the local model draft an
+answer and use its mean token log-prob as confidence (this is implemented; see
+local_model.generate). Local compute is cheap, so the cost is mostly latency.
+If the heuristics misroute a workload, add such a scorer as one more entry in
 ConfidenceEstimator.scorers with its own weight; nothing else changes.
 """
 from __future__ import annotations
@@ -42,16 +42,17 @@ class ConfidenceReport:
 # penalty (a family 1–3B models are weak at — pushes remote); NEGATIVE
 # weight = boost (a family they handle reliably — pushes local, e.g. so the
 # length ramp doesn't send a long-but-easy sentiment prompt remote). The
-# score is clamped to 0..1 after summing. Tuned for the Track-1 kickoff
-# categories (2026-07-07): hard-remote = math, code debug/gen, logic;
-# easy-local = sentiment, NER, summarization, short factual.
+# score is clamped to 0..1 after summing. Tuned against eight task families:
+# hard-remote = math, code debug/gen, logic; easy-local = sentiment, NER,
+# summarization, short factual.
 #
-# Why the hard categories weigh 0.75: the kickoff scoring is an accuracy
-# GATE (fail → excluded), so hard categories must go remote even on SHORT
-# prompts — and with length weighted 0.4, a short prompt (length ≈ 0.96)
-# stays local unless its penalties exceed ~0.72. One decisive hard signal
-# beats stacking-and-hoping; the cost of a false positive is a few remote
-# tokens, the cost of a false negative is the whole submission.
+# Why the hard categories weigh 0.75: these weights were set against a hard
+# accuracy floor, so hard categories must go remote even on SHORT prompts —
+# with length weighted 0.4, a short prompt (length ≈ 0.96) stays local unless
+# its penalties exceed ~0.72. One decisive hard signal beats
+# stacking-and-hoping: a false positive costs a few remote tokens, a false
+# negative costs a wrong answer. Re-tune against measured data (see
+# EVALUATION.md), not intuition.
 _SIGNAL_PATTERNS = {
     # multi-step / symbolic math is where small models fail hardest;
     # includes GSM8K-style word problems (how many/much + numbers)
@@ -75,7 +76,7 @@ _SIGNAL_PATTERNS = {
         ),
     ),
     # debugging specifically: stacks with "code" so fix-this-bug prompts
-    # (kickoff category: code debugging) clear the remote bar even when short
+    # (category: code debugging) clear the remote bar even when short
     "code_debug": (
         0.35,
         re.compile(
@@ -84,7 +85,7 @@ _SIGNAL_PATTERNS = {
             re.I,
         ),
     ),
-    # logical/deductive reasoning puzzles (kickoff category): constraint
+    # logical/deductive reasoning puzzles: constraint
     # satisfaction, syllogisms, truth-tellers — reliably beyond small models
     "logic": (
         0.75,
@@ -181,7 +182,7 @@ class ConfidenceEstimator:
     """Combines independent scorers into one 0..1 confidence value.
 
     Pluggable by design: scorers is a plain dict of name → callable, weights
-    a dict of name → float. Swap or extend either on kickoff day without
+    a dict of name → float. Swap or extend either without
     touching the router.
     """
 

@@ -1,54 +1,56 @@
-# Hybrid Token-Efficient Routing Agent
+# banana — Hybrid Token-Efficient Routing Agent
 
-Submission for **AMD Developer Competition ACT II — Track 1** ("General-Purpose
-AI Agent", 8 capability categories).
+A routing layer that decides, **per request**, whether a small **local** model
+can answer it or whether the question deserves a frontier **remote** model.
+Cheap questions are answered locally at near-zero marginal cost; only the
+genuinely hard ones pay for a large model.
 
-An agent that completes tasks autonomously, deciding per task whether to run a
-small **local** model (counts as **zero** tokens under the scoring rules) or
-call a **remote** model via the Fireworks AI API (billable, but accurate).
+**The research question:** can a router using cheap difficulty signals plus the
+local model's own self-assessed confidence beat single-model baselines on the
+accuracy-versus-cost frontier — and beat *random* routing at the same spend?
 
-## Published images (GHCR, public)
+See [`EVALUATION.md`](EVALUATION.md) for how we intend to answer that,
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for how the system works, and
+[`ROADMAP.md`](ROADMAP.md) for what we're building next.
 
-| Tag | What | Size (compressed) |
-| --- | --- | --- |
-| `ghcr.io/sujugithub/hybrid-token-routing-agent:latest` | **Submission default** — ROCm torch (AMD GPU, falls back to CPU), Qwen2.5-1.5B baked | ~6–7 GB |
-| `ghcr.io/sujugithub/hybrid-token-routing-agent:cpu` | CPU-torch fallback, same agent + baked model | 2.78 GB |
+> **Project history.** This began as a 4-day AMD Developer Competition
+> submission. The competition-era documents are archived in
+> [`docs/history/`](docs/history/) for provenance — including the measured
+> results — but they describe rules that no longer apply. In particular the
+> competition scored local tokens as **zero**; the capstone replaces that with
+> a real cost model.
 
-Both are `linux/amd64` and run the scoring-harness contract by default: read
-`/input/tasks.json` (`[{task_id, prompt}]`), write `/output/results.json`
-(`[{task_id, answer}]`), always-valid JSON, exit 0 on success, all inside the
-10-minute cap (thread-pooled remote calls + a `RUN_DEADLINE_S` guard).
+## Design rationale
 
-## Scoring model → design
+Routing is worthwhile only if the cheap tier is genuinely cheaper *and* you can
+tell, in advance or shortly after, when it isn't good enough. Five ideas drive
+the design:
 
-Accuracy is a pass/fail **gate** (an LLM-judge score below the threshold
-excludes the submission entirely); survivors are ranked by fewest tokens
-through the Fireworks proxy, and local tokens count as **zero**. Five
-consequences drive the whole design:
-
-1. **Default local.** Every task the small model can handle is free — so the
-   router is biased toward local and treats routing as *risk detection*.
-2. **Detect risk for free.** `confidence.py` scores each query with zero-cost
-   heuristics (length, math/code/reasoning/multi-part signals). Only queries
-   that look beyond a 1–3B model go remote.
-3. **Bound the accuracy downside.** When local runs, TWO free checks gate
-   the answer: `router.post_check` inspects the output for small-model
-   failure modes (empty output, repetition loops, prompt echo, hedging),
-   and a **draft-and-judge confidence gate** reads the model's own mean
-   token probability (`local_confidence`) — below
-   `LOGPROB_CONFIDENCE_THRESHOLD` (default 0.4) the task **escalates to
-   remote**. A failed local attempt costs nothing but latency.
-4. **Make the bill observable.** `token_tracker.py` writes one JSONL line per
-   task — including confidence, the active threshold, per-signal scores, and
-   a run_id — so calibration analysis happens on the log, not by rerunning.
+1. **Default to local.** Local inference is far cheaper per token than a
+   frontier API, so the router is biased toward local and treats routing as
+   *risk detection* — "is there reason to believe the small model will fail?"
+2. **Detect risk cheaply.** `confidence.py` scores each query with zero-cost
+   heuristics (length, plus math/code/logic/reasoning/multi-part signals and
+   sentiment/NER/summarisation boosts). Only queries that look beyond a small
+   model go straight to remote.
+3. **Bound the accuracy downside.** When local runs, two further checks gate
+   the answer: `router.post_check` inspects the output for small-model failure
+   modes (empty output, repetition loops, prompt echo, hedging), and a
+   **draft-and-judge confidence gate** reads the model's own mean token
+   probability (`local_confidence`) — below `LOGPROB_CONFIDENCE_THRESHOLD`
+   (default 0.4) the task **escalates to remote**. A discarded local attempt
+   costs compute and latency, not API spend.
+4. **Make the cost observable.** `token_tracker.py` writes one JSONL line per
+   task — confidence, active threshold, per-signal scores, local confidence,
+   and a run_id — so calibration is a log replay, not a rerun.
 5. **No single failure kills the run.** Escalation failures keep the flagged
    local answer, remote failures fall back to a local attempt, and any other
-   per-task error is recorded and skipped — an answer always beats no answer.
+   per-task error is recorded and skipped: an answer always beats no answer.
 
 ```
 task ──▶ Router.decide  (confidence.py heuristics — zero cost)
            │
-           ├─ score ≥ threshold ──▶ LocalModel  (0 billable tokens)
+           ├─ score ≥ threshold ──▶ LocalModel  (no API spend)
            │                          │
            │                     Router.post_check(output)
            │                          ├─ looks good ──▶ answer
@@ -68,11 +70,13 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 | `router.py` | Decision layer: pre-route + post-check + escalation policy. |
 | `confidence.py` | Heuristic scorers estimating "can the local model handle this?" |
 | `local_model.py` | HF transformers wrapper (lazy load, chat template, exact token counts). |
-| `remote_client.py` | Fireworks AI client (`/chat/completions`, retries, usage-based counts). |
+| `remote_client.py` | Remote model client (`/chat/completions`, retries, usage-based counts). |
 | `token_tracker.py` | Local-vs-remote accounting, JSONL audit log, run summary. |
-| `config.py` | Every knob, env-overridable. The one file to touch on kickoff day. |
-| `schemas.py` | Shared `Task` / `Completion` dataclasses. |
+| `config.py` | Every knob, env-overridable. The one file to touch when swapping models. |
+| `schemas.py` | Shared `Task` / `Completion` dataclasses — the contract between backends. |
 | `test_harness.py` | Offline end-to-end wiring test (mock mode, stdlib only). |
+| `scripts/banana.py` | Interactive CLI + `--demo` mode with a session token graph. |
+| `scripts/calibrate.py` | Threshold calibration analysis over `logs/usage.jsonl`. |
 
 ## Quickstart
 
@@ -80,65 +84,47 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 # 0) Wiring test — offline, zero dependencies:
 python3 test_harness.py
 
-# 1) Mock run of the sample task file:
+# 1) Mock run of the sample task file (no model, no network):
 python3 main.py --tasks tasks/sample_tasks.json --mock
 
 # 2) Real run:
 pip install -r requirements.txt
-export FIREWORKS_API_KEY=fw-...
+cp .env.example .env        # then add your API key
 python3 main.py --tasks tasks/sample_tasks.json
 
-# 3) Docker (or `make build` / `make docker-run`):
-docker build --platform=linux/amd64 -t hybrid-router-agent .   # scoring host is x86_64
-# dev run (image default CMD is scoring-harness mode — see below):
-docker run --rm --env-file .env -v "$(pwd)/logs:/app/logs" \
-    hybrid-router-agent --tasks tasks/sample_tasks.json
-
-# 4) Scoring-harness mode (the image default: reads /input/tasks.json,
-#    writes /output/results.json = [{task_id, answer}]) — `make docker-run-harness`:
-docker run --rm --env-file .env \
-    -v "$(pwd)/harness/input:/input:ro" -v "$(pwd)/harness/output:/output" \
-    hybrid-router-agent
+# 3) Interactive CLI (model loads once, stays warm):
+python3 scripts/banana.py            # ask questions at the `banana ›` prompt
+python3 scripts/banana.py --demo     # 8-category run + token graph
 ```
 
-## Kickoff-day checklist
+Never commit `.env` — it is gitignored and holds a live API key.
 
-1. **Swap models**: set `LOCAL_MODEL_NAME` / `REMOTE_MODEL_NAME` (env vars or
-   `config.py`). Prefer a pre-quantized local checkpoint (GPTQ/AWQ) for the
-   limited-compute scoring box.
-2. **Adapt task input**: if the task format differs, edit `load_tasks()` in
-   `main.py` — nothing else should need to change.
-3. **Calibrate the threshold** (the highest-leverage hour of the day): run
-   the revealed sample tasks at several thresholds
-   (`--threshold 0.4 / 0.55 / 0.7`), then run `python3 scripts/calibrate.py`
-   — it groups `logs/usage.jsonl` by run, tabulates billable tokens vs
-   threshold, and (given `--accuracy grades.json`, a `{task_id: true/false}`
-   file, plus `--min-accuracy`) recommends the LOWEST threshold that clears
-   the accuracy bar. It also replays what LOWERING each threshold would have
-   saved (remote costs of flipped tasks are already logged; raising needs a
-   rerun). Grading answers is task-set-specific and stays manual. The same
-   graded sweep should also calibrate `LOGPROB_CONFIDENCE_THRESHOLD` by
-   comparing each line's `local_confidence` against its grade (ISSUES.md #8
-   — the logprob gate flags *uncertainty*, not *confident error*, so the
-   0.4 default is a safety net until calibrated).
-4. **Add task-specific signals**: extend `_SIGNAL_PATTERNS` in
-   `confidence.py`; if tasks carry categories, fill in
-   `FORCE_ROUTE_BY_CATEGORY` in `router.py`.
-5. **Add a real validator** if outputs are checkable (exact match, JSON
-   schema, tests): plug it into `router.post_check` — it's the single biggest
-   accuracy upgrade available.
-6. **Model bake is the build default** (`BAKE_MODEL` build arg): the image
-   ships the local model's weights and pins `LOCAL_MODEL_NAME` to them — the
-   scoring run downloads nothing. `--build-arg BAKE_MODEL=""` builds a small
-   dev image instead. Push: `make ghcr-login && make push`.
-7. **AMD GPU in the scoring env?** Switch the torch install to the ROCm wheel
-   index (comment in Dockerfile). `LocalModel._pick_device()` already treats
-   ROCm as `cuda`.
+### Batch mode
 
-## Debugging live
+The agent also runs headlessly, reading a JSON task list and writing a JSON
+answer list. This is how it is evaluated in bulk:
+
+```bash
+python3 main.py --input tasks/demo_tasks.json --output results.json
+```
+
+Input is `[{task_id, prompt}]`; output is `[{task_id, answer}]`, always valid
+JSON, exit 0 on success.
+
+Container images build with `make build` (ROCm torch, for AMD GPU hosts) or
+`make build-cpu` (smaller, CPU-only). `make docker-run-harness` runs batch mode
+in-container against the `/input` and `/output` mounts.
+
+## Debugging
 
 - Every routing decision prints its confidence **and per-signal breakdown** —
   "why did task 7 go remote?" is answered by the log line itself.
 - `AGENT_MOCK=1` (or `--mock`) isolates wiring bugs from model/API bugs.
 - `logs/usage.jsonl` is the audit trail: one line per task, replayable.
 - `make test` after every change; it runs in ~50 ms with no deps.
+
+## Team
+
+Six-person university capstone. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for
+the workflow and [`ROADMAP.md`](ROADMAP.md) for the workstreams — each is sized
+so one person can own it without colliding with the others.

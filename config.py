@@ -1,6 +1,6 @@
 """Central configuration for the hybrid routing agent.
 
-Everything you should need to change on kickoff day lives HERE (plus, maybe,
+Everything you should need to tune lives HERE (plus, maybe,
 keyword patterns in confidence.py). Every value can also be overridden with an
 environment variable, so you can tune the router inside the container without
 rebuilding the image:
@@ -44,7 +44,7 @@ def _env_bool(name: str, default: bool) -> bool:
 class Settings:
     # ── Local model ──────────────────────────────────────────────────────
     # Placeholder: a 1.5B instruct model that runs on CPU. Swap via
-    # LOCAL_MODEL_NAME once the competition reveals the allowed local models.
+    # LOCAL_MODEL_NAME to swap in a different local model.
     local_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"
     local_max_new_tokens: int = 512
 
@@ -56,9 +56,9 @@ class Settings:
     # gpt-oss-120b / glm-5p1 / glm-5p2 / kimi-k2p6 — every serverless chat
     # model now bills hidden reasoning tokens into completion usage).
     remote_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
-    # Kickoff contract: the harness injects ALLOWED_MODELS (comma-separated
-    # model IDs) and the remote model MUST come from it — calling anything
-    # else invalidates the submission. Empty = dev mode, use
+    # Optional allow-list: when ALLOWED_MODELS is set (comma-separated model
+    # IDs), the remote model MUST come from it — useful for cost control or
+    # when a deployment restricts which models may be called. Empty = use
     # remote_model_name. Selection: remote_client.resolve_remote_model().
     allowed_models: str = ""
     # Tie-breaker when ALLOWED_MODELS has several entries: first name here
@@ -97,7 +97,7 @@ class Settings:
     # Queries whose confidence >= threshold go LOCAL (free tokens).
     # Lower threshold  = more local = fewer billable tokens, more accuracy risk.
     # Higher threshold = safer, more expensive.
-    # THE single most important number to calibrate on kickoff day.
+    # THE single most important number to calibrate (see EVALUATION.md).
     confidence_threshold: float = 0.55
     # If a local answer fails router.post_check, retry the task remotely
     # instead of submitting a probably-wrong answer. Costs remote tokens only
@@ -112,12 +112,12 @@ class Settings:
     # Draft-and-judge gate: the local model's OWN mean token probability for
     # its answer (Completion.confidence). Below this → escalate to remote
     # even if post_check passed — a fluent-but-unsure answer is the failure
-    # mode regexes can't see. 0.4 is a placeholder; CALIBRATE at kickoff by
+    # mode regexes can't see. 0.4 is a placeholder; CALIBRATE it by
     # comparing logged local_confidence against graded answers
     # (scripts/calibrate.py). Set to 0 to disable the gate.
     logprob_confidence_threshold: float = 0.4
 
-    # ── Harness limits (kickoff spec: 10-minute cap) ─────────────────────
+    # ── Concurrency and deadlines ────────────────────────────────────────
     # Worker threads for the task pool. Remote calls (~27 s each observed)
     # parallelize up to this; local generation serializes on the model lock
     # regardless, so this dial only bounds concurrent Fireworks requests.

@@ -2,7 +2,7 @@
 
 Runs entirely in MOCK mode: no model download, no network, no third-party
 deps — pure stdlib. This is the "is the wiring sane?" check to run after any
-change, especially live during the competition:
+change:
 
     python3 test_harness.py
 
@@ -60,7 +60,7 @@ TASKS = [
         ),
         ROUTE_REMOTE,  # code + multi-step reasoning + math: beyond a small model
     ),
-    # ── Track-1 kickoff categories (2026-07-07) ─────────────────────────
+    # ── Capability categories ───────────────────────────────────────────
     # easy-local: the boost patterns must beat the length ramp
     (
         Task(
@@ -194,8 +194,8 @@ def harness_io_check() -> List[str]:
 
 
 def allowed_models_check() -> List[str]:
-    """resolve_remote_model must honor the ALLOWED_MODELS contract (kickoff
-    #10): pure settings-driven logic, no network."""
+    """resolve_remote_model must honor the ALLOWED_MODELS contract:
+    pure settings-driven logic, no network."""
     DEV_DEFAULT = "accounts/fireworks/models/deepseek-v4-pro"
     # (allowed_models, remote_model_name, preference, expected)
     cases = [
@@ -334,13 +334,13 @@ def main() -> int:
     if model_failures:
         failures.extend(model_failures)
     else:
-        print("PASS ALLOWED_MODELS resolution (kickoff #10 contract)")
+        print("PASS ALLOWED_MODELS resolution")
 
     calibrate_failures = calibrate_logprob_check()
     if calibrate_failures:
         failures.extend(calibrate_failures)
     else:
-        print("PASS logprob-gate recommendation (calibrate.py, issue #8)")
+        print("PASS logprob-gate recommendation (calibrate.py)")
 
     if failures:
         print("\nFAILURES:")

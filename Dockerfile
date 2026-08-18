@@ -2,14 +2,14 @@
 # Image strategy:
 # - python:3.11-slim base (no build toolchain needed: pure-python deps + wheels)
 # - torch comes from TORCH_INDEX. Default is the ROCm wheel index: the
-#   competition scores on AMD GPUs, and a ROCm torch build falls back to CPU
+#   project targets AMD GPU hosts, and a ROCm torch build falls back to CPU
 #   cleanly when no GPU is exposed (torch.cuda.is_available() → False), so
 #   ROCm-by-default costs image size, never correctness. The ROCm userspace
 #   is bundled in the wheel — the host only needs the amdgpu driver.
 #   No-GPU / smallest-image build (multi-GB smaller):
 #     docker build --build-arg TORCH_INDEX=https://download.pytorch.org/whl/cpu ...
 #   (`make build-cpu`.) ROCm wheels are x86_64-only — build on/for
-#   linux/amd64, see Makefile. If AMD Dev Cloud runs ROCm 7, bump the index
+#   linux/amd64, see Makefile. On a ROCm 7 host, bump the index
 #   to .../whl/rocm7.0.
 # - At RUNTIME the container must see the GPU devices:
 #     docker run --device=/dev/kfd --device=/dev/dri ...   (`make docker-run-gpu`)
@@ -23,10 +23,9 @@ FROM python:3.11-slim
 
 # ROCm (AMD GPU) torch by default — see header comment for the CPU override.
 ARG TORCH_INDEX=https://download.pytorch.org/whl/rocm6.4
-# Local model BAKED into the image (submission default): the scoring run
-# must download nothing — a cold multi-GB pull inside the 10-minute cap is
-# a run-killer. Budget check: ROCm layers ~4.9 GB compressed + ~2.9 GB
-# weights ≈ 7.9 GB, under the 10 GB submission limit. Dev escape hatch:
+# Local model BAKED into the image (default): a deployed run must download
+# nothing — a cold multi-GB pull at startup is a run-killer. Size check:
+# ROCm layers ~4.9 GB compressed + ~2.9 GB weights ≈ 7.9 GB. Dev escape hatch:
 #   docker build --build-arg BAKE_MODEL="" ...   (small image, no weights)
 ARG BAKE_MODEL=Qwen/Qwen2.5-1.5B-Instruct
 
@@ -64,7 +63,7 @@ RUN if [ -n "${BAKE_MODEL}" ]; then \
 
 # AFTER the bake (which needs network): at RUNTIME load the baked model from
 # the local cache and NEVER phone home. Without this, transformers issues a
-# HEAD to huggingface.co on every load — verified 2026-07-07 on AMD Dev Cloud:
+# HEAD to huggingface.co on every load — verified on an AMD GPU host:
 # with the HF host unreachable the tokenizer load raises and EVERY local task
 # errors. Baking is meant to download nothing; this makes that actually true.
 # The remote path uses plain `requests` to FIREWORKS_BASE_URL, unaffected.
@@ -76,7 +75,7 @@ ENV HF_HUB_OFFLINE=1 \
 COPY --chown=agent:agent . .
 
 ENTRYPOINT ["python", "main.py"]
-# Scoring-harness contract (kickoff spec): read /input/tasks.json, write
+# Batch mode (the container default): read /input/tasks.json, write
 # /output/results.json. Dev/mock runs override CMD, e.g.:
 #   docker run ... hybrid-router-agent --tasks tasks/sample_tasks.json --mock
 CMD ["--input", "/input/tasks.json", "--output", "/output/results.json"]

@@ -41,7 +41,7 @@ def _model_key(model_id: str) -> str:
 
 
 def resolve_remote_model() -> Optional[str]:
-    """Pick the remote model, honoring the kickoff ALLOWED_MODELS contract.
+    """Pick the remote model, honoring the ALLOWED_MODELS allow-list.
 
     - ALLOWED_MODELS unset/empty → dev mode: settings.remote_model_name.
     - Otherwise the answer ALWAYS comes from the allow-list, VERBATIM as the
@@ -105,9 +105,9 @@ class RemoteClient:
     ):
         self.model_name = model_name or resolve_remote_model()
         self.api_key = api_key or settings.fireworks_api_key
-        # The kickoff harness meters tokens through its proxy: EVERY call
-        # must go through FIREWORKS_BASE_URL (this is the only HTTP call
-        # site in the codebase — keep it that way).
+        # EVERY remote call must go through FIREWORKS_BASE_URL, so token
+        # usage is metered in one place (this is the only HTTP call site in
+        # the codebase — keep it that way).
         self.base_url = (base_url or settings.fireworks_base_url).rstrip("/")
 
     def generate(self, prompt: str) -> Completion:

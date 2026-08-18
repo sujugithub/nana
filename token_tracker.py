@@ -1,10 +1,10 @@
-"""Token accounting — the scoring function, made observable.
+"""Token accounting — the cost of every routing decision, made observable.
 
 Rules this module encodes:
-- LOCAL tokens are FREE (count 0 toward the score) but are still recorded, so
+- LOCAL tokens incur no API spend (counted 0 as billable) but are recorded, so
   you can see how much work the small model absorbed.
-- REMOTE tokens (prompt + completion, from the Fireworks `usage` field) are
-  the billable spend.
+- REMOTE tokens (prompt + completion, from the API's `usage` field) are the
+  billable spend.
 - Every task appends one JSON line to logs/usage.jsonl, including the
   routing confidence, the active threshold, the per-signal breakdown, any
   post-check problems, and a per-run run_id.

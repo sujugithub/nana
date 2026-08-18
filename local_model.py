@@ -3,12 +3,12 @@
 Design notes:
 - LAZY imports: transformers/torch are only imported when the model actually
   loads, so mock mode (and therefore the test harness) runs on stdlib alone.
-- Exact token counts come from the tokenizer, not word counts — you want your
-  own accounting to match whatever the judges count.
-- Quantization: for the constrained scoring environment, prefer a
+- Exact token counts come from the tokenizer, not word counts — accounting
+  must match what the provider actually bills.
+- Quantization: on constrained hardware, prefer a
   PRE-QUANTIZED checkpoint (GPTQ/AWQ, or a -GGUF variant via llama.cpp) over
-  runtime bitsandbytes — bitsandbytes is NVIDIA-only, and the scoring box is
-  AMD/CPU. Swapping checkpoints is just LOCAL_MODEL_NAME; nothing here changes.
+  runtime bitsandbytes, which is NVIDIA-only. Swapping checkpoints is just
+  LOCAL_MODEL_NAME; nothing else here changes.
 - MOCK mode (AGENT_MOCK=1) returns deterministic canned output so routing and
   accounting can be tested with zero downloads and zero network.
 """
@@ -63,7 +63,7 @@ class LocalModel:
         import torch
 
         # torch.cuda.is_available() is also True on AMD GPUs with ROCm builds
-        # of torch — relevant for this competition's scoring environment.
+        # of torch, so this branch covers both vendors.
         if torch.cuda.is_available():
             return "cuda"
         mps = getattr(torch.backends, "mps", None)
@@ -97,8 +97,8 @@ class LocalModel:
         # tokens (the template already contains them).
         if getattr(self._tokenizer, "chat_template", None):
             # Same concise-answer directive as the remote side: local tokens
-            # are free, but a rambling answer risks the accuracy judge (live
-            # failure 2026-07-07: "mixed" to an options question).
+            # cost no API spend, but a rambling answer is more likely to be
+            # graded wrong (observed: "mixed" in reply to an options question).
             messages = []
             if settings.system_prompt:
                 messages.append(
@@ -129,12 +129,11 @@ class LocalModel:
 
         with torch.no_grad():
             # Greedy decoding: deterministic outputs → reproducible accuracy
-            # in the scoring run, and no sampling-induced flakiness while
-            # debugging live.
+            # measurements, and no sampling-induced flakiness while debugging.
             # output_scores + return_dict_in_generate: keep the per-step
             # logits so we can compute the model's own confidence in its
-            # answer — the "draft-and-judge" signal. Local compute is FREE
-            # under the scoring rules, so this costs nothing but memory.
+            # answer — the "draft-and-judge" signal. It reuses logits the
+            # forward pass already produced, so it costs only memory.
             outputs = self._model.generate(
                 **encoded,
                 max_new_tokens=settings.local_max_new_tokens,
