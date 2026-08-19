@@ -93,6 +93,18 @@ class Settings:
         "question, no extra background."
     )
 
+    # ── Router selection ─────────────────────────────────────────────────
+    # heuristic: keyword rules in confidence.py (always available, no deps).
+    # learned:   trained artifact (ROUTER_ARTIFACT) — FAILS LOUDLY at startup
+    #            if the artifact is missing or incompatible.
+    # auto:      learned if the artifact loads, otherwise heuristic with a
+    #            visible warning on stderr.
+    router_mode: str = "heuristic"
+    # Path to the trained pre-router artifact (see routing/train.py).
+    # SECURITY: joblib artifacts execute code on load — point this only at
+    # files you trained yourself (routing/artifact.py docstring).
+    router_artifact_path: str = "artifacts/router.joblib"
+
     # ── Routing: the dials that decide the score ─────────────────────────
     # Queries whose confidence >= threshold go LOCAL (free tokens).
     # Lower threshold  = more local = fewer billable tokens, more accuracy risk.
@@ -116,6 +128,16 @@ class Settings:
     # comparing logged local_confidence against graded answers
     # (scripts/calibrate.py). Set to 0 to disable the gate.
     logprob_confidence_threshold: float = 0.4
+    # Which statistic of the local model's token probabilities the gate
+    # compares against the threshold above. All are computed from logits the
+    # forward pass already produced (zero extra compute):
+    #   mean      mean token probability (default; flatters short answers)
+    #   min       minimum token probability (harshest single-token view)
+    #   low_frac  1 - fraction of tokens below 0.5 probability
+    # Higher ALWAYS means safer-to-keep-local. Pick with evidence: the
+    # training report's post-gen AUC comparison (routing/train.py) says
+    # which statistic actually separates right from wrong local answers.
+    local_conf_stat: str = "mean"
 
     # ── Concurrency and deadlines ────────────────────────────────────────
     # Worker threads for the task pool. Remote calls (~27 s each observed)
@@ -149,6 +171,9 @@ class Settings:
         s.request_timeout_s = _env_float("REQUEST_TIMEOUT_S", s.request_timeout_s)
         s.max_retries = _env_int("MAX_RETRIES", s.max_retries)
         s.system_prompt = _env_str("SYSTEM_PROMPT", s.system_prompt)
+        s.router_mode = _env_str("ROUTER_MODE", s.router_mode)
+        s.router_artifact_path = _env_str("ROUTER_ARTIFACT", s.router_artifact_path)
+        s.local_conf_stat = _env_str("LOCAL_CONF_STAT", s.local_conf_stat)
         s.confidence_threshold = _env_float("CONFIDENCE_THRESHOLD", s.confidence_threshold)
         s.enable_escalation = _env_bool("ENABLE_ESCALATION", s.enable_escalation)
         s.post_check_min_chars = _env_int("POST_CHECK_MIN_CHARS", s.post_check_min_chars)

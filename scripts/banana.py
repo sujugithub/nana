@@ -147,7 +147,10 @@ class Session:
     CTX_CHARS = int(os.environ.get("BANANA_CTX_CHARS", "8000"))
 
     def __init__(self):
-        self.router = Router()
+        # Honors ROUTER_MODE (heuristic | learned | auto) like main.py does.
+        from main import build_router
+
+        self.router = build_router()
         self.local = LocalModel()
         with contextlib.redirect_stderr(io.StringIO()):  # mute model-pick notes
             self.remote = RemoteClient()

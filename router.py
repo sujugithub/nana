@@ -63,6 +63,11 @@ class RoutingDecision:
     confidence: float
     signals: Dict[str, float]  # per-scorer breakdown, printed for debugging
     reason: str
+    # Which router produced this decision ("heuristic" | "learned") and, for
+    # learned routers, the artifact version — both land in the usage log so
+    # every routed task is traceable to the exact policy that routed it.
+    router_kind: str = "heuristic"
+    artifact_version: Optional[str] = None
 
 
 class Router:

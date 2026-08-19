@@ -40,21 +40,31 @@ this exists.
       verbosity-bias check.
 
 ## 3. Router policy — the core contribution
-**Owner:** _unclaimed_ · **Touches:** `confidence.py`, `router.py` · **P1**
+**Owner:** _unclaimed_ · **Touches:** `routing/`, `evaluation/`, `router.py` · **P1**
 
-Depends on workstream 2 for labels. The current signal is keyword heuristics
-plus raw logprobs, and both have known failure modes.
+The learned-router machinery is BUILT (see `docs/LEARNED_ROUTING.md`): a
+versioned outcome-dataset format, leakage-safe group splits, two trained +
+calibrated candidates, data-driven threshold policies, a full offline
+evaluator with all baselines, and `ROUTER_MODE=learned|auto` runtime
+integration — proven end-to-end on synthetic toy data. What remains is
+feeding it real data and hardening the post-generation side:
 
-- [ ] **Calibrate the logprob gate** — raw logprobs are miscalibrated (a wrong
-      answer scored 0.90). Fit isotonic or Platt scaling so a confidence of 0.7
-      actually means 70% correct.
+- [x] **Learned router** — classifier on (prompt features →
+      did-local-get-it-right); RouteLLM-style threshold calibration.
+      *(pipeline complete; needs the real dataset from workstream 2)*
+- [x] Report AUC for each signal separately (training report covers the
+      heuristic reference, both candidates, and all three post-gen
+      statistics).
+- [x] **Alternative post-gen statistics** — min token prob and low-confidence
+      fraction are now computed, logged, gate-selectable
+      (`LOCAL_CONF_STAT`), and AUC-compared per training run.
+- [ ] **Collect the real dataset** (`scripts/collect_outcomes.py`) and
+      retrain/evaluate; only then change any default.
+- [ ] **Calibrate the logprob gate** on real graded answers — the machinery
+      reports the AUCs; the calibration decision needs real data.
 - [ ] **Self-consistency** — sample the local model k times and measure
       disagreement. This catches *confident-wrong*, which logprobs cannot, and
       local compute is cheap.
-- [ ] **Learned router** — train a classifier on (query features →
-      did-local-get-it-right), using labels from workstream 2. This is the
-      RouteLLM-style upgrade over hand-tuned regexes.
-- [ ] Report AUC for each signal separately and combined.
 - [ ] *(carried forward)* Task-specific output validators in `post_check` — if
       a category has checkable output, verifying it beats guessing at it.
 

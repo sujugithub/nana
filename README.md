@@ -66,9 +66,12 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 
 | File | Role |
 | --- | --- |
-| `main.py` | Orchestrator + CLI. `run_task()` is the decide→execute→check→account loop. |
+| `main.py` | Orchestrator + CLI. `run_task()` is the decide→execute→check→account loop; `build_router()` picks the router for `ROUTER_MODE`. |
 | `router.py` | Decision layer: pre-route + post-check + escalation policy. |
 | `confidence.py` | Heuristic scorers estimating "can the local model handle this?" |
+| `routing/` | **Learned pre-router**: outcome-dataset format, leakage-safe splits, training + calibration + threshold policies, artifact I/O, runtime router. See [`docs/LEARNED_ROUTING.md`](docs/LEARNED_ROUTING.md). |
+| `evaluation/` | Offline evaluator: all-local / all-remote / random / heuristic / learned / oracle on the held-out test split, with bootstrap CIs and a Pareto chart. |
+| `tests/` | Deterministic offline suite for the learned routing system (`make test`). |
 | `local_model.py` | HF transformers wrapper (lazy load, chat template, exact token counts). |
 | `remote_client.py` | Remote model client (`/chat/completions`, retries, usage-based counts). |
 | `token_tracker.py` | Local-vs-remote accounting, JSONL audit log, run summary. |
@@ -77,6 +80,8 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 | `test_harness.py` | Offline end-to-end wiring test (mock mode, stdlib only). |
 | `scripts/banana.py` | Interactive CLI + `--demo` mode with a session token graph. |
 | `scripts/calibrate.py` | Threshold calibration analysis over `logs/usage.jsonl`. |
+| `scripts/make_toy_dataset.py` | Synthetic outcome dataset for offline end-to-end runs. |
+| `scripts/collect_outcomes.py` | Collect REAL both-model outcomes (requires explicit `--run-paid-calls`). |
 
 ## Quickstart
 
@@ -95,7 +100,18 @@ python3 main.py --tasks tasks/sample_tasks.json
 # 3) Interactive CLI (model loads once, stays warm):
 python3 scripts/banana.py            # ask questions at the `banana ›` prompt
 python3 scripts/banana.py --demo     # 8-category run + token graph
+
+# 4) Learned router — offline end-to-end loop on synthetic data:
+make toy-data && make train && make evaluate
+ROUTER_MODE=learned python3 main.py --tasks tasks/sample_tasks.json --mock
 ```
+
+The pre-router now has two implementations selected by `ROUTER_MODE`:
+`heuristic` (the keyword rules above, the default), `learned` (a trained,
+calibrated classifier predicting *P(local answer acceptable)* from real
+model outcomes), and `auto` (learned if its artifact loads, else heuristic
+with a warning). [`docs/LEARNED_ROUTING.md`](docs/LEARNED_ROUTING.md) covers
+dataset collection, training, threshold policies, and evaluation.
 
 Never commit `.env` — it is gitignored and holds a live API key.
 

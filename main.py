@@ -43,8 +43,74 @@ from config import ROUTE_ERROR, ROUTE_LOCAL, settings
 from local_model import LocalModel
 from remote_client import RemoteClient, RemoteError
 from router import Router
-from schemas import Task
+from schemas import Completion, Task
 from token_tracker import TokenTracker
+
+
+def build_router(threshold: Optional[float] = None) -> Router:
+    """Construct the pre-router for ROUTER_MODE (heuristic | learned | auto).
+
+    - heuristic: keyword rules, no extra deps (the default).
+    - learned:   trained artifact at ROUTER_ARTIFACT; any load problem is
+                 FATAL — an explicitly requested learned router that cannot
+                 load must never silently degrade.
+    - auto:      learned if the artifact loads, else heuristic with a loud
+                 stderr warning.
+    The artifact is loaded ONCE, here; LearnedRouter holds it for the run.
+    """
+    mode = settings.router_mode.strip().lower()
+    if mode == "heuristic":
+        return Router(threshold=threshold)
+    if mode not in ("learned", "auto"):
+        raise ValueError(
+            f"ROUTER_MODE={settings.router_mode!r} invalid: expected "
+            f"heuristic | learned | auto"
+        )
+    try:
+        # Deferred import: heuristic mode (and the stdlib-only test harness)
+        # must keep working without sklearn/joblib installed.
+        from routing.learned_router import LearnedRouter
+
+        router = LearnedRouter(artifact_path=settings.router_artifact_path)
+        print(
+            f"router: learned (artifact {router.artifact.version}, "
+            f"threshold {router.threshold:.3f})",
+            file=sys.stderr,
+        )
+        return router
+    except Exception as err:
+        if mode == "learned":
+            raise RuntimeError(
+                f"ROUTER_MODE=learned but the artifact is unusable: {err}"
+            ) from err
+        print(
+            f"WARNING: ROUTER_MODE=auto — learned router unavailable "
+            f"({err}); falling back to heuristic rules",
+            file=sys.stderr,
+        )
+        return Router(threshold=threshold)
+
+
+def _gate_confidence(completion: Completion) -> Optional[float]:
+    """The post-generation confidence the escalation gate compares against
+    LOGPROB_CONFIDENCE_THRESHOLD, per LOCAL_CONF_STAT. Higher = safer to
+    keep the local answer, whichever statistic is selected. None = no signal
+    recorded (mock mode / empty output): never treated as low."""
+    stat = settings.local_conf_stat.strip().lower()
+    if stat == "mean":
+        return completion.confidence
+    if stat == "min":
+        return completion.min_token_prob
+    if stat == "low_frac":
+        if completion.low_token_frac is None:
+            return None
+        return 1.0 - completion.low_token_frac
+    if stat == "none":
+        return None
+    raise ValueError(
+        f"LOCAL_CONF_STAT={settings.local_conf_stat!r} invalid: expected "
+        f"mean | min | low_frac | none"
+    )
 
 
 def run_task(
@@ -72,18 +138,19 @@ def run_task(
     if decision.target == ROUTE_LOCAL:
         local_completion = local.generate(task.prompt)
         ok, problems = router.post_check(task.prompt, local_completion.text)
-        # Draft-and-judge: the local model's own mean token probability.
-        # Low self-confidence catches the failure mode post_check's surface
-        # rules can't — a fluent, well-formed, WRONG answer. None (mock mode,
-        # zero-length output) means "no signal": never treated as low.
+        # Draft-and-judge: the local model's own token-probability statistic
+        # (LOCAL_CONF_STAT — mean by default). Low self-confidence catches
+        # the failure mode post_check's surface rules can't — a fluent,
+        # well-formed, WRONG answer. None (mock mode, zero-length output)
+        # means "no signal": never treated as low.
+        gate_conf = _gate_confidence(local_completion)
         low_confidence = (
-            local_completion.confidence is not None
-            and local_completion.confidence
-            < settings.logprob_confidence_threshold
+            gate_conf is not None
+            and gate_conf < settings.logprob_confidence_threshold
         )
         if low_confidence:
             problems.append(
-                f"low_confidence:{local_completion.confidence:.2f}"
+                f"low_confidence:{settings.local_conf_stat}:{gate_conf:.2f}"
             )
         if (not ok or low_confidence) and settings.enable_escalation:
             # The free local attempt produced something that looks wrong.
@@ -119,6 +186,17 @@ def run_task(
             local_completion.confidence if local_completion else None
         ),
         latency_s=time.time() - started,
+        local_min_token_prob=(
+            local_completion.min_token_prob if local_completion else None
+        ),
+        local_low_token_frac=(
+            local_completion.low_token_frac if local_completion else None
+        ),
+        router=decision.router_kind,
+        artifact_version=decision.artifact_version,
+        p_local=(
+            decision.confidence if decision.router_kind == "learned" else None
+        ),
     )
 
     return {
@@ -126,6 +204,8 @@ def run_task(
         "route": final.source,
         "escalated": escalated,
         "confidence": decision.confidence,
+        "router": decision.router_kind,
+        "artifact_version": decision.artifact_version,
         "local_confidence": (
             local_completion.confidence if local_completion else None
         ),
@@ -323,7 +403,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     results: Dict[str, dict] = {}
     pending = False
     try:
-        router = Router()
+        router = build_router()
         local = LocalModel()
         remote = RemoteClient()
         tracker = TokenTracker()

@@ -5,6 +5,13 @@
 
 requests>=2.31
 
+# Learned pre-router (routing/, evaluation/, tests/): training, calibration,
+# artifact serialisation. Heuristic mode (ROUTER_MODE=heuristic, the default)
+# does not import any of these.
+scikit-learn>=1.3
+numpy>=1.24
+joblib>=1.3
+
 # Local model stack. torch is the heavy one: the Dockerfile installs the CPU
 # wheel (multi-GB smaller than the default CUDA build). On a host with an AMD
 # GPU, use the ROCm wheel index instead — see the comments in the Dockerfile.

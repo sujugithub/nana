@@ -11,3 +11,9 @@ harness/
 .claude/
 banana_out/
 graphify-out/
+# learned-router working products: generated datasets, trained artifacts,
+# and evaluation reports are reproducible from commands in docs — never
+# commit them (see docs/LEARNED_ROUTING.md).
+data/
+artifacts/
+reports/

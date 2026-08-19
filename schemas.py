@@ -36,6 +36,12 @@ class Completion:
     # it (remote APIs don't expose logprobs by default; mock mode has no
     # logits at all) — None means "no signal", never "zero confidence".
     confidence: Optional[float] = None
+    # Alternative post-generation confidence statistics, from the same
+    # logits (zero extra compute). The escalation gate can run on any of
+    # them via LOCAL_CONF_STAT; all are logged so the choice can be made
+    # from data (see the post-gen AUC analysis in routing/train.py).
+    min_token_prob: Optional[float] = None  # harshest single-token view
+    low_token_frac: Optional[float] = None  # fraction of tokens with p < 0.5
 
     @property
     def total_tokens(self) -> int:

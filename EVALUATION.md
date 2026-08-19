@@ -4,6 +4,14 @@ How we will demonstrate that routing is worth doing. This is the backbone of
 the final report: if the numbers here are solid, the project stands up; if they
 are hand-waved, nothing else rescues it.
 
+> **Status:** the offline evaluator implementing this methodology exists —
+> `python3 -m evaluation.run` compares all-local, all-remote, seeded random
+> routing, the heuristic rules, every learned candidate, the selected
+> learned router, and the oracle, with bootstrap CIs, per-category results,
+> workload mixtures, and a Pareto chart. What still needs real data is the
+> dataset itself: graded outcomes from the eight categories below, collected
+> with `scripts/collect_outcomes.py`. See `docs/LEARNED_ROUTING.md`.
+
 ## What we are claiming
 
 That a confidence-gated router reaches a **better accuracy-versus-cost
@@ -46,8 +54,10 @@ AUC 0.5 means the score is worthless (indistinguishable from random ranking);
 pre-route heuristic score and for `local_confidence`, because they may be good
 at different things — and a combined signal may beat either alone.
 
-This also produces the labelled dataset needed to train a learned router
-(see `ROADMAP.md`).
+This also produces the labelled dataset needed to train a learned router —
+which now exists: `routing/train.py` reports exactly these AUCs (heuristic
+reference vs learned candidates, plus the three post-generation confidence
+statistics) on every training run.
 
 ## Grading: use code, not judgment, wherever possible
 

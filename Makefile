@@ -1,5 +1,6 @@
-# Project shortcuts. `make test` before every commit; it needs no deps.
-.PHONY: test mock run demo build build-cpu docker-run docker-run-gpu docker-run-harness \
+# Project shortcuts. `make test` before every commit.
+.PHONY: test test-wiring test-learned mock run demo toy-data train evaluate \
+	build build-cpu docker-run docker-run-gpu docker-run-harness \
 	ghcr-login push push-cpu image-size
 
 # Public container registry (check the package's visibility settings on GHCR
@@ -7,8 +8,26 @@
 IMAGE ?= ghcr.io/sujugithub/hybrid-token-routing-agent
 TAG ?= latest
 
-test:            ## offline wiring test — stdlib only, runs anywhere
+test: test-wiring test-learned  ## everything offline: wiring + learned-router suite
+
+test-wiring:     ## offline wiring test — stdlib only, runs anywhere
 	python3 test_harness.py
+
+test-learned:    ## learned-routing suite — needs scikit-learn (pip install -r requirements.txt)
+	python3 -m unittest discover -s tests
+
+# ── Learned router: toy end-to-end loop (offline, no paid calls) ─────────
+toy-data:        ## generate the synthetic toy outcome dataset
+	python3 scripts/make_toy_dataset.py --out data/toy_dataset.json --n 900 --seed 7
+
+train:           ## train + calibrate + select threshold from data/toy_dataset.json
+	python3 -m routing.train --dataset data/toy_dataset.json \
+		--out artifacts/router.joblib --report reports/train
+
+evaluate:        ## one-shot TEST-split evaluation of the trained router
+	python3 -m evaluation.run --dataset data/toy_dataset.json \
+		--artifact artifacts/router.joblib --train-report reports/train \
+		--report reports/eval
 
 demo:            ## 🍌 banana demo: 8-category run + summary graph (real models)
 	python3 scripts/banana.py --demo

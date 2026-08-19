@@ -44,6 +44,15 @@ class UsageRecord:
     # draft-and-judge signal) — distinct from `confidence`, which is the
     # router's pre-route heuristic. None when local never ran / mock mode.
     local_confidence: Optional[float] = None
+    # Alternative post-gen statistics from the same logits (see schemas.py).
+    local_min_token_prob: Optional[float] = None
+    local_low_token_frac: Optional[float] = None
+    # Which router made the pre-route decision ("heuristic" | "learned"),
+    # the artifact version behind a learned decision, and the raw predicted
+    # P(local ok) — so every logged task is traceable to its routing policy.
+    router: str = "heuristic"
+    artifact_version: Optional[str] = None
+    p_local: Optional[float] = None
     local_prompt_tokens: int = 0
     local_completion_tokens: int = 0
     remote_prompt_tokens: int = 0
@@ -77,6 +86,11 @@ class TokenTracker:
         problems: Optional[List[str]] = None,
         local_confidence: Optional[float] = None,
         latency_s: float = 0.0,
+        local_min_token_prob: Optional[float] = None,
+        local_low_token_frac: Optional[float] = None,
+        router: str = "heuristic",
+        artifact_version: Optional[str] = None,
+        p_local: Optional[float] = None,
     ) -> UsageRecord:
         rec = UsageRecord(
             task_id=task_id,
@@ -87,6 +101,11 @@ class TokenTracker:
             signals=signals or {},
             problems=problems or [],
             local_confidence=local_confidence,
+            local_min_token_prob=local_min_token_prob,
+            local_low_token_frac=local_low_token_frac,
+            router=router,
+            artifact_version=artifact_version,
+            p_local=p_local,
             local_prompt_tokens=local.prompt_tokens if local else 0,
             local_completion_tokens=local.completion_tokens if local else 0,
             remote_prompt_tokens=remote.prompt_tokens if remote else 0,

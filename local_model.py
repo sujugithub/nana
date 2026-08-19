@@ -156,11 +156,20 @@ class LocalModel:
         # to min-token-prob or fraction-below-a-floor; the plumbing is
         # identical.
         confidence = None
+        min_token_prob = None
+        low_token_frac = None
         if len(new_tokens) > 0:
             transition_scores = self._model.compute_transition_scores(
                 outputs.sequences, outputs.scores, normalize_logits=True
             )
-            confidence = float(transition_scores[0].exp().mean())
+            token_probs = transition_scores[0].exp()
+            confidence = float(token_probs.mean())
+            # Same logits, two more views: the harshest single token, and how
+            # much of the answer the model was outright unsure about. Which
+            # statistic the escalation gate uses is LOCAL_CONF_STAT; all
+            # three are logged so the choice can be made from graded data.
+            min_token_prob = float(token_probs.min())
+            low_token_frac = float((token_probs < 0.5).float().mean())
 
         return Completion(
             text=text,
@@ -169,4 +178,10 @@ class LocalModel:
             source=ROUTE_LOCAL,
             latency_s=time.time() - started,
             confidence=round(confidence, 4) if confidence is not None else None,
+            min_token_prob=(
+                round(min_token_prob, 4) if min_token_prob is not None else None
+            ),
+            low_token_frac=(
+                round(low_token_frac, 4) if low_token_frac is not None else None
+            ),
         )
