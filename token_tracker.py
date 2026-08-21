@@ -1,10 +1,9 @@
-"""Token accounting — the cost of every routing decision, made observable.
+"""Token and estimated API-cost accounting for both routing tiers.
 
 Rules this module encodes:
-- LOCAL tokens incur no API spend (counted 0 as billable) but are recorded, so
-  you can see how much work the small model absorbed.
-- REMOTE tokens (prompt + completion, from the API's `usage` field) are the
-  billable spend.
+- In ``remote_pair`` mode both cheap and strong tokens are billable.
+- In ``local_remote`` mode cheap-tier local tokens are recorded but do not
+  incur API spend; strong-tier tokens remain billable.
 - Every task appends one JSON line to logs/usage.jsonl, including the
   routing confidence, the active threshold, the per-signal breakdown, any
   post-check problems, and a per-run run_id.
@@ -52,12 +51,25 @@ class UsageRecord:
     # P(local ok) — so every logged task is traceable to its routing policy.
     router: str = "heuristic"
     artifact_version: Optional[str] = None
+    p_cheap_ok: Optional[float] = None
     p_local: Optional[float] = None
+    tier_mode: str = "remote_pair"
+    cheap_model: str = ""
+    cheap_provider: str = ""
+    strong_model: str = ""
+    strong_provider: str = ""
+    cheap_prompt_tokens: int = 0
+    cheap_completion_tokens: int = 0
+    strong_prompt_tokens: int = 0
+    strong_completion_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    # Legacy aliases retained so older calibration scripts and logs remain
+    # readable. They mirror cheap_* and strong_* respectively.
     local_prompt_tokens: int = 0
     local_completion_tokens: int = 0
     remote_prompt_tokens: int = 0
     remote_completion_tokens: int = 0
-    billable_tokens: int = 0  # remote prompt + completion; local counts ZERO
+    billable_tokens: int = 0  # all Fireworks-hosted tokens across both tiers
     latency_s: float = 0.0
     run_id: str = ""
     timestamp: float = 0.0
@@ -92,6 +104,21 @@ class TokenTracker:
         artifact_version: Optional[str] = None,
         p_local: Optional[float] = None,
     ) -> UsageRecord:
+        cheap = local
+        strong = remote
+        cheap_billable = bool(cheap and cheap.provider == "fireworks")
+        strong_billable = bool(strong and strong.provider == "fireworks")
+        estimated_cost = 0.0
+        if cheap_billable:
+            estimated_cost += (
+                cheap.prompt_tokens * settings.cheap_input_per_mtok
+                + cheap.completion_tokens * settings.cheap_output_per_mtok
+            ) / 1e6
+        if strong_billable:
+            estimated_cost += (
+                strong.prompt_tokens * settings.strong_input_per_mtok
+                + strong.completion_tokens * settings.strong_output_per_mtok
+            ) / 1e6
         rec = UsageRecord(
             task_id=task_id,
             route=route,
@@ -105,12 +132,26 @@ class TokenTracker:
             local_low_token_frac=local_low_token_frac,
             router=router,
             artifact_version=artifact_version,
+            p_cheap_ok=p_local,
             p_local=p_local,
-            local_prompt_tokens=local.prompt_tokens if local else 0,
-            local_completion_tokens=local.completion_tokens if local else 0,
-            remote_prompt_tokens=remote.prompt_tokens if remote else 0,
-            remote_completion_tokens=remote.completion_tokens if remote else 0,
-            billable_tokens=remote.total_tokens if remote else 0,
+            tier_mode=settings.tier_mode,
+            cheap_model=cheap.model_name if cheap else "",
+            cheap_provider=cheap.provider if cheap else "",
+            strong_model=strong.model_name if strong else "",
+            strong_provider=strong.provider if strong else "",
+            cheap_prompt_tokens=cheap.prompt_tokens if cheap else 0,
+            cheap_completion_tokens=cheap.completion_tokens if cheap else 0,
+            strong_prompt_tokens=strong.prompt_tokens if strong else 0,
+            strong_completion_tokens=strong.completion_tokens if strong else 0,
+            estimated_cost_usd=round(estimated_cost, 9),
+            local_prompt_tokens=cheap.prompt_tokens if cheap else 0,
+            local_completion_tokens=cheap.completion_tokens if cheap else 0,
+            remote_prompt_tokens=strong.prompt_tokens if strong else 0,
+            remote_completion_tokens=strong.completion_tokens if strong else 0,
+            billable_tokens=(
+                (cheap.total_tokens if cheap_billable else 0)
+                + (strong.total_tokens if strong_billable else 0)
+            ),
             latency_s=round(latency_s, 3),
             run_id=self.run_id,
             timestamp=time.time(),
@@ -141,15 +182,20 @@ class TokenTracker:
             "errors": errors,
             "escalations": sum(1 for r in self.records if r.escalated),
             "billable_prompt_tokens": sum(
-                r.remote_prompt_tokens for r in self.records
+                (r.cheap_prompt_tokens if r.cheap_provider == "fireworks" else 0)
+                + (r.strong_prompt_tokens if r.strong_provider == "fireworks" else 0)
+                for r in self.records
             ),
             "billable_completion_tokens": sum(
-                r.remote_completion_tokens for r in self.records
+                (r.cheap_completion_tokens if r.cheap_provider == "fireworks" else 0)
+                + (r.strong_completion_tokens if r.strong_provider == "fireworks" else 0)
+                for r in self.records
             ),
             "billable_total_tokens": sum(r.billable_tokens for r in self.records),
+            "estimated_cost_usd": sum(r.estimated_cost_usd for r in self.records),
             "free_local_tokens": sum(
-                r.local_prompt_tokens + r.local_completion_tokens
-                for r in self.records
+                r.cheap_prompt_tokens + r.cheap_completion_tokens
+                for r in self.records if r.cheap_provider == "local"
             ),
             "local_share": round(final_local / n, 3) if n else 0.0,
         }
@@ -158,13 +204,15 @@ class TokenTracker:
         s = self.summary()
         print("\n──── token usage summary ────")
         print(
-            f"tasks: {s['tasks']}  |  answered locally: {s['final_local']} "
-            f"({s['local_share']:.0%})  |  remote: {s['final_remote']}  |  "
+            f"tasks: {s['tasks']}  |  cheap-tier answers: {s['final_local']} "
+            f"({s['local_share']:.0%})  |  strong-tier: {s['final_remote']}  |  "
             f"escalations: {s['escalations']}  |  errors: {s['errors']}"
         )
         print(
-            f"billable (remote) tokens: {s['billable_prompt_tokens']} prompt "
+            f"billable API tokens: {s['billable_prompt_tokens']} prompt "
             f"+ {s['billable_completion_tokens']} completion "
             f"= {s['billable_total_tokens']}"
         )
-        print(f"free (local) tokens:      {s['free_local_tokens']}")
+        print(f"estimated API cost:       ${s['estimated_cost_usd']:.6f}")
+        if settings.tier_mode == "local_remote":
+            print(f"local cheap-tier tokens:  {s['free_local_tokens']}")

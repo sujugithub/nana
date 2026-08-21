@@ -20,16 +20,24 @@ from routing.dataset import OutcomeDataset, OutcomeRecord  # noqa: E402
 
 _REAL_CONNECT = socket.socket.connect
 
+# Loopback is allowed (the web-UI tests talk to a server on 127.0.0.1);
+# anything leaving the machine is an error. "Offline" means no external
+# network, not no sockets.
+_LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
-def _blocked_connect(self, *args, **kwargs):
+
+def _guarded_connect(self, address, *args, **kwargs):
+    host = address[0] if isinstance(address, tuple) and address else address
+    if isinstance(host, str) and host in _LOOPBACK:
+        return _REAL_CONNECT(self, address, *args, **kwargs)
     raise RuntimeError(
-        f"network access attempted during tests (connect{args!r}) — the "
-        f"test suite must be fully offline"
+        f"external network access attempted during tests "
+        f"(connect to {address!r}) — the test suite must be fully offline"
     )
 
 
 def install_network_guard() -> None:
-    socket.socket.connect = _blocked_connect
+    socket.socket.connect = _guarded_connect
     atexit.register(lambda: setattr(socket.socket, "connect", _REAL_CONNECT))
 
 

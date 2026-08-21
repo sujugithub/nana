@@ -11,9 +11,9 @@ harness/
 .claude/
 banana_out/
 graphify-out/
-# learned-router working products: generated datasets, trained artifacts,
-# and evaluation reports are reproducible from commands in docs — never
-# commit them (see docs/LEARNED_ROUTING.md).
-data/
+# learned-router working products are ignored except the curated, graded
+# 600-row FYP dataset needed to reproduce the published training/evaluation.
+data/*
+!data/real_qwen_pro_600.json
 artifacts/
 reports/

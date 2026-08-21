@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>banana — routing demo</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --panel2: #23262d; --line: #33373f;
+    --text: #e8e9eb; --dim: #9aa0aa; --accent: #f5c518;
+    --green: #3fbf6f; --orange: #f08c3a; --red: #e05555; --blue: #5b9dd9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 20px 20px 60px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  header h1 { font-size: 22px; margin: 0; }
+  header .sub { color: var(--dim); font-size: 13px; }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; letter-spacing: .3px;
+  }
+  .badge.mock { background: #2a3d2f; color: var(--green); }
+  .badge.real { background: #46311c; color: var(--orange); }
+
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .mode {
+    background: var(--panel); border: 2px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer; transition: border-color .12s;
+  }
+  .mode:hover { border-color: #4a4f59; }
+  .mode.active { border-color: var(--accent); }
+  .mode h2 { margin: 0 0 4px; font-size: 15px; }
+  .mode p { margin: 0; font-size: 12.5px; color: var(--dim); }
+  .mode .tag { font-size: 11px; font-weight: 600; }
+  .tag.free { color: var(--green); }
+  .tag.paid { color: var(--orange); }
+
+  .cols { display: grid; grid-template-columns: 340px 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .panel h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--dim); }
+  .field { margin-bottom: 11px; }
+  .field label { display: block; font-size: 12.5px; color: var(--dim); margin-bottom: 3px; }
+  .field select, .field input[type=text], .field input[type=number], textarea {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font-size: 13.5px;
+  }
+  .field .radio-row { display: flex; gap: 14px; padding: 3px 0; font-size: 13.5px; }
+  .field .radio-row label { display: flex; gap: 5px; align-items: center; color: var(--text); margin: 0; font-size: 13.5px; cursor: pointer; }
+  .check { display: flex; gap: 7px; align-items: center; font-size: 13.5px; cursor: pointer; }
+  .hint { font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+  .hidden { display: none !important; }
+
+  #activeConfig { border-left: 3px solid var(--blue); }
+  #activeConfig ul { margin: 0; padding-left: 18px; }
+  #activeConfig li { margin-bottom: 5px; font-size: 13.5px; }
+  .warn { color: var(--orange); font-size: 13px; margin-top: 8px; }
+  .err { color: var(--red); font-size: 13px; margin-top: 8px; white-space: pre-wrap; }
+  .artifact-note { font-size: 12.5px; margin-top: 8px; padding: 7px 9px; border-radius: 6px; }
+  .artifact-note.ok { background: #21301f; color: var(--green); }
+  .artifact-note.warnbg { background: #3a2f19; color: var(--orange); }
+  .artifact-note.bad { background: #3a2020; color: var(--red); }
+
+  textarea { min-height: 96px; resize: vertical; font-family: inherit; }
+  .runrow { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  button#run {
+    background: var(--accent); color: #1a1a1a; border: 0; border-radius: 7px;
+    padding: 9px 22px; font-size: 14.5px; font-weight: 700; cursor: pointer;
+  }
+  button#run:disabled { opacity: .45; cursor: not-allowed; }
+  #spin { color: var(--dim); font-size: 13px; }
+
+  #result { margin-top: 14px; }
+  .bill-banner { padding: 8px 12px; border-radius: 7px; font-weight: 700; font-size: 13.5px; margin-bottom: 10px; }
+  .bill-banner.billable { background: #46311c; color: var(--orange); }
+  .bill-banner.free { background: #21301f; color: var(--green); }
+  .bill-banner.mockb { background: #253244; color: var(--blue); }
+  .answer {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 7px;
+    padding: 12px 14px; white-space: pre-wrap; font-size: 14.5px; margin-bottom: 12px;
+  }
+  .meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .kv { background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; }
+  .kv .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+  .kv .v { font-size: 13.5px; word-break: break-all; }
+  .kv .v.good { color: var(--green); } .kv .v.warnc { color: var(--orange); }
+  footer { margin-top: 26px; color: var(--dim); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🍌 banana</h1>
+    <span class="sub">hybrid model-routing demo</span>
+    <span id="serverBadge" class="badge mock">…</span>
+  </header>
+
+  <div class="modes" id="modes">
+    <div class="mode active" data-mode="hybrid">
+      <h2>Hybrid</h2>
+      <p>The router picks a cheap or strong tier per prompt.</p>
+      <p class="tag paid">may bill Fireworks</p>
+    </div>
+    <div class="mode" data-mode="remote_only">
+      <h2>Remote</h2>
+      <p>Always one chosen Fireworks model. No routing, no local fallback.</p>
+      <p class="tag paid">bills Fireworks per request</p>
+    </div>
+    <div class="mode" data-mode="local_only">
+      <h2>Fully local</h2>
+      <p>Always one local model. Fireworks is never contacted.</p>
+      <p class="tag free">no API calls</p>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="panel" id="settings">
+        <h3>Settings</h3>
+
+        <div class="field" id="f_pair">
+          <label>Hybrid pair</label>
+          <div class="radio-row">
+            <label><input type="radio" name="pair" value="remote_pair" checked> Cheap remote + strong remote</label>
+          </div>
+          <div class="radio-row">
+            <label><input type="radio" name="pair" value="local_remote"> Local + remote</label>
+          </div>
+        </div>
+
+        <div class="field" id="f_router">
+          <label>Router</label>
+          <div class="radio-row">
+            <label><input type="radio" name="router" value="heuristic" checked> Heuristic (keyword rules)</label>
+            <label><input type="radio" name="router" value="learned"> Learned</label>
+          </div>
+          <div id="artifactNote" class="artifact-note hidden"></div>
+        </div>
+
+        <div class="field" id="f_local">
+          <label>Local model</label>
+          <select id="localModel"></select>
+          <input type="text" id="localModelCustom" class="hidden" placeholder="org/model-name">
+        </div>
+
+        <div class="field" id="f_cheap">
+          <label>Cheap remote model (Fireworks, billable)</label>
+          <select id="cheapModel"></select>
+          <input type="text" id="cheapModelCustom" class="hidden" placeholder="accounts/fireworks/models/…">
+        </div>
+
+        <div class="field" id="f_strong">
+          <label>Strong remote model (Fireworks, billable)</label>
+          <select id="strongModel"></select>
+          <input type="text" id="strongModelCustom" class="hidden" placeholder="accounts/fireworks/models/…">
+        </div>
+
+        <div class="field" id="f_remote">
+          <label>Remote model (Fireworks, billable)</label>
+          <select id="remoteModel"></select>
+          <input type="text" id="remoteModelCustom" class="hidden" placeholder="accounts/fireworks/models/…">
+        </div>
+
+        <div class="field" id="f_threshold">
+          <label>Confidence threshold (heuristic router): <span id="thVal">0.55</span></label>
+          <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.55" style="width:100%">
+          <div class="hint">≥ threshold stays on the cheap tier. Learned mode uses the artifact's own threshold.</div>
+        </div>
+
+        <div class="field" id="f_escalation">
+          <label class="check"><input type="checkbox" id="escalation" checked> Escalate failed cheap answers to the strong tier</label>
+        </div>
+
+        <div class="field">
+          <label class="check"><input type="checkbox" id="mock" checked> Mock mode (no models, no network, no cost)</label>
+          <div class="hint" id="mockHint"></div>
+        </div>
+
+        <div class="hint" id="allowedNote"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel" id="activeConfig">
+        <h3>Active configuration</h3>
+        <ul id="configSummary"><li>Loading…</li></ul>
+        <div id="configWarnings"></div>
+        <div id="configErrors"></div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h3>Prompt</h3>
+        <textarea id="prompt" placeholder="Ask something… e.g. What is the capital of France?  or  Prove that the sum of two odd numbers is even."></textarea>
+        <div class="runrow">
+          <button id="run">Run</button>
+          <span id="spin" class="hidden">running…</span>
+        </div>
+      </div>
+
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <footer>
+    Demo UI — settings apply per-session only; nothing is written to .env and the API key never leaves the server.
+    Costs shown are estimates from the configured rate tables; token counts come from the backends.
+  </footer>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let SERVER = { real_allowed: false };
+let state = { mode: "hybrid" };
+let describeTimer = null;
+
+function selWithCustom(selectId, customId, models, defaultValue) {
+  const sel = $(selectId), custom = $(customId);
+  sel.innerHTML = "";
+  for (const m of models) {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m.split("/").pop();
+    sel.appendChild(o);
+  }
+  const oc = document.createElement("option");
+  oc.value = "__custom__"; oc.textContent = "custom…";
+  sel.appendChild(oc);
+  sel.value = models.includes(defaultValue) ? defaultValue : models[0];
+  sel.addEventListener("change", () => {
+    custom.classList.toggle("hidden", sel.value !== "__custom__");
+    scheduleDescribe();
+  });
+  custom.addEventListener("input", scheduleDescribe);
+}
+
+function modelValue(selectId, customId) {
+  const sel = $(selectId);
+  return sel.value === "__custom__" ? $(customId).value.trim() : sel.value;
+}
+
+function currentConfig() {
+  return {
+    mode: state.mode,
+    hybrid_pair: document.querySelector('input[name=pair]:checked').value,
+    router_kind: document.querySelector('input[name=router]:checked').value,
+    local_model: modelValue("localModel", "localModelCustom"),
+    cheap_model: modelValue("cheapModel", "cheapModelCustom"),
+    strong_model: modelValue("strongModel", "strongModelCustom"),
+    remote_model: modelValue("remoteModel", "remoteModelCustom"),
+    confidence_threshold: parseFloat($("threshold").value),
+    enable_escalation: $("escalation").checked,
+    mock: $("mock").checked,
+  };
+}
+
+function refreshVisibility() {
+  const mode = state.mode;
+  const pair = document.querySelector('input[name=pair]:checked').value;
+  const router = document.querySelector('input[name=router]:checked').value;
+  $("f_pair").classList.toggle("hidden", mode !== "hybrid");
+  $("f_router").classList.toggle("hidden", mode !== "hybrid");
+  $("f_threshold").classList.toggle("hidden", mode !== "hybrid" || router !== "heuristic");
+  $("f_escalation").classList.toggle("hidden", mode !== "hybrid");
+  $("f_local").classList.toggle("hidden",
+    !(mode === "local_only" || (mode === "hybrid" && pair === "local_remote")));
+  $("f_cheap").classList.toggle("hidden", !(mode === "hybrid" && pair === "remote_pair"));
+  $("f_strong").classList.toggle("hidden", mode !== "hybrid");
+  $("f_remote").classList.toggle("hidden", mode !== "remote_only");
+}
+
+function scheduleDescribe() {
+  refreshVisibility();
+  clearTimeout(describeTimer);
+  describeTimer = setTimeout(describeNow, 180);
+}
+
+async function describeNow() {
+  try {
+    const res = await fetch("/api/describe", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: currentConfig() }),
+    });
+    const d = await res.json();
+    $("configSummary").innerHTML =
+      d.summary.map((s) => `<li>${esc(s)}</li>`).join("");
+    $("configWarnings").innerHTML =
+      (d.warnings || []).map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join("");
+    $("configErrors").innerHTML =
+      (d.errors || []).map((e) => `<div class="err">✕ ${esc(e)}</div>`).join("");
+    $("run").disabled = (d.errors || []).length > 0;
+    renderArtifactNote(d.artifact);
+  } catch (e) {
+    $("configErrors").innerHTML = `<div class="err">describe failed: ${esc(String(e))}</div>`;
+  }
+}
+
+function renderArtifactNote(a) {
+  const el = $("artifactNote");
+  const learned = document.querySelector('input[name=router]:checked').value === "learned";
+  if (!learned || !a) { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  el.classList.remove("ok", "warnbg", "bad");
+  if (!a.available) {
+    el.classList.add("bad");
+    el.textContent = "No usable artifact: " + a.detail;
+  } else if (a.pair_match === true) {
+    el.classList.add("ok");
+    el.textContent = `Artifact ${a.version} trained for exactly this pair.`;
+  } else if (a.pair_match === false) {
+    el.classList.add("bad");
+    el.textContent = "Router retraining required — " + a.detail;
+  } else {
+    el.classList.add("warnbg");
+    el.textContent = `Artifact ${a.version}: ` + a.detail;
+  }
+}
+
+async function run() {
+  $("run").disabled = true; $("spin").classList.remove("hidden");
+  $("result").innerHTML = "";
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: currentConfig(), prompt: $("prompt").value }),
+    });
+    renderResult(await res.json());
+  } catch (e) {
+    $("result").innerHTML =
+      `<div class="panel"><div class="err">request failed: ${esc(String(e))}</div></div>`;
+  } finally {
+    $("spin").classList.add("hidden");
+    describeNow(); // re-enables Run if the config is valid
+  }
+}
+
+function banner(r) {
+  if (!r.ok) return "";
+  if (r.mode === "local_only")
+    return `<div class="bill-banner free">✓ No API request — ran entirely on this machine</div>`;
+  if (r.mock) {
+    const wb = r.would_bill
+      ? `mock run — a real run like this WOULD be a billable Fireworks request` +
+        (r.mock_estimated_cost_usd ? ` (≈ $${r.mock_estimated_cost_usd.toFixed(6)})` : "")
+      : `mock run — a real run like this would stay off the API`;
+    return `<div class="bill-banner mockb">◌ ${esc(wb)}</div>`;
+  }
+  return r.billable
+    ? `<div class="bill-banner billable">⚠ Billable Fireworks request (≈ $${(r.estimated_cost_usd || 0).toFixed(6)})</div>`
+    : `<div class="bill-banner free">✓ No API request</div>`;
+}
+
+function kv(k, v, cls) {
+  return `<div class="kv"><div class="k">${esc(k)}</div><div class="v ${cls || ""}">${esc(String(v))}</div></div>`;
+}
+
+function renderResult(r) {
+  if (!r.ok) {
+    $("result").innerHTML =
+      `<div class="panel"><h3>Result</h3><div class="err">✕ ${esc(r.error || "unknown error")}</div>
+       <div class="hint" style="margin-top:6px">No fallback was attempted — this mode fails loudly by design.</div></div>`;
+    return;
+  }
+  const cells = [];
+  cells.push(kv("final model", r.final_model || "?"));
+  cells.push(kv("provider", r.provider === "local" ? "local (this machine)" : "Fireworks (API)",
+                r.provider === "local" ? "good" : "warnc"));
+  cells.push(kv("route", r.route));
+  if (r.mode === "hybrid") {
+    cells.push(kv("escalated", r.escalated ? "yes — retried on strong tier" : "no",
+                  r.escalated ? "warnc" : ""));
+    cells.push(kv("router", r.routing.kind +
+      (r.routing.artifact_version ? ` (${r.routing.artifact_version})` : "")));
+    if (typeof r.routing.confidence === "number")
+      cells.push(kv("routing confidence", r.routing.confidence.toFixed(3) +
+        " vs threshold " + Number(r.routing.threshold).toFixed(3)));
+    const t = r.tokens;
+    cells.push(kv("cheap-tier tokens", `${t.cheap_prompt}+${t.cheap_completion}`));
+    cells.push(kv("strong-tier tokens", `${t.strong_prompt}+${t.strong_completion}`));
+    cells.push(kv("billable tokens", t.billable, t.billable > 0 ? "warnc" : "good"));
+  } else {
+    const t = r.tokens;
+    cells.push(kv("tokens (prompt+completion)", `${t.prompt}+${t.completion}`));
+    cells.push(kv("billable tokens", t.billable, t.billable > 0 ? "warnc" : "good"));
+  }
+  const costLabel = r.mock ? "est. cost if real" : "estimated API cost";
+  const cost = r.mock ? r.mock_estimated_cost_usd : r.estimated_cost_usd;
+  cells.push(kv(costLabel, "$" + (cost || 0).toFixed(6), (cost || 0) > 0 ? "warnc" : "good"));
+  cells.push(kv("latency", r.latency_s.toFixed(2) + " s"));
+  if (r.routing && r.routing.local_confidence != null)
+    cells.push(kv("local self-confidence", Number(r.routing.local_confidence).toFixed(3)));
+
+  const problems = (r.problems || []).length
+    ? `<div class="warn" style="margin-top:8px">post-check: ${esc(r.problems.join(", "))}</div>` : "";
+  const warns = (r.warnings || [])
+    .map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join("");
+
+  $("result").innerHTML =
+    `<div class="panel"><h3>Result</h3>${banner(r)}
+     <div class="answer">${esc(r.answer || "(empty answer)")}</div>
+     <div class="meta">${cells.join("")}</div>${problems}${warns}</div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function init() {
+  const cfg = await (await fetch("/api/config")).json();
+  SERVER = cfg;
+  selWithCustom("localModel", "localModelCustom", cfg.known_local_models, cfg.defaults.local_model);
+  const fw = cfg.allowed_models || cfg.known_fireworks_models;
+  selWithCustom("cheapModel", "cheapModelCustom", fw, cfg.defaults.cheap_model);
+  selWithCustom("strongModel", "strongModelCustom", fw, cfg.defaults.strong_model);
+  selWithCustom("remoteModel", "remoteModelCustom", fw, cfg.defaults.remote_model);
+
+  const badge = $("serverBadge");
+  if (cfg.real_allowed) {
+    badge.className = "badge real"; badge.textContent = "real calls allowed";
+    $("mockHint").textContent = cfg.api_key_present
+      ? "Unchecking uses real backends: Fireworks requests bill your account."
+      : "Unchecking uses real backends, but no FIREWORKS_API_KEY is set — remote calls will fail.";
+  } else {
+    badge.className = "badge mock"; badge.textContent = "mock-only server";
+    $("mock").checked = true; $("mock").disabled = true;
+    $("mockHint").textContent = "Server started without --real: everything runs in mock mode.";
+  }
+  if (cfg.allowed_models)
+    $("allowedNote").textContent =
+      `ALLOWED_MODELS is configured: Fireworks selections are restricted to ${cfg.allowed_models.length} model(s).`;
+
+  document.querySelectorAll("#modes .mode").forEach((el) => {
+    el.addEventListener("click", () => {
+      document.querySelectorAll("#modes .mode").forEach((m) => m.classList.remove("active"));
+      el.classList.add("active");
+      state.mode = el.dataset.mode;
+      scheduleDescribe();
+    });
+  });
+  document.querySelectorAll("input[name=pair], input[name=router]").forEach((el) =>
+    el.addEventListener("change", scheduleDescribe));
+  ["escalation", "mock"].forEach((id) => $(id).addEventListener("change", scheduleDescribe));
+  $("threshold").addEventListener("input", () => {
+    $("thVal").textContent = Number($("threshold").value).toFixed(2);
+    scheduleDescribe();
+  });
+  $("run").addEventListener("click", run);
+  $("prompt").addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
+  });
+
+  scheduleDescribe();
+}
+init();
+</script>
+</body>
+</html>

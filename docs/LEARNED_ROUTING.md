@@ -9,19 +9,19 @@ without reading the code first.
 The heuristic router (`confidence.py`) guesses difficulty from keywords. The
 learned router replaces that guess with a trained estimate of
 
-    P(the local model produces an acceptable answer | prompt)
+    P(the cheap-tier model produces an acceptable answer | prompt)
 
-trained on *observed outcomes* of this project's actual local and remote
-models — not on anyone's idea of what "looks hard". Route local when that
-probability clears an operating threshold chosen from data; otherwise remote.
+trained on *observed outcomes* of the exact cheap/strong model pair — not on
+anyone's idea of what “looks hard.” Route cheap when that probability clears
+an operating threshold chosen from data; otherwise route strong.
 
-Everything downstream is unchanged: a local answer still has to survive
-`router.post_check` and the token-probability escalation gate, and every
-failure path (escalation failure, remote failure) behaves exactly as before.
+Everything downstream is unchanged: a cheap answer survives
+`router.post_check`; when it came from the local backend it also passes the
+token-probability gate. Failure paths use the strong/cheap fallback cascade.
 
 ```
-prompt ──▶ pre-router (heuristic OR learned) ──▶ local or remote
-             local ──▶ post_check + confidence gate ──▶ ok, or escalate remote
+prompt ──▶ pre-router (heuristic OR learned) ──▶ cheap or strong
+             cheap ──▶ post_check (+ local confidence gate) ──▶ ok/escalate
 ```
 
 Pre-routing and post-generation confidence stay strictly separate: the
@@ -92,11 +92,12 @@ score would make the chosen policy meaningless.
 One JSON file, schema-versioned (`schema_version: "1.0"`), validated on
 every load. Full field list in `routing/dataset.py`. The essentials per
 record: the prompt, safe pre-route metadata, a `group_id` tying related or
-paraphrased prompts together, graded `local_quality` and `remote_quality`
-(0..1), the label `local_ok` (which MUST equal
-`local_quality >= meta.quality_threshold` — the validator rejects
-contradictions), token counts, measured costs and latencies for both models,
-and the local model's post-generation confidence statistics.
+paraphrased prompts together, graded outcomes, token counts, measured costs,
+and latencies for both models. Schema 1.0 retains the names `local_*`,
+`remote_*`, and `local_ok` for artifact compatibility; for newly collected
+data those mean **cheap**, **strong**, and **cheap_ok**. Metadata records
+`tier_mode`, the exact models, and `tier_schema`. Local post-generation
+confidence fields are populated only when the cheap provider is local.
 
 ### Leakage rules (enforced, not advisory)
 
@@ -126,6 +127,31 @@ make test         # wiring harness + 103-test learned-routing suite
 quality/cost value in the toy dataset is synthesized
 (`scripts/make_toy_dataset.py` documents how).
 
+### Current real Qwen/DeepSeek-Pro pilot
+
+The local demo artifact is trained on 600 automatically graded outcomes for
+`Qwen/Qwen2.5-1.5B-Instruct` (local cheap tier) versus
+`accounts/fireworks/models/deepseek-v4-pro` (strong tier): 200 GSM8K, 200
+MMLU, and 200 BIG-Bench Hard prompts. The group-aware split is 420/90/90 and
+the exact combined dataset hash is `30c51583d6c8ab07`.
+
+On the untouched 90-row test split, the selected logistic TF-IDF router sent
+60% of tasks to Pro and 40% to local, reached 0.789 quality, and beat seeded
+random routing at the same remote rate by +0.082. It also improved quality
+over the heuristic by +0.033 while reducing measured cost, but the quality
+confidence interval includes zero. Treat this as **real preliminary pilot
+evidence**, not a final statistical claim; more diverse data and repeated
+runs are still required for the FYP.
+
+Reproducible local outputs:
+
+```text
+data/real_qwen_pro_600.json
+artifacts/router_qwen_pro_600.joblib
+reports/train_qwen_pro_600/
+reports/eval_qwen_pro_600/
+```
+
 ### 1) Collect a real dataset
 
 Write a task file with references and graders (format in
@@ -136,12 +162,14 @@ Write a task file with references and graders (format in
 python3 scripts/collect_outcomes.py --tasks tasks/graded_tasks.json \
     --out data/collected.json --mock
 
-# the real thing — one PAID remote call per task, so consent is explicit:
+# the real thing — explicit consent; remote_pair makes TWO paid calls/task,
+# local_remote makes ONE paid call/task:
 python3 scripts/collect_outcomes.py --tasks tasks/graded_tasks.json \
-    --out data/collected.json --run-paid-calls
+    --out data/collected.json --run-paid-calls --max-api-cost-usd <approved-budget>
 ```
 
-It runs every task through BOTH models, grades programmatically (exact /
+Before the real command, verify `TIER_MODE`, `CHEAP_MODEL_NAME`, and
+`STRONG_MODEL_NAME`. It runs every task through BOTH tiers, grades programmatically (exact /
 numeric / contains / choice), records tokens, latency, and the three
 post-generation confidence statistics, appends after every task (interrupted
 runs resume without re-paying), and leaves ungraded tasks in a work file for
@@ -182,8 +210,9 @@ python3 -m routing.train --dataset data/collected.json \
     --policy remote_rate --target-remote-rate 0.3 ...
 ```
 
-An **unsafe-local** decision (router chose local; the local answer was
-graded a failure) is the error that matters most; every policy reports it
+An **unsafe-cheap** decision (router chose cheap; its answer was graded a
+failure) is the error that matters most; the schema/report currently retains
+the historical label `unsafe_local`. Every policy reports it
 and `max_unsafe` optimizes against it directly.
 
 ### 4) Evaluate — the one-shot test number
@@ -194,7 +223,7 @@ python3 -m evaluation.run --dataset data/collected.json \
     --report reports/eval
 ```
 
-Compares all-local, all-remote, seeded random routing (50 trials × 21 remote
+Compares all-cheap, all-strong, seeded random routing (50 trials × 21 strong
 rates), the heuristic rules at their deployed threshold, every trained
 candidate, the selected router, and the oracle — with bootstrap CIs,
 per-category breakdowns, easy-heavy/hard-heavy workload mixtures, and a
@@ -219,11 +248,12 @@ ROUTER_MODE=auto    python3 main.py ...   # fall back to heuristic, loudly
 - `learned` fails fast and clearly when `ROUTER_ARTIFACT` (default
   `artifacts/router.joblib`) is missing or incompatible.
 - `auto` falls back to the heuristic with a stderr warning.
-- Every usage-log line records `router`, `artifact_version`, `p_local`, and
+- Every usage-log line records `router`, `artifact_version`, `p_cheap_ok`
+  (and the legacy `p_local` alias),
   the active threshold, so any routed task is traceable to the exact policy
   that routed it.
-- Score direction is unchanged everywhere: **higher always means "local is
-  safer"**.
+- Score direction is unchanged everywhere: **higher always means “the cheap
+  tier is safer.”**
 
 ## Post-generation gate
 

@@ -13,8 +13,12 @@ import os
 from dataclasses import dataclass
 
 # Route names used across the codebase — import these, never hardcode strings.
-ROUTE_LOCAL = "local"
-ROUTE_REMOTE = "remote"
+# Route labels describe policy tiers, not hosting. The provider/model fields in
+# each Completion and usage record say where the answer actually ran.
+ROUTE_CHEAP = "cheap"
+ROUTE_STRONG = "strong"
+ROUTE_LOCAL = ROUTE_CHEAP       # compatibility alias for ML/runtime internals
+ROUTE_REMOTE = ROUTE_STRONG     # compatibility alias for ML/runtime internals
 ROUTE_ERROR = "error"  # tracker-only sentinel: task crashed, no answer produced
 
 
@@ -42,36 +46,45 @@ def _env_bool(name: str, default: bool) -> bool:
 
 @dataclass
 class Settings:
-    # ── Local model ──────────────────────────────────────────────────────
-    # Placeholder: a 1.5B instruct model that runs on CPU. Swap via
-    # LOCAL_MODEL_NAME to swap in a different local model.
+    # cheap tier backend:
+    #   remote_pair  -> DeepSeek-V4-Flash on Fireworks (demo, no local load)
+    #   local_remote -> local_model.py / LOCAL_MODEL_NAME (original FYP mode)
+    # The strong tier is Fireworks-hosted in both modes.
+    tier_mode: str = "remote_pair"
+
+    # ── Local cheap-tier backend ─────────────────────────────────────────
+    # Used when TIER_MODE=local_remote. It is deliberately a first-class
+    # runtime option, not merely training-data compatibility.
     local_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"
     local_max_new_tokens: int = 512
 
-    # ── Remote model (Fireworks AI) ──────────────────────────────────────
-    # llama-v3p3-70b-instruct (the original placeholder) was retired from
-    # Fireworks serverless — the API 404s on it (verified live 2026-07-04).
-    # deepseek-v4-pro won the available-models bake-off: flagship accuracy
-    # and the FEWEST completion tokens on a trivial prompt (41 vs 48–85 for
-    # gpt-oss-120b / glm-5p1 / glm-5p2 / kimi-k2p6 — every serverless chat
-    # model now bills hidden reasoning tokens into completion usage).
+    # ── Two Fireworks-hosted routing tiers ───────────────────────────────
+    # In remote_pair these are both remote; the strong model is also used by
+    # local_remote. Keep that distinction honest in logs and reports.
+    cheap_model_name: str = "accounts/fireworks/models/deepseek-v4-flash"
+    strong_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
+    cheap_max_tokens: int = 1024
+    strong_max_tokens: int = 4096
+    # Explicit USD / 1M-token assumptions for demo accounting. Override when
+    # Fireworks pricing changes; actual token counts still come from `usage`.
+    cheap_input_per_mtok: float = 0.14
+    cheap_output_per_mtok: float = 0.28
+    strong_input_per_mtok: float = 1.74
+    strong_output_per_mtok: float = 3.48
+
+    # Backward-compatible strong-tier settings used by the old harness and
+    # archived deployment environment. New code should use strong_model_name.
     remote_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
     # Optional allow-list: when ALLOWED_MODELS is set (comma-separated model
     # IDs), the remote model MUST come from it — useful for cost control or
     # when a deployment restricts which models may be called. Empty = use
     # remote_model_name. Selection: remote_client.resolve_remote_model().
     allowed_models: str = ""
-    # Tie-breaker when ALLOWED_MODELS has several entries: first name here
-    # (comma-separated, matched on the ID's last path segment) that appears
-    # in the allow-list wins; otherwise the list's first entry. deepseek won
-    # the 2026-07-04 bake-off (flagship quality, fewest completion tokens).
+    # Legacy single-remote tie-breaker, retained for compatibility helpers.
     remote_model_preference: str = "deepseek-v4-pro"
     fireworks_api_key: str = ""  # set FIREWORKS_API_KEY; never commit a key
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
-    # 4096, not 1024: reasoning models spend completion budget on thinking
-    # first — at 1024 the hard sample task came back truncated mid-thought
-    # (billed but useless). Truncation fails accuracy; the router already
-    # sends only hard tasks remote, so the bigger cap only pays when needed.
+    # Legacy alias for strong_max_tokens.
     remote_max_tokens: int = 4096
     connect_timeout_s: float = 10.0  # slow handshakes fail fast; safe to retry
     # READ timeout — must cover a full remote generation at remote_max_tokens.
@@ -106,14 +119,12 @@ class Settings:
     router_artifact_path: str = "artifacts/router.joblib"
 
     # ── Routing: the dials that decide the score ─────────────────────────
-    # Queries whose confidence >= threshold go LOCAL (free tokens).
-    # Lower threshold  = more local = fewer billable tokens, more accuracy risk.
+    # Queries whose confidence >= threshold go to the CHEAP tier.
+    # Lower threshold  = more cheap-tier use, lower cost, more quality risk.
     # Higher threshold = safer, more expensive.
     # THE single most important number to calibrate (see EVALUATION.md).
     confidence_threshold: float = 0.55
-    # If a local answer fails router.post_check, retry the task remotely
-    # instead of submitting a probably-wrong answer. Costs remote tokens only
-    # when the local gamble actually failed — cheap insurance for accuracy.
+    # If a cheap-tier answer fails router.post_check, retry on the strong tier.
     enable_escalation: bool = True
     # Only truly-EMPTY local output counts as a failure by default: a 1-char
     # answer ("B", "7") can be exactly right on multiple-choice/short-answer
@@ -157,16 +168,37 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         s = cls()
+        s.tier_mode = _env_str("TIER_MODE", s.tier_mode)
         s.local_model_name = _env_str("LOCAL_MODEL_NAME", s.local_model_name)
         s.local_max_new_tokens = _env_int("LOCAL_MAX_NEW_TOKENS", s.local_max_new_tokens)
-        s.remote_model_name = _env_str("REMOTE_MODEL_NAME", s.remote_model_name)
+        s.cheap_model_name = _env_str("CHEAP_MODEL_NAME", s.cheap_model_name)
+        # REMOTE_MODEL_NAME remains a supported fallback for existing .env
+        # files, while STRONG_MODEL_NAME is the clear two-tier spelling.
+        legacy_remote = _env_str("REMOTE_MODEL_NAME", s.remote_model_name)
+        s.strong_model_name = _env_str("STRONG_MODEL_NAME", legacy_remote)
+        s.remote_model_name = s.strong_model_name
         s.allowed_models = _env_str("ALLOWED_MODELS", s.allowed_models)
         s.remote_model_preference = _env_str(
             "REMOTE_MODEL_PREFERENCE", s.remote_model_preference
         )
         s.fireworks_api_key = _env_str("FIREWORKS_API_KEY", s.fireworks_api_key)
         s.fireworks_base_url = _env_str("FIREWORKS_BASE_URL", s.fireworks_base_url)
-        s.remote_max_tokens = _env_int("REMOTE_MAX_TOKENS", s.remote_max_tokens)
+        s.cheap_max_tokens = _env_int("CHEAP_MAX_TOKENS", s.cheap_max_tokens)
+        legacy_max = _env_int("REMOTE_MAX_TOKENS", s.remote_max_tokens)
+        s.strong_max_tokens = _env_int("STRONG_MAX_TOKENS", legacy_max)
+        s.remote_max_tokens = s.strong_max_tokens
+        s.cheap_input_per_mtok = _env_float(
+            "CHEAP_INPUT_PER_MTOK", s.cheap_input_per_mtok
+        )
+        s.cheap_output_per_mtok = _env_float(
+            "CHEAP_OUTPUT_PER_MTOK", s.cheap_output_per_mtok
+        )
+        s.strong_input_per_mtok = _env_float(
+            "STRONG_INPUT_PER_MTOK", s.strong_input_per_mtok
+        )
+        s.strong_output_per_mtok = _env_float(
+            "STRONG_OUTPUT_PER_MTOK", s.strong_output_per_mtok
+        )
         s.connect_timeout_s = _env_float("CONNECT_TIMEOUT_S", s.connect_timeout_s)
         s.request_timeout_s = _env_float("REQUEST_TIMEOUT_S", s.request_timeout_s)
         s.max_retries = _env_int("MAX_RETRIES", s.max_retries)

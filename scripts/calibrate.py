@@ -48,10 +48,11 @@ import json
 import sys
 from typing import Dict, List, Optional
 
-# Route names duplicated from config.py on purpose: config imports are wired
-# for the repo root, and this script must also work on a bare copied-out log.
-ROUTE_LOCAL = "local"
-ROUTE_REMOTE = "remote"
+# Route names duplicated from config.py on purpose: this script must also
+# work on a copied-out log. Accept both current cheap/strong labels and old
+# local/remote logs produced before the selectable-tier runtime.
+CHEAP_ROUTES = {"cheap", "local"}
+STRONG_ROUTES = {"strong", "remote"}
 ROUTE_ERROR = "error"
 
 
@@ -94,8 +95,8 @@ def run_stats(rows: List[dict], grades: Optional[Dict[str, float]]) -> dict:
             (r["threshold"] for r in rows if r.get("route") != ROUTE_ERROR), 0.0
         ),
         "tasks": len(rows),
-        "local": sum(1 for r in rows if r.get("route") == ROUTE_LOCAL),
-        "remote": sum(1 for r in rows if r.get("route") == ROUTE_REMOTE),
+        "local": sum(1 for r in rows if r.get("route") in CHEAP_ROUTES),
+        "remote": sum(1 for r in rows if r.get("route") in STRONG_ROUTES),
         "escalations": sum(1 for r in rows if r.get("escalated")),
         "errors": sum(1 for r in rows if r.get("route") == ROUTE_ERROR),
         "billable": sum(r.get("billable_tokens", 0) for r in rows),
@@ -118,7 +119,7 @@ def lowering_replay(rows: List[dict], candidates: List[float]) -> List[tuple]:
     """
     remote_pre_routed = [
         r for r in rows
-        if r.get("route") == ROUTE_REMOTE and not r.get("escalated")
+        if r.get("route") in STRONG_ROUTES and not r.get("escalated")
     ]
     out = []
     for t in candidates:
@@ -137,7 +138,7 @@ def logprob_rows(records: List[dict], grades: Dict[str, float]) -> List[dict]:
     for rec in records:
         task_id = rec.get("task_id")
         if (
-            rec.get("route") == ROUTE_LOCAL
+            rec.get("route") in CHEAP_ROUTES
             and rec.get("local_confidence") is not None
             and task_id in grades
             and task_id not in rows

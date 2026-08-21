@@ -1,13 +1,22 @@
 # banana — Hybrid Token-Efficient Routing Agent
 
-A routing layer that decides, **per request**, whether a small **local** model
-can answer it or whether the question deserves a frontier **remote** model.
-Cheap questions are answered locally at near-zero marginal cost; only the
-genuinely hard ones pay for a large model.
+A learned routing layer that decides, **per request**, whether the configured
+cheap tier is likely to be adequate or the task needs the strong tier. It has
+two selectable deployments, so the same FYP can be demonstrated cheaply now
+and evaluated with a real local model later:
 
-**The research question:** can a router using cheap difficulty signals plus the
-local model's own self-assessed confidence beat single-model baselines on the
-accuracy-versus-cost frontier — and beat *random* routing at the same spend?
+| `TIER_MODE` | Cheap tier | Strong tier | Purpose |
+| --- | --- | --- | --- |
+| `remote_pair` (default) | DeepSeek V4 Flash on Fireworks | DeepSeek V4 Pro on Fireworks | Convenient two-remote demo; both tiers are billed. |
+| `local_remote` | Qwen 2.5 1.5B on the machine | DeepSeek V4 Pro on Fireworks | Original local-vs-remote research deployment. |
+
+The router predicts *P(cheap-tier answer acceptable)*. A trained artifact is
+valid only for the exact model pair used to collect its outcome data.
+
+**The research question:** can an outcome-trained router beat single-model
+baselines on the quality-versus-cost frontier — and beat *random* routing at
+the same spend? The local deployment additionally tests whether local token
+confidence improves the decision after generation.
 
 See [`EVALUATION.md`](EVALUATION.md) for how we intend to answer that,
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for how the system works, and
@@ -26,37 +35,38 @@ Routing is worthwhile only if the cheap tier is genuinely cheaper *and* you can
 tell, in advance or shortly after, when it isn't good enough. Five ideas drive
 the design:
 
-1. **Default to local.** Local inference is far cheaper per token than a
-   frontier API, so the router is biased toward local and treats routing as
-   *risk detection* — "is there reason to believe the small model will fail?"
+1. **Prefer the cheap tier when evidence supports it.** The router treats
+   routing as risk detection: “is there reason to believe this model will
+   fail?” In `local_remote` that tier has no API charge; in `remote_pair` it
+   is a lower-cost API model, not local or free.
 2. **Detect risk cheaply.** `confidence.py` scores each query with zero-cost
    heuristics (length, plus math/code/logic/reasoning/multi-part signals and
    sentiment/NER/summarisation boosts). Only queries that look beyond a small
    model go straight to remote.
-3. **Bound the accuracy downside.** When local runs, two further checks gate
-   the answer: `router.post_check` inspects the output for small-model failure
-   modes (empty output, repetition loops, prompt echo, hedging), and a
+3. **Bound the accuracy downside.** When the cheap tier runs,
+   `router.post_check` inspects the output for failure modes (empty output,
+   repetition loops, prompt echo, hedging). In `local_remote`, a second
    **draft-and-judge confidence gate** reads the model's own mean token
    probability (`local_confidence`) — below `LOGPROB_CONFIDENCE_THRESHOLD`
-   (default 0.4) the task **escalates to remote**. A discarded local attempt
-   costs compute and latency, not API spend.
+   (default 0.4) the task **escalates to strong**. Fireworks Flash does not
+   expose this local-logit signal, so `remote_pair` uses the surface gate.
 4. **Make the cost observable.** `token_tracker.py` writes one JSONL line per
    task — confidence, active threshold, per-signal scores, local confidence,
    and a run_id — so calibration is a log replay, not a rerun.
 5. **No single failure kills the run.** Escalation failures keep the flagged
-   local answer, remote failures fall back to a local attempt, and any other
+   cheap answer, strong-tier failures fall back to a cheap attempt, and any other
    per-task error is recorded and skipped: an answer always beats no answer.
 
 ```
-task ──▶ Router.decide  (confidence.py heuristics — zero cost)
+task ──▶ Router.decide  (heuristic or trained artifact)
            │
-           ├─ score ≥ threshold ──▶ LocalModel  (no API spend)
+           ├─ score ≥ threshold ──▶ cheap tier
            │                          │
            │                     Router.post_check(output)
            │                          ├─ looks good ──▶ answer
            │                          └─ looks bad ───▶ escalate ─┐
            │                                                      ▼
-           └─ score < threshold ─────────▶ RemoteClient (Fireworks, billable)
+           └─ score < threshold ─────────▶ strong tier (Fireworks)
                                                                    │
 every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
                                                                 answer
@@ -68,13 +78,13 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 | --- | --- |
 | `main.py` | Orchestrator + CLI. `run_task()` is the decide→execute→check→account loop; `build_router()` picks the router for `ROUTER_MODE`. |
 | `router.py` | Decision layer: pre-route + post-check + escalation policy. |
-| `confidence.py` | Heuristic scorers estimating "can the local model handle this?" |
+| `confidence.py` | Heuristic fallback estimating “can the cheap tier handle this?” |
 | `routing/` | **Learned pre-router**: outcome-dataset format, leakage-safe splits, training + calibration + threshold policies, artifact I/O, runtime router. See [`docs/LEARNED_ROUTING.md`](docs/LEARNED_ROUTING.md). |
-| `evaluation/` | Offline evaluator: all-local / all-remote / random / heuristic / learned / oracle on the held-out test split, with bootstrap CIs and a Pareto chart. |
+| `evaluation/` | Offline evaluator: all-cheap / all-strong / random / heuristic / learned / oracle on the held-out test split, with bootstrap CIs and a Pareto chart. |
 | `tests/` | Deterministic offline suite for the learned routing system (`make test`). |
 | `local_model.py` | HF transformers wrapper (lazy load, chat template, exact token counts). |
-| `remote_client.py` | Remote model client (`/chat/completions`, retries, usage-based counts). |
-| `token_tracker.py` | Local-vs-remote accounting, JSONL audit log, run summary. |
+| `remote_client.py` | Fireworks cheap/strong clients (`/chat/completions`, retries, usage counts). |
+| `token_tracker.py` | Provider-aware accounting, estimated API cost, JSONL audit log, run summary. |
 | `config.py` | Every knob, env-overridable. The one file to touch when swapping models. |
 | `schemas.py` | Shared `Task` / `Completion` dataclasses — the contract between backends. |
 | `test_harness.py` | Offline end-to-end wiring test (mock mode, stdlib only). |
@@ -82,6 +92,7 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 | `scripts/calibrate.py` | Threshold calibration analysis over `logs/usage.jsonl`. |
 | `scripts/make_toy_dataset.py` | Synthetic outcome dataset for offline end-to-end runs. |
 | `scripts/collect_outcomes.py` | Collect REAL both-model outcomes (requires explicit `--run-paid-calls`). |
+| `webui/` | Browser demo (Hybrid / Remote / Fully local), stdlib-only server. See [`docs/DEMO_UI.md`](docs/DEMO_UI.md). |
 
 ## Quickstart
 
@@ -92,10 +103,13 @@ python3 test_harness.py
 # 1) Mock run of the sample task file (no model, no network):
 python3 main.py --tasks tasks/sample_tasks.json --mock
 
-# 2) Real run:
+# 2) Real two-remote demo (both tiers bill Fireworks):
 pip install -r requirements.txt
 cp .env.example .env        # then add your API key
-python3 main.py --tasks tasks/sample_tasks.json
+python3 main.py --tier-mode remote_pair --tasks tasks/sample_tasks.json
+
+# Or keep the local model as the cheap tier:
+python3 main.py --tier-mode local_remote --tasks tasks/sample_tasks.json
 
 # 3) Interactive CLI (model loads once, stays warm):
 python3 scripts/banana.py            # ask questions at the `banana ›` prompt
@@ -104,16 +118,30 @@ python3 scripts/banana.py --demo     # 8-category run + token graph
 # 4) Learned router — offline end-to-end loop on synthetic data:
 make toy-data && make train && make evaluate
 ROUTER_MODE=learned python3 main.py --tasks tasks/sample_tasks.json --mock
+
+# 5) Browser demo UI (mock-only by default; --real enables billable calls):
+make ui                              # http://127.0.0.1:8642
 ```
 
 The pre-router now has two implementations selected by `ROUTER_MODE`:
 `heuristic` (the keyword rules above, the default), `learned` (a trained,
-calibrated classifier predicting *P(local answer acceptable)* from real
+calibrated classifier predicting *P(cheap-tier answer acceptable)* from real
 model outcomes), and `auto` (learned if its artifact loads, else heuristic
 with a warning). [`docs/LEARNED_ROUTING.md`](docs/LEARNED_ROUTING.md) covers
 dataset collection, training, threshold policies, and evaluation.
 
-Never commit `.env` — it is gitignored and holds a live API key.
+This workspace also contains the real Qwen/DeepSeek-Pro pilot artifact at
+`artifacts/router_qwen_pro_600.joblib`. The local `.env` points the browser
+demo to it. Select **Hybrid → local + remote → Learned** to use the verified
+pair-specific router; switching to a different model pair correctly asks for
+retraining instead of reusing the artifact.
+
+Never commit `.env` — it is gitignored and holds a live API key. Also do not
+run `scripts/collect_outcomes.py --run-paid-calls` until the intended
+`TIER_MODE` and exact model pair have been verified; collection executes both
+tiers for every task. Paid collection also requires an explicit
+`--max-api-cost-usd` ceiling and refuses to start when the configured
+worst-case cost exceeds it.
 
 ### Batch mode
 
@@ -137,7 +165,7 @@ in-container against the `/input` and `/output` mounts.
   "why did task 7 go remote?" is answered by the log line itself.
 - `AGENT_MOCK=1` (or `--mock`) isolates wiring bugs from model/API bugs.
 - `logs/usage.jsonl` is the audit trail: one line per task, replayable.
-- `make test` after every change; it runs in ~50 ms with no deps.
+- `make test` after every change; it is deterministic and makes no API calls.
 
 ## Team
 

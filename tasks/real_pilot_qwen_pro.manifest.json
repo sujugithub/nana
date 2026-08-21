@@ -1,0 +1,72 @@
+{
+  "kind": "real-outcome-pilot-manifest",
+  "created": "2026-08-21",
+  "seed": 21,
+  "task_count": 120,
+  "categories": {
+    "knowledge": 40,
+    "math": 40,
+    "reasoning": 40
+  },
+  "graders": {
+    "choice": 80,
+    "numeric": 40
+  },
+  "intended_pair": {
+    "tier_mode": "local_remote",
+    "cheap": "Qwen/Qwen2.5-1.5B-Instruct",
+    "strong": "accounts/fireworks/models/deepseek-v4-pro"
+  },
+  "sources": [
+    {
+      "name": "GSM8K",
+      "url": "https://github.com/openai/grade-school-math",
+      "license": "MIT",
+      "input_sha256": "3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14"
+    },
+    {
+      "name": "MMLU",
+      "url": "https://github.com/hendrycks/test",
+      "license": "MIT",
+      "input_sha256": {
+        "abstract_algebra": "4be89c0fb1d2419722e88880f6da3da95750367185ecd36f6492a6f74785cf64",
+        "anatomy": "966dfd5c4579885ebdb8c05d6754ae5834f672632586d8595be3c0f9360e6f4e",
+        "astronomy": "87c9c3cb5a55395c70dd9ed521dd7d2629fd4ff236c5ab647102e007f52a9341",
+        "business_ethics": "cd3fc3a85a34cb17e6c5b2fb68ea61e7800b31120d92934019f1e17f4832fbd4",
+        "clinical_knowledge": "06a1ea973000d5ef5d2664c4ac1c68d0423f1cab6b3b682be7942633740811f1",
+        "college_computer_science": "d53a1d0d1c4362dacf92a4ff1d6a755beb5a87f24a7301c3c4391fcacc6530b4",
+        "college_mathematics": "8b5bef14d4209c7918eaf947e4f12a5ae9470567722d8ba9761302d733e8ac71",
+        "conceptual_physics": "7b39a241bb20424fd2a4e0e37ce05d94865ffc44191d8be4063be0e973312256",
+        "global_facts": "a81058ee8e2385edaf42b8847ec9db01221fa4b16d262db415f3370884745ff9",
+        "high_school_geography": "c6acdaa9d94c88cdefb9dd569e376733d9ba670c07db12cdff36ccdc18c2ab0c",
+        "high_school_psychology": "88c33b6b0ade567d07b8b5b074effdb52f31d773541fd71e86cb0d85a8daf7bf",
+        "high_school_world_history": "7787343ae18e4e1ef833c8630c0c914c62f42c2f35d8b90f4bec2eecccfc161e",
+        "machine_learning": "05984b90f887a7da12b3dd8e41e6c34fa856b2c939ea3124975d90910ceb2af0",
+        "moral_scenarios": "128d7bd823d793f8b7faf28f98f4b3c737b3e84d4b42c06c13458d36075a423a",
+        "nutrition": "309432be237ac2b659acd10fdd4347d32cdc60aa9daeafbac78486a8744fa0b6",
+        "philosophy": "a0f0c6fc9e4f08c04ff3a339996c4ed688a9fbe75d205fff4b9d3549fb49fa1e",
+        "professional_law": "eeb81cac576a5f537485b6befd25837b55f64b57e9b2a7e409210d7c8d608820",
+        "professional_medicine": "a034bf0dda10cb0848bdd3097eb1547d61ca2dac9e9b871563691621c38d51e9",
+        "security_studies": "ab7634702670ee0d5e98b852f5bcfad2821ff9a2e909d223de05422c948f6638",
+        "world_religions": "3be96b2465419289c4fe0c8a0d003003facd243c8982c6daafc6ac90a40bd507"
+      }
+    },
+    {
+      "name": "BIG-Bench Hard",
+      "url": "https://github.com/suzgunmirac/BIG-Bench-Hard",
+      "license": "MIT",
+      "input_sha256": {
+        "boolean_expressions": "ea6c754ec005e2d3f2d085d349a740f593b5764f32ea4638ffed4cfc0061b12a",
+        "causal_judgement": "6e8bca44dd402008ed41c07a3d0a1d5e7b03db7001a7e002fcdf4c60985ea081",
+        "date_understanding": "0148d4ac5fca05b2f82373e5fef7208e15363b9c6079493034d77b3dab496bf5",
+        "logical_deduction_five_objects": "d2df31394b903b7f0e085d42a69572a092987856eac076799017d70ef266fa8f"
+      }
+    }
+  ],
+  "limitations": [
+    "Pilot scale: results are preliminary, not a final FYP claim.",
+    "Public benchmark prompts may have appeared in model pretraining data.",
+    "Only deterministic numeric/multiple-choice grading is included.",
+    "A separate outcome collection and artifact are required for remote_pair."
+  ]
+}

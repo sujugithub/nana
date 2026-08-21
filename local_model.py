@@ -82,6 +82,8 @@ class LocalModel:
                 completion_tokens=len(text.split()),
                 source=ROUTE_LOCAL,
                 latency_s=time.time() - started,
+                model_name=settings.local_model_name,
+                provider="local",
             )
 
         with self._lock:
@@ -177,6 +179,8 @@ class LocalModel:
             completion_tokens=int(new_tokens.shape[-1]),
             source=ROUTE_LOCAL,
             latency_s=time.time() - started,
+            model_name=settings.local_model_name,
+            provider="local",
             confidence=round(confidence, 4) if confidence is not None else None,
             min_token_prob=(
                 round(min_token_prob, 4) if min_token_prob is not None else None

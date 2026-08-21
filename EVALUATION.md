@@ -5,7 +5,7 @@ the final report: if the numbers here are solid, the project stands up; if they
 are hand-waved, nothing else rescues it.
 
 > **Status:** the offline evaluator implementing this methodology exists —
-> `python3 -m evaluation.run` compares all-local, all-remote, seeded random
+> `python3 -m evaluation.run` compares all-cheap, all-strong, seeded random
 > routing, the heuristic rules, every learned candidate, the selected
 > learned router, and the oracle, with bootstrap CIs, per-category results,
 > workload mixtures, and a Pareto chart. What still needs real data is the
@@ -27,17 +27,17 @@ one that decides whether the router has learned anything at all.
 
 | Baseline | What it is | Why it matters |
 | --- | --- | --- |
-| **All-local** | Every task on the small model | The cheap floor |
-| **All-remote** | Every task on the frontier model | The expensive ceiling — the "just use one model" case |
-| **Random routing at rate p** | Send a random p% remote, sweeping p from 0 to 1 | Traces a straight line between the two corners. **If our router does not sit clearly above this line, it is only buying accuracy in proportion to spend and the difficulty signal is worthless.** |
-| **Oracle routing** | Route remote *only* when local would actually have been wrong, using ground truth | Cheating by construction, and that is the point: the theoretical ceiling. The gap between us and the oracle is the headroom left in the problem. |
+| **All-cheap** | Every task on the configured cheap model | The low-cost floor |
+| **All-strong** | Every task on the strong model | The expensive “just use one model” case |
+| **Random routing at rate p** | Send a random p% strong, sweeping p from 0 to 1 | Traces a line between the corners. **If our router does not sit clearly above it, the learned signal is worthless.** |
+| **Oracle routing** | Route strong *only* when cheap would have failed, using ground truth | Cheating by construction: the theoretical routing ceiling. |
 
 Then sweep our own `CONFIDENCE_THRESHOLD` to trace our curve and plot all five
 together: accuracy on one axis, cost on the other. Our line should sit above
 random and below oracle.
 
 Report-ready sentences fall straight out of that plot, e.g. *"at 40% of
-all-remote cost we retain 97% of its accuracy"*.
+all-strong cost we retain 97% of its accuracy"*.
 
 ## Does the difficulty score actually predict anything?
 
@@ -45,14 +45,13 @@ Separate from system performance, test the signal itself:
 
 1. Run every task through **both** models.
 2. Grade both.
-3. Label each task `local_correct` or `local_wrong` — this is the ground truth
+3. Label each task `cheap_correct` or `cheap_wrong` — this is the ground truth
    the router is trying to predict.
 4. Measure **AUC** of the difficulty score against that label.
 
 AUC 0.5 means the score is worthless (indistinguishable from random ranking);
 0.8+ means it genuinely detects difficulty. Do this separately for the
-pre-route heuristic score and for `local_confidence`, because they may be good
-at different things — and a combined signal may beat either alone.
+pre-route heuristic score and, only in `local_remote`, `local_confidence`.
 
 This also produces the labelled dataset needed to train a learned router —
 which now exists: `routing/train.py` reports exactly these AUCs (heuristic
@@ -111,7 +110,7 @@ temperature at 0 for reproducibility.
 
 **Routing only pays on mixed workloads.** If every query is hard, everything
 escalates and we have added latency for nothing; if every query is easy, the
-remote tier is never needed. Run the evaluation across several difficulty
+strong tier is never needed. Run the evaluation across several difficulty
 mixtures and show how the advantage grows and shrinks.
 
 Demonstrating *when our own system is useless* is what separates a serious
@@ -119,9 +118,10 @@ project from a sales pitch.
 
 ## Honest accounting
 
-Count the cascade's overhead. When the logprob gate escalates, we paid for a
-full local generation and discarded it. Include that in the cost model —
-reporting it is what makes the rest of the numbers credible.
+Count the cascade's overhead. When a gate escalates, we paid for a full cheap
+generation and discarded it. In `local_remote` that is local compute; in
+`remote_pair` it is a billed Flash call. Include either in the cost model and
+never describe the two-remote demo as local or free.
 
 Which is the deeper point: the cost model itself must be **real**. The
 competition scored local tokens as zero. Local inference costs compute time,

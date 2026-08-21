@@ -29,8 +29,10 @@ class Completion:
     text: str
     prompt_tokens: int
     completion_tokens: int
-    source: str  # ROUTE_LOCAL or ROUTE_REMOTE
+    source: str  # ROUTE_CHEAP or ROUTE_STRONG (legacy aliases still work)
     latency_s: float = 0.0
+    model_name: str = ""
+    provider: str = ""  # "local" or "fireworks"; never inferred from route
     # Model self-confidence: mean per-token probability of the generated
     # text (0..1), from the model's own logits. Only the LOCAL backend sets
     # it (remote APIs don't expose logprobs by default; mock mode has no

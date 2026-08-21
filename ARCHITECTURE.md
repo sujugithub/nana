@@ -5,10 +5,14 @@ worth knowing before you change something.
 
 ## The one-line version
 
-`Router.decide` scores the prompt with zero-cost heuristics → confident
-queries run on the **local** model, unconfident ones go straight to **remote**
-→ local answers must then pass `Router.post_check` *and* a logprob confidence
-gate, or they escalate to remote → `TokenTracker` records every decision.
+`Router.decide` estimates whether the **cheap** tier is adequate → otherwise
+the request goes to the **strong** tier → cheap answers pass
+`Router.post_check` and, when the cheap backend is local, a logprob confidence
+gate → `TokenTracker` records the model, provider, tokens, and estimated cost.
+
+`TIER_MODE=remote_pair` selects Fireworks Flash → Pro.
+`TIER_MODE=local_remote` selects local Qwen → Fireworks Pro. The router logic
+is shared; only the cheap backend changes.
 
 ## The routing pipeline
 
@@ -17,30 +21,30 @@ gate, or they escalate to remote → `TokenTracker` records every decision.
    - **heuristic** (default): `confidence.py` → `router.decide`, described
      below.
    - **learned**: `routing/learned_router.py` loads a trained artifact once
-     and predicts a calibrated *P(local answer acceptable)* from TF-IDF and
+     and predicts a calibrated *P(cheap-tier answer acceptable)* from TF-IDF and
      engineered prompt features; the artifact's own data-selected threshold
      replaces `CONFIDENCE_THRESHOLD`. Trained on observed outcomes of this
      project's model pair — see `docs/LEARNED_ROUTING.md`. `auto` mode uses
      learned when the artifact loads and falls back to heuristic loudly.
    Both emit the same `RoutingDecision`, log `router`/`artifact_version`/
-   `p_local`, and obey the same direction contract: higher score = local is
-   safer. Features for the learned pre-router are computable from the
+   `p_cheap_ok` (plus legacy `p_local`), and obey the same direction contract:
+   higher score = the cheap tier is safer. Features are computable from the
    prompt alone — post-generation signals are structurally excluded
    (`routing/dataset.py` POST_GEN_FIELDS, enforced by tests).
 
    The heuristic scorer: nine keyword pattern
    groups plus a length ramp produce a 0–1 score. Penalties (math, code,
    code-debug, logic, multi-part, explicit reasoning demands) push toward
-   remote; boosts (sentiment, NER, summarisation) push toward local, because
+   strong; boosts (sentiment, NER, summarisation) push toward cheap, because
    those are long prompts but easy work and need to overcome the length
    penalty. Weighted 40% length / 60% signals, compared against
    `CONFIDENCE_THRESHOLD` (default 0.55). Costs microseconds and no API spend.
 
-2. **Local generation** (`local_model.py`). Chat template applied when the
-   tokenizer has one, greedy decoding for determinism, exact token counts from
-   the tokenizer rather than word counts.
+2. **Cheap generation.** In `remote_pair`, `CheapRemoteClient` calls Flash.
+   In `local_remote`, `local_model.py` applies the Qwen chat template, uses
+   deterministic greedy decoding, and counts exact tokenizer tokens.
 
-3. **Self-assessment** (the draft-and-judge gate). `generate()` keeps the
+3. **Local self-assessment** (only `local_remote`). `generate()` keeps the
    per-step logits and computes three statistics of its own answer's token
    probabilities via `compute_transition_scores(..., normalize_logits=True)`:
    the mean (`Completion.confidence`, logged as `local_confidence`), the
@@ -55,8 +59,9 @@ gate, or they escalate to remote → `TokenTracker` records every decision.
    empty output, hedging or refusal near the start, prompt echo, degenerate
    repetition (one trigram dominating the output).
 
-5. **Escalation.** Failing either check sends the task to `RemoteClient`. The
-   local attempt is discarded — it cost compute and latency, not API spend.
+5. **Escalation.** A failed cheap answer goes to `StrongRemoteClient`. A
+   discarded local attempt costs compute/latency; a discarded Flash attempt
+   also costs API tokens. Provider-aware accounting records the difference.
 
 ## Design rules that must hold
 
@@ -68,8 +73,8 @@ else. Breaking this rule is the fastest way to make the project unmaintainable
 across six people.
 
 **An answer always beats no answer.** The failure policy in `main.run_task`:
-if escalation's remote call fails, keep the flagged local answer; if a
-remote-routed call fails, fall back to a local attempt; any other per-task
+if escalation's strong call fails, keep the flagged cheap answer; if a
+strong-routed call fails, fall back to a cheap attempt; any other per-task
 error records an error row and the run continues. One bad task must never kill
 a batch.
 
@@ -106,8 +111,8 @@ chasing sampling noise.
   almost by construction. If that bites, switch the statistic to minimum token
   probability or the fraction below a floor — the plumbing is identical.
 
-- **Local generation is serialised.** One model behind one lock, so local tasks
-  queue. Remote calls are thread-pooled and run concurrently.
+- **Local generation is serialised.** In `local_remote`, one model sits behind
+  one lock, so local tasks queue. Fireworks calls are thread-pooled.
 
 - **`confidence.py` weights were tuned against a pass/fail accuracy floor.**
   The decisive 0.75 penalties deliberately over-escalate rather than risk a

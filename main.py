@@ -2,16 +2,16 @@
 
 Flow per task (see README for the diagram):
 
-    Router.decide ──▶ local? ──▶ LocalModel.generate ──▶ Router.post_check
-                         │                                   ok │ bad
-                         │                                      ▼
-                         └─ remote? ─────────────▶ RemoteClient.generate
+    Router.decide ──▶ cheap? ──▶ selected cheap backend ──▶ post_check
+                         │                                ok │ bad
+                         │                                   ▼
+                         └─ strong? ─────────────▶ StrongRemoteClient
     every step ──▶ TokenTracker (logs/usage.jsonl + summary)
 
 Failure policy — an ANSWER always beats no answer, and one bad task must
 never kill the run:
-- escalation's remote call fails → keep the flagged local answer;
-- a remote-routed call fails → fall back to a local attempt (some chance of
+- escalation's strong call fails → keep the flagged cheap-tier answer;
+- a strong-routed call fails → fall back to a cheap-tier attempt (some chance of
   being right beats none);
 - anything else per-task → record an error row and continue the run.
 
@@ -41,7 +41,7 @@ from typing import Dict, List, Optional, Tuple
 
 from config import ROUTE_ERROR, ROUTE_LOCAL, settings
 from local_model import LocalModel
-from remote_client import RemoteClient, RemoteError
+from remote_client import CheapRemoteClient, RemoteError, StrongRemoteClient
 from router import Router
 from schemas import Completion, Task
 from token_tracker import TokenTracker
@@ -91,6 +91,26 @@ def build_router(threshold: Optional[float] = None) -> Router:
         return Router(threshold=threshold)
 
 
+def build_backends():
+    """Build the configured cheap and strong execution tiers.
+
+    ``remote_pair`` uses Fireworks for both tiers. ``local_remote`` swaps
+    only the cheap tier for LocalModel; the learned routing policy and the
+    strong fallback stay identical.
+    """
+    tier_mode = settings.tier_mode.strip().lower()
+    if tier_mode == "remote_pair":
+        cheap = CheapRemoteClient()
+    elif tier_mode == "local_remote":
+        cheap = LocalModel()
+    else:
+        raise ValueError(
+            f"TIER_MODE={settings.tier_mode!r} invalid: expected "
+            "remote_pair | local_remote"
+        )
+    return tier_mode, cheap, StrongRemoteClient()
+
+
 def _gate_confidence(completion: Completion) -> Optional[float]:
     """The post-generation confidence the escalation gate compares against
     LOGPROB_CONFIDENCE_THRESHOLD, per LOCAL_CONF_STAT. Higher = safer to
@@ -116,8 +136,8 @@ def _gate_confidence(completion: Completion) -> Optional[float]:
 def run_task(
     task: Task,
     router: Router,
-    local: LocalModel,
-    remote: RemoteClient,
+    cheap,
+    strong,
     tracker: TokenTracker,
 ) -> dict:
     """Run one task through decide → execute → post-check → account.
@@ -130,20 +150,18 @@ def run_task(
     started = time.time()
     decision = router.decide(task)
 
-    local_completion = None
-    remote_completion = None
+    cheap_completion = None
+    strong_completion = None
     escalated = False
     problems: List[str] = []
 
     if decision.target == ROUTE_LOCAL:
-        local_completion = local.generate(task.prompt)
-        ok, problems = router.post_check(task.prompt, local_completion.text)
-        # Draft-and-judge: the local model's own token-probability statistic
-        # (LOCAL_CONF_STAT — mean by default). Low self-confidence catches
-        # the failure mode post_check's surface rules can't — a fluent,
-        # well-formed, WRONG answer. None (mock mode, zero-length output)
-        # means "no signal": never treated as low.
-        gate_conf = _gate_confidence(local_completion)
+        cheap_completion = cheap.generate(task.prompt)
+        ok, problems = router.post_check(task.prompt, cheap_completion.text)
+        # Only a genuinely local cheap backend exposes token probabilities.
+        # In remote_pair mode Fireworks returns no logits, so this signal is
+        # None and the surface post-check remains the escalation gate.
+        gate_conf = _gate_confidence(cheap_completion)
         low_confidence = (
             gate_conf is not None
             and gate_conf < settings.logprob_confidence_threshold
@@ -153,44 +171,44 @@ def run_task(
                 f"low_confidence:{settings.local_conf_stat}:{gate_conf:.2f}"
             )
         if (not ok or low_confidence) and settings.enable_escalation:
-            # The free local attempt produced something that looks wrong.
-            # Pay for a remote retry rather than risk the accuracy penalty —
-            # the local attempt itself cost 0 tokens, only latency.
+            # The cheap-tier attempt looks wrong. Retry on the strong tier;
+            # whether the first attempt was local or billable is recorded by
+            # its provider rather than inferred from the route.
             escalated = True
             try:
-                remote_completion = remote.generate(task.prompt)
+                strong_completion = strong.generate(task.prompt)
             except RemoteError as err:
-                # A flagged local answer still beats no answer.
+                # A flagged cheap-tier answer still beats no answer.
                 problems.append(f"escalation_failed: {err}")
     else:
         try:
-            remote_completion = remote.generate(task.prompt)
+            strong_completion = strong.generate(task.prompt)
         except RemoteError as err:
-            # Last resort: a low-confidence local attempt has SOME chance of
+            # Last resort: a low-confidence cheap-tier attempt has SOME chance of
             # being right; an unanswered task has none.
-            problems.append(f"remote_failed_local_fallback: {err}")
-            local_completion = local.generate(task.prompt)
+            problems.append(f"strong_failed_cheap_fallback: {err}")
+            cheap_completion = cheap.generate(task.prompt)
 
-    final = remote_completion or local_completion
+    final = strong_completion or cheap_completion
     record = tracker.record(
         task_id=task.task_id,
         route=final.source,
         escalated=escalated,
-        local=local_completion,
-        remote=remote_completion,
+        local=cheap_completion,
+        remote=strong_completion,
         confidence=decision.confidence,
         threshold=router.threshold,
         signals=decision.signals,
         problems=problems,
         local_confidence=(
-            local_completion.confidence if local_completion else None
+            cheap_completion.confidence if cheap_completion else None
         ),
         latency_s=time.time() - started,
         local_min_token_prob=(
-            local_completion.min_token_prob if local_completion else None
+            cheap_completion.min_token_prob if cheap_completion else None
         ),
         local_low_token_frac=(
-            local_completion.low_token_frac if local_completion else None
+            cheap_completion.low_token_frac if cheap_completion else None
         ),
         router=decision.router_kind,
         artifact_version=decision.artifact_version,
@@ -207,12 +225,15 @@ def run_task(
         "router": decision.router_kind,
         "artifact_version": decision.artifact_version,
         "local_confidence": (
-            local_completion.confidence if local_completion else None
+            cheap_completion.confidence if cheap_completion else None
         ),
         "signals": decision.signals,
         "reason": decision.reason,
         "post_check_problems": problems,
         "billable_tokens": record.billable_tokens,
+        "estimated_cost_usd": record.estimated_cost_usd,
+        "model_name": final.model_name,
+        "provider": final.provider,
         "answer": final.text,
     }
 
@@ -257,8 +278,8 @@ def _report(result: dict) -> None:
 def run_all(
     tasks: List[Task],
     router: Router,
-    local: LocalModel,
-    remote: RemoteClient,
+    cheap,
+    strong,
     tracker: TokenTracker,
     deadline: float,
 ) -> Tuple[Dict[str, dict], bool]:
@@ -276,7 +297,7 @@ def run_all(
 
     def _guarded(task: Task) -> dict:
         try:
-            return run_task(task, router, local, remote, tracker)
+            return run_task(task, router, cheap, strong, tracker)
         except Exception as err:  # one bad task must not kill the whole run
             print(f"[{task.task_id}] ERROR: {err}", file=sys.stderr)
             tracker.record(task_id=task.task_id, route=ROUTE_ERROR)
@@ -376,12 +397,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="override CONFIDENCE_THRESHOLD for this run (calibration sweeps)",
     )
+    parser.add_argument(
+        "--tier-mode",
+        choices=("remote_pair", "local_remote"),
+        default=None,
+        help="override TIER_MODE: two Fireworks models or local cheap + strong remote",
+    )
     args = parser.parse_args(argv)
 
     # Apply overrides BEFORE constructing components — Router snapshots the
     # threshold at construction time.
     if args.mock:
         settings.mock_mode = True
+    if args.tier_mode is not None:
+        settings.tier_mode = args.tier_mode
     if args.threshold is not None:
         settings.confidence_threshold = args.threshold
 
@@ -404,12 +433,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     pending = False
     try:
         router = build_router()
-        local = LocalModel()
-        remote = RemoteClient()
+        tier_mode, cheap, strong = build_backends()
         tracker = TokenTracker()
-        if not settings.mock_mode:
-            local.load()  # pay the cold-start once, up front, not on task #1
-        results, pending = run_all(tasks, router, local, remote, tracker, deadline)
+        if tier_mode == "local_remote" and not settings.mock_mode:
+            cheap.load()  # pay the local cold-start once, before task #1
+        print(
+            f"tiers: {tier_mode} | cheap={getattr(cheap, 'model_name', settings.local_model_name)} "
+            f"| strong={strong.model_name}",
+            file=sys.stderr,
+        )
+        results, pending = run_all(tasks, router, cheap, strong, tracker, deadline)
         tracker.print_summary()
     except Exception as err:
         # Belt and braces: nothing above should raise (run_all guards each

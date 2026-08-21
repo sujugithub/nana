@@ -4,10 +4,11 @@
         --artifact artifacts/router.joblib --train-report reports/train \
         --report reports/eval
 
-Compares, on identical tasks:
-  all_local          every task on the small model (no cascade — the floor)
-  all_remote         every task on the frontier model (the ceiling)
-  random@p           random routing swept across remote rates, repeated
+Compares, on identical tasks (report keys retain schema-1.0 local/remote
+names, which mean cheap/strong):
+  all_local          every task on the cheap model (no cascade — the floor)
+  all_remote         every task on the strong model (the ceiling)
+  random@p           random routing swept across strong-tier rates, repeated
                      seeded trials — the line a useful router must beat
   heuristic          the existing keyword rules at their deployed threshold
   <candidates>       every trained candidate at its policy threshold

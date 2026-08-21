@@ -3,9 +3,8 @@
 
 Demo + local-use tooling ONLY. The batch path (main.py entrypoint, Dockerfile,
 /input → /output contract) is deliberately untouched: this script IMPORTS the
-exact modules a batch run executes — run_task, Router, LocalModel,
-RemoteClient — so what a banana session shows is the real routing, not a
-reimplementation.
+exact backend factory and run_task path used by batch mode, so what a banana
+session shows is the real routing rather than a reimplementation.
 
 Modes:
     banana                  interactive session (model loads once, stays warm)
@@ -65,9 +64,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 warnings.filterwarnings("ignore")
 
 from config import ROUTE_LOCAL, ROUTE_REMOTE, settings  # noqa: E402
-from local_model import LocalModel  # noqa: E402
-from main import run_task  # noqa: E402
-from remote_client import RemoteClient  # noqa: E402
+from main import build_backends, run_task  # noqa: E402
 from router import Router  # noqa: E402
 from schemas import Task  # noqa: E402
 from token_tracker import TokenTracker  # noqa: E402
@@ -122,14 +119,18 @@ def print_banner():
         print(yellow(bold(line)) + suffix)
     print(dim(" token-efficient routing agent · team banana"))
     print()
-    local_name = settings.local_model_name.rsplit("/", 1)[-1]
     with contextlib.redirect_stderr(io.StringIO()):  # mute the dev-fallback NOTE
-        remote_name = (RemoteClient().model_name or "none").rsplit("/", 1)[-1]
-    print("   {} {}".format(dim("models "),
-          green(local_name + " (local · free)") + dim("  →  ")
-          + yellow(remote_name + " (remote · billed)")))
+        tier_mode, cheap, strong = build_backends()
+    cheap_name = (cheap.model_name or "none").rsplit("/", 1)[-1]
+    strong_name = (strong.model_name or "none").rsplit("/", 1)[-1]
+    cheap_where = "local · free" if tier_mode == "local_remote" else "Fireworks · billed"
+    print("   {} {}".format(
+        dim("models "),
+        green(cheap_name + " (cheap, " + cheap_where + ")") + dim("  →  ")
+        + yellow(strong_name + " (strong, Fireworks · billed)"),
+    ))
     print("   {} {}".format(dim("router "),
-          dim("confidence ≥ {:.2f} stays local · self-check gate {:.2f}".format(
+          dim("confidence ≥ {:.2f} uses cheap tier · self-check gate {:.2f}".format(
               settings.confidence_threshold,
               settings.logprob_confidence_threshold))))
     print()
@@ -151,23 +152,24 @@ class Session:
         from main import build_router
 
         self.router = build_router()
-        self.local = LocalModel()
         with contextlib.redirect_stderr(io.StringIO()):  # mute model-pick notes
-            self.remote = RemoteClient()
+            self.tier_mode, self.cheap, self.strong = build_backends()
         self.tracker = TokenTracker(log_path="")  # never touch usage.jsonl
         self.asked = 0
-        self.local_n = 0
+        self.cheap_n = 0
         self.billable = 0
-        self.free_tokens = 0
+        self.local_tokens = 0
         self.history = []      # [(question, answer)] — the whole session
         self.last_answer = ""
 
     def warm(self):
-        if settings.mock_mode or self.local.loaded:
+        if self.tier_mode != "local_remote":
+            return
+        if settings.mock_mode or self.cheap.loaded:
             return
         print(dim("loading local model ({}) …".format(settings.local_model_name)))
         started = time.time()
-        self.local.load()
+        self.cheap.load()
         print(dim("ready in {:.1f}s — model stays warm for this session".format(
             time.time() - started)))
 
@@ -208,13 +210,14 @@ class Session:
 
     def _run(self, prompt, sent, task_id):
         task = Task(task_id, sent)
-        result = run_task(task, self.router, self.local, self.remote, self.tracker)
+        result = run_task(task, self.router, self.cheap, self.strong, self.tracker)
         self.asked += 1
         if result["route"] == ROUTE_LOCAL:
-            self.local_n += 1
+            self.cheap_n += 1
         self.billable += result["billable_tokens"]
         rec = self.tracker.records[-1]
-        self.free_tokens += rec.local_prompt_tokens + rec.local_completion_tokens
+        if rec.cheap_provider == "local":
+            self.local_tokens += rec.cheap_prompt_tokens + rec.cheap_completion_tokens
         return result
 
     def _is_echo(self, answer):
@@ -241,18 +244,21 @@ class Session:
         return result
 
     def footer(self):
-        return dim("session: {} asked · {} local (free) · {} billable tokens".format(
-            self.asked, self.local_n, self.billable))
+        return dim("session: {} asked · {} cheap-tier · {} billable tokens".format(
+            self.asked, self.cheap_n, self.billable))
 
 
 def route_tag(result, pad=0):
     """Colored route label; padding happens on the PLAIN string so ANSI
     codes never break column alignment."""
     if result["route"] == ROUTE_LOCAL:
-        plain = "LOCAL · free"
+        if result.get("provider") == "local":
+            plain = "CHEAP · local/free"
+        else:
+            plain = "CHEAP · {} tok".format(result["billable_tokens"])
         paint = green
     elif result["route"] == ROUTE_REMOTE:
-        plain = "REMOTE · {} tok".format(result["billable_tokens"])
+        plain = "STRONG · {} tok".format(result["billable_tokens"])
         if result["escalated"]:
             plain += " (esc)"
         paint = yellow
@@ -299,32 +305,28 @@ def save_code(answer, name=None):
 def session_graph(session):
     """ANSI bar graph of the session so far — shared by --demo, the :stats
     command, and the end-of-session summary."""
-    remote_n = session.asked - session.local_n
+    strong_n = session.asked - session.cheap_n
     billed = session.billable
-    free = session.free_tokens
-    max_count = max(session.local_n, remote_n, 1)
+    local_tokens = session.local_tokens
+    max_count = max(session.cheap_n, strong_n, 1)
     print("  routing   {} {} {}".format(
-        "local ".ljust(7), green(_bar(session.local_n, max_count)), session.local_n))
+        "cheap ".ljust(7), green(_bar(session.cheap_n, max_count)), session.cheap_n))
     print("            {} {} {}".format(
-        "remote".ljust(7), yellow(_bar(remote_n, max_count)), remote_n))
-    max_tok = max(billed, free, 1)
+        "strong".ljust(7), yellow(_bar(strong_n, max_count)), strong_n))
+    max_tok = max(billed, local_tokens, 1)
     print("  tokens    {} {} {:,}".format(
         "billed".ljust(7), yellow(_bar(billed, max_tok)), billed))
-    print("            {} {} {:,}  {}".format(
-        "free  ".ljust(7), green(_bar(free, max_tok)), free,
-        dim("(local — costs nothing)")))
+    if session.tier_mode == "local_remote":
+        print("            {} {} {:,}  {}".format(
+            "local ".ljust(7), green(_bar(local_tokens, max_tok)), local_tokens,
+            dim("(no API billing)")))
     print()
-    print("  " + bold("{} of {} tasks answered free".format(
-        session.local_n, session.asked)))
-    # All-remote comparison: mean billable of the REMOTE-answered tasks in
-    # THIS session, applied to every task. Clearly an estimate — the local
-    # tasks' remote cost was never measured (that's the point of the agent).
-    if remote_n and session.asked > remote_n:
-        est = int(round(billed / remote_n * session.asked))
-        if est > billed:
-            saved = 100.0 * (1 - billed / est)
-            print("  all-remote agent: ~{:,} tokens {} → banana billed {:,}, "
-                  "saved ~{:.0f}%".format(est, dim("(estimate)"), billed, saved))
+    if session.tier_mode == "local_remote":
+        print("  " + bold("{} of {} tasks answered locally".format(
+            session.cheap_n, session.asked)))
+    else:
+        print("  " + bold("{} of {} tasks used the cheap remote model".format(
+            session.cheap_n, session.asked)))
 
 
 def interactive():
@@ -437,9 +439,18 @@ def main(argv=None):
     )
     parser.add_argument("--demo", action="store_true",
                         help="run tasks/demo_tasks.json and print the summary graph")
+    parser.add_argument(
+        "--tier-mode",
+        choices=("remote_pair", "local_remote"),
+        default=None,
+        help="override TIER_MODE for this session",
+    )
     parser.add_argument("question", nargs="*",
                         help="ask one question and exit (no args = interactive)")
     args = parser.parse_args(argv)
+
+    if args.tier_mode is not None:
+        settings.tier_mode = args.tier_mode
 
     if args.demo:
         return demo()

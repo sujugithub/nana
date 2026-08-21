@@ -1,6 +1,7 @@
-"""Replay routing decisions against recorded outcomes.
+"""Replay cheap/strong routing decisions against recorded outcomes.
 
-Given per-record routing decisions (local/remote) this module computes what
+Schema 1.0 uses the historical names local/remote internally; they mean the
+cheap/strong tiers for newly collected data. This module computes what
 the SYSTEM would have delivered, using only quantities the dataset actually
 recorded — no modelled guesses:
 
@@ -11,8 +12,8 @@ recorded — no modelled guesses:
   ESCALATES: quality = remote_quality, cost = local_cost + remote_cost
   (the discarded local attempt is paid for — honest accounting), latency =
   local + remote. Otherwise the local answer stands.
-- unsafe-local: the final answer came from the local model AND local_ok is
-  False. This is the router's cardinal error and is reported separately.
+- unsafe-cheap (legacy metric key ``unsafe_local``): the delivered answer came
+  from the cheap tier and failed its quality threshold.
 
 The same simulation backs threshold selection (routing/policies.py) and the
 offline evaluator (evaluation/), so a threshold picked on validation means
@@ -139,7 +140,7 @@ def summarize(sim: SimulationResult) -> dict:
     """Aggregate a simulation into the metric dict every report uses."""
     n = sim.n or 1
     remote_calls = int((~sim.route_local).sum() + sim.escalated.sum())
-    return {
+    summary = {
         "n": sim.n,
         "quality_mean": float(sim.quality.mean()) if sim.n else 0.0,
         "cost_total": float(sim.cost.sum()),
@@ -152,3 +153,13 @@ def summarize(sim: SimulationResult) -> dict:
         "unsafe_local_rate": float(sim.unsafe_local.sum()) / n,
         "unsafe_local_count": int(sim.unsafe_local.sum()),
     }
+    # Clear tier-neutral names for current reports. Keep the schema-1.0 names
+    # above so Fable's policies, historical reports, and tests remain valid.
+    summary.update({
+        "strong_call_rate": summary["remote_call_rate"],
+        "cheap_utilisation": summary["local_utilisation"],
+        "pre_route_cheap_rate": summary["pre_route_local_rate"],
+        "unsafe_cheap_rate": summary["unsafe_local_rate"],
+        "unsafe_cheap_count": summary["unsafe_local_count"],
+    })
+    return summary

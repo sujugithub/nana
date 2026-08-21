@@ -1,23 +1,12 @@
-"""Fireworks AI client (OpenAI-compatible /chat/completions endpoint).
+"""Fireworks AI clients for the cheap and strong remotely hosted tiers.
 
-Design notes:
-- Plain `requests` instead of an SDK: one fewer dependency, the exact payload
-  is visible in this file (easy to debug live), and the endpoint is
-  OpenAI-compatible anyway. Import is lazy so mock mode needs no deps at all.
-- Token counts come from the API's `usage` field — the authoritative number
-  for the billable side of the score. If a proxy/gateway strips `usage`, we
-  warn loudly and estimate rather than silently logging 0.
-- Retry policy is billing-aware:
-    * connect errors, 429, 5xx, dropped/garbled bodies → retry with backoff
-      (the generation was never completed, so retrying cannot double-bill);
-      429 honors the Retry-After header.
-    * READ timeouts are NOT retried: the server may have finished and billed
-      the generation, so a retry would pay for the same answer twice. The
-      caller (main.run_task) falls back to a local answer instead. Size
-      REQUEST_TIMEOUT_S to comfortably cover remote_max_tokens of generation.
-    * other 4xx (bad key, bad model name) fail fast — retrying a config
-      error just burns clock during the scoring run.
-- temperature=0: deterministic → reproducible accuracy, no flaky reruns.
+Both clients use the same OpenAI-compatible endpoint and billing-aware retry
+policy. The module keeps ``RemoteClient`` and ``resolve_remote_model``
+compatibility shims for the older single-remote harness; new runtime code
+uses ``CheapRemoteClient`` and ``StrongRemoteClient``.
+
+No network call is made in mock mode. Read timeouts are deliberately not
+retried because a completed generation may already have been billed.
 """
 from __future__ import annotations
 
@@ -25,56 +14,68 @@ import sys
 import time
 from typing import Optional
 
-from config import ROUTE_REMOTE, settings
+from config import ROUTE_CHEAP, ROUTE_STRONG, settings
 from schemas import Completion
 
 
 class RemoteError(RuntimeError):
-    """Remote call failed in a way this client cannot recover from."""
+    """A Fireworks call failed in a way this client cannot recover from."""
 
 
 def _model_key(model_id: str) -> str:
-    """Match models on the last path segment, case-insensitive, so
-    "deepseek-v4-pro" == "accounts/fireworks/models/deepseek-v4-pro" —
-    the harness and our config may spell the same model differently."""
     return model_id.rsplit("/", 1)[-1].strip().lower()
 
 
-def resolve_remote_model() -> Optional[str]:
-    """Pick the remote model, honoring the ALLOWED_MODELS allow-list.
-
-    - ALLOWED_MODELS unset/empty → dev mode: settings.remote_model_name.
-    - Otherwise the answer ALWAYS comes from the allow-list, VERBATIM as the
-      harness spells it (its proxy bills by these IDs). Priority: an
-      explicitly configured REMOTE_MODEL_NAME that appears in the list, then
-      the first REMOTE_MODEL_PREFERENCE entry that does, then the list head.
-    - Set-but-unusable list (e.g. " , ") → None. Callers fail per-call
-      (RemoteError) rather than aborting the run: local answers still score.
-    """
+def _allowed_models() -> Optional[list[str]]:
+    """Return the deployment allow-list, or None when it is not configured."""
     raw = settings.allowed_models.strip()
     if not raw:
-        if not settings.mock_mode:  # keep wiring-test output clean
-            print(
-                f"NOTE: ALLOWED_MODELS not set — dev fallback "
-                f"{settings.remote_model_name!r}",
-                file=sys.stderr,
-            )
-        return settings.remote_model_name
-
-    allowed = [m.strip() for m in raw.split(",") if m.strip()]
+        return None
+    allowed = [model.strip() for model in raw.split(",") if model.strip()]
     if not allowed:
         print(
-            "ERROR: ALLOWED_MODELS is set but contains no model IDs — remote "
-            "routing disabled, all tasks will use the local fallback",
+            "ERROR: ALLOWED_MODELS is set but contains no model IDs",
             file=sys.stderr,
         )
+        return []
+    return allowed
+
+
+def resolve_tier_model(configured: str, tier: str) -> Optional[str]:
+    """Resolve one configured tier against ALLOWED_MODELS.
+
+    Each requested tier must appear in a configured allow-list. Silently
+    substituting another model would invalidate an artifact trained for a
+    specific model pair.
+    """
+    allowed = _allowed_models()
+    if allowed is None:
+        return configured
+    if not allowed:
         return None
+    by_key = {_model_key(model): model for model in allowed}
+    resolved = by_key.get(_model_key(configured))
+    if resolved is None:
+        print(
+            f"ERROR: configured {tier} model {configured!r} is not present "
+            "in ALLOWED_MODELS",
+            file=sys.stderr,
+        )
+    return resolved
 
+
+def resolve_remote_model() -> Optional[str]:
+    """Legacy single-remote resolver retained for the old harness."""
+    allowed = _allowed_models()
+    if allowed is None:
+        return settings.remote_model_name
+    if not allowed:
+        return None
     by_key = {}
-    for model in allowed:  # first occurrence wins on duplicates
+    for model in allowed:
         by_key.setdefault(_model_key(model), model)
-
-    candidates = [settings.remote_model_name] + settings.remote_model_preference.split(",")
+    candidates = [settings.remote_model_name]
+    candidates.extend(settings.remote_model_preference.split(","))
     for candidate in candidates:
         chosen = by_key.get(_model_key(candidate))
         if chosen:
@@ -82,62 +83,65 @@ def resolve_remote_model() -> Optional[str]:
             return chosen
     print(
         f"remote model: {allowed[0]!r} (first of ALLOWED_MODELS; no "
-        f"preference matched)",
+        "preference matched)",
         file=sys.stderr,
     )
     return allowed[0]
 
 
 class _Transient(Exception):
-    """Internal marker for retryable HTTP statuses."""
-
     def __init__(self, message: str, retry_after: Optional[str] = None):
         super().__init__(message)
         self.retry_after = retry_after
 
 
-class RemoteClient:
+class FireworksClient:
+    """One configured Fireworks model tier."""
+
     def __init__(
         self,
-        model_name: Optional[str] = None,
+        *,
+        tier: str,
+        route: str,
+        model_name: str,
+        max_tokens: int,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
-        self.model_name = model_name or resolve_remote_model()
+        self.tier = tier
+        self.route = route
+        self.model_name = resolve_tier_model(model_name, tier)
+        self.max_tokens = max_tokens
         self.api_key = api_key or settings.fireworks_api_key
-        # EVERY remote call must go through FIREWORKS_BASE_URL, so token
-        # usage is metered in one place (this is the only HTTP call site in
-        # the codebase — keep it that way).
         self.base_url = (base_url or settings.fireworks_base_url).rstrip("/")
 
     def generate(self, prompt: str) -> Completion:
         started = time.time()
-
         if settings.mock_mode:
-            text = f"[mock-remote] detailed answer to: {prompt[:60]}"
+            adjective = "concise" if self.route == ROUTE_CHEAP else "detailed"
+            completion_tokens = 12 if self.route == ROUTE_CHEAP else 24
             return Completion(
-                text=text,
-                prompt_tokens=len(prompt.split()),  # fake but deterministic
-                completion_tokens=24,
-                source=ROUTE_REMOTE,
+                text=f"[mock-{self.tier}] {adjective} answer to: {prompt[:60]}",
+                prompt_tokens=len(prompt.split()),
+                completion_tokens=completion_tokens,
+                source=self.route,
                 latency_s=time.time() - started,
+                model_name=self.model_name or "mock",
+                provider="fireworks",
             )
 
         if not self.model_name:
-            # ALLOWED_MODELS was set but unusable (see resolve_remote_model).
-            # Per-call failure → run_task's local fallback keeps the run alive.
             raise RemoteError(
-                "no usable remote model: ALLOWED_MODELS is set but empty — "
-                "check the env the harness injected"
+                f"no usable {self.tier} model; check the tier model setting "
+                "and ALLOWED_MODELS"
             )
-
         if not self.api_key:
             raise RemoteError(
-                "FIREWORKS_API_KEY is not set. Export it (or use docker run "
-                "--env-file .env). For offline wiring tests use AGENT_MOCK=1."
+                "FIREWORKS_API_KEY is not set. Export it or use --mock for "
+                "offline tests."
             )
 
-        import requests  # lazy: mock mode must run on stdlib alone
+        import requests  # lazy: mock mode remains stdlib-only
 
         url = f"{self.base_url}/chat/completions"
         headers = {
@@ -146,13 +150,12 @@ class RemoteClient:
         }
         messages = []
         if settings.system_prompt:
-            # Concise-answer directive: rank counts completion tokens.
             messages.append({"role": "system", "content": settings.system_prompt})
         messages.append({"role": "user", "content": prompt})
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": settings.remote_max_tokens,
+            "max_tokens": self.max_tokens,
             "temperature": 0,
         }
 
@@ -163,8 +166,6 @@ class RemoteClient:
                     url,
                     json=payload,
                     headers=headers,
-                    # (connect, read): a slow handshake fails fast and is safe
-                    # to retry; the read timeout must cover full generation.
                     timeout=(settings.connect_timeout_s, settings.request_timeout_s),
                 )
                 if response.status_code == 429 or response.status_code >= 500:
@@ -176,28 +177,22 @@ class RemoteClient:
                 try:
                     data = response.json()
                 except ValueError as err:
-                    # 200 with truncated/garbled body (proxy or LB reset):
-                    # generation state unknown but response unusable — retry.
                     raise _Transient(f"unparseable response body: {err}")
                 break
             except requests.HTTPError as err:
-                # Non-retryable 4xx: almost always a wrong model name or key.
                 raise RemoteError(
-                    f"non-retryable HTTP error: {err} — check REMOTE_MODEL_NAME "
-                    f"and FIREWORKS_API_KEY. Body: {response.text[:300]}"
+                    f"non-retryable HTTP error for {self.tier} model "
+                    f"{self.model_name!r}: {err}. Body: {response.text[:300]}"
                 ) from err
             except requests.exceptions.ReadTimeout as err:
-                # Do NOT retry: the server may have completed and billed the
-                # generation. Fail the call; run_task falls back locally.
                 raise RemoteError(
-                    f"read timeout after {settings.request_timeout_s}s (not "
-                    f"retried to avoid double-billing a completed generation; "
-                    f"raise REQUEST_TIMEOUT_S if this recurs): {err}"
+                    f"{self.tier} read timeout after {settings.request_timeout_s}s "
+                    f"(not retried to avoid double billing): {err}"
                 ) from err
             except (_Transient, requests.RequestException) as err:
                 if attempt == settings.max_retries:
                     raise RemoteError(
-                        f"remote call failed after {attempt + 1} attempts: {err}"
+                        f"{self.tier} call failed after {attempt + 1} attempts: {err}"
                     ) from err
                 backoff = min(30.0, 2.0 ** attempt)
                 retry_after = getattr(err, "retry_after", None)
@@ -210,25 +205,49 @@ class RemoteClient:
 
         choice = data["choices"][0]
         text = ((choice.get("message") or {}).get("content") or "").strip()
-
         usage = data.get("usage") or {}
         if not usage:
-            # Never silently record 0 for real spend — it would poison the
-            # threshold calibration. Estimate at ~4 chars/token and say so.
             print(
-                "WARNING: response contained no 'usage' field; billable "
-                "tokens are ESTIMATED for this call",
+                f"WARNING: {self.tier} response omitted usage; token counts "
+                "are estimated",
                 file=sys.stderr,
             )
         prompt_tokens = int(usage.get("prompt_tokens", max(1, len(prompt) // 4)))
         completion_tokens = int(
             usage.get("completion_tokens", max(1, len(text) // 4))
         )
-
         return Completion(
             text=text,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            source=ROUTE_REMOTE,
+            source=self.route,
             latency_s=time.time() - started,
+            model_name=self.model_name,
+            provider="fireworks",
         )
+
+
+class CheapRemoteClient(FireworksClient):
+    def __init__(self, **kwargs):
+        super().__init__(
+            tier="cheap",
+            route=ROUTE_CHEAP,
+            model_name=kwargs.pop("model_name", settings.cheap_model_name),
+            max_tokens=kwargs.pop("max_tokens", settings.cheap_max_tokens),
+            **kwargs,
+        )
+
+
+class StrongRemoteClient(FireworksClient):
+    def __init__(self, **kwargs):
+        super().__init__(
+            tier="strong",
+            route=ROUTE_STRONG,
+            model_name=kwargs.pop("model_name", settings.strong_model_name),
+            max_tokens=kwargs.pop("max_tokens", settings.strong_max_tokens),
+            **kwargs,
+        )
+
+
+class RemoteClient(StrongRemoteClient):
+    """Backward-compatible name for the strong remote tier."""

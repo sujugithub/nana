@@ -5,13 +5,14 @@ import io
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from contextlib import redirect_stderr
 from unittest import mock
 
 from tests.util import trained_once
 
 from config import ROUTE_LOCAL, ROUTE_REMOTE, settings
-from routing.artifact import save_artifact
+from routing.artifact import ArtifactError, save_artifact
 from routing.learned_router import LearnedRouter
 from schemas import Task
 
@@ -35,6 +36,7 @@ class TestLearnedRouterDecisions(unittest.TestCase):
         decision = self.router.decide(Task("x", "What is the capital of Peru?"))
         self.assertEqual(decision.router_kind, "learned")
         self.assertEqual(decision.artifact_version, self.artifact.version)
+        self.assertIn("p_cheap_ok", decision.signals)
         self.assertIn("p_local", decision.signals)
         self.assertIn("threshold", decision.reason)
 
@@ -68,6 +70,33 @@ class TestLearnedRouterDecisions(unittest.TestCase):
                 for _ in range(3):
                     router.decide(Task("x", "hello"))
                 self.assertEqual(loader.call_count, 1)
+
+    def test_real_artifact_rejects_wrong_deployment_pair(self):
+        saved = (
+            settings.tier_mode,
+            settings.cheap_model_name,
+            settings.strong_model_name,
+        )
+        try:
+            settings.tier_mode = "remote_pair"
+            settings.cheap_model_name = "cheap-configured"
+            settings.strong_model_name = "strong-configured"
+            artifact = replace(
+                self.artifact,
+                dataset_meta={
+                    "tier_mode": "remote_pair",
+                    "local_model": "different-cheap",
+                    "remote_model": "strong-configured",
+                },
+            )
+            with self.assertRaises(ArtifactError):
+                LearnedRouter(artifact=artifact)
+        finally:
+            (
+                settings.tier_mode,
+                settings.cheap_model_name,
+                settings.strong_model_name,
+            ) = saved
 
 
 class TestBuildRouter(unittest.TestCase):

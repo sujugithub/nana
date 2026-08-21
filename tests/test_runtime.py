@@ -7,13 +7,15 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from types import SimpleNamespace
 
 from tests.util import trained_once
 
 import main as main_module
 from config import ROUTE_LOCAL, ROUTE_REMOTE, settings
-from main import _gate_confidence, run_task
-from remote_client import RemoteError
+from local_model import LocalModel
+from main import _gate_confidence, build_backends, run_task
+from remote_client import CheapRemoteClient, RemoteError, StrongRemoteClient
 from router import Router
 from routing.learned_router import LearnedRouter
 from schemas import Completion, Task
@@ -63,7 +65,7 @@ class SettingsCase(unittest.TestCase):
     """Snapshot/restore every setting a test might mutate."""
 
     _FIELDS = (
-        "mock_mode", "router_mode", "router_artifact_path", "local_conf_stat",
+        "mock_mode", "tier_mode", "router_mode", "router_artifact_path", "local_conf_stat",
         "logprob_confidence_threshold", "enable_escalation", "usage_log_path",
     )
 
@@ -169,7 +171,7 @@ class TestCascade(SettingsCase):
         )
         self.assertEqual(result["route"], ROUTE_LOCAL)
         self.assertTrue(
-            any("remote_failed_local_fallback" in p
+            any("strong_failed_cheap_fallback" in p
                 for p in result["post_check_problems"])
         )
         self.assertEqual(local.calls, 1)
@@ -198,6 +200,113 @@ class TestLoggingFields(SettingsCase):
         self.assertEqual(rec.artifact_version, artifact.version)
         self.assertIsNotNone(rec.p_local)
         self.assertEqual(rec.threshold, artifact.threshold)
+
+
+class TestTierModes(SettingsCase):
+    def test_remote_pair_builds_two_fireworks_clients(self):
+        settings.tier_mode = "remote_pair"
+        mode, cheap, strong = build_backends()
+        self.assertEqual(mode, "remote_pair")
+        self.assertIsInstance(cheap, CheapRemoteClient)
+        self.assertIsInstance(strong, StrongRemoteClient)
+
+    def test_local_remote_keeps_local_backend_available(self):
+        settings.tier_mode = "local_remote"
+        mode, cheap, strong = build_backends()
+        self.assertEqual(mode, "local_remote")
+        self.assertIsInstance(cheap, LocalModel)
+        self.assertIsInstance(strong, StrongRemoteClient)
+
+    def test_invalid_tier_mode_fails_loudly(self):
+        settings.tier_mode = "not-a-mode"
+        with self.assertRaises(ValueError):
+            build_backends()
+
+    def test_accounting_uses_provider_not_route_name(self):
+        tracker = TokenTracker(log_path="")
+        local = Completion(
+            text="local", prompt_tokens=10, completion_tokens=5,
+            source=ROUTE_LOCAL, provider="local", model_name="qwen",
+        )
+        strong = Completion(
+            text="strong", prompt_tokens=20, completion_tokens=10,
+            source=ROUTE_REMOTE, provider="fireworks", model_name="pro",
+        )
+        record = tracker.record("t", ROUTE_REMOTE, local=local, remote=strong)
+        self.assertEqual(record.billable_tokens, 30)
+        self.assertGreater(record.estimated_cost_usd, 0)
+
+        cheap_remote = Completion(
+            text="cheap", prompt_tokens=10, completion_tokens=5,
+            source=ROUTE_LOCAL, provider="fireworks", model_name="flash",
+        )
+        record = tracker.record("u", ROUTE_LOCAL, local=cheap_remote)
+        self.assertEqual(record.billable_tokens, 15)
+
+    def test_collector_records_exact_remote_pair_without_network(self):
+        from scripts.collect_outcomes import collect
+
+        settings.mock_mode = True
+        settings.tier_mode = "remote_pair"
+        with tempfile.TemporaryDirectory() as tmp:
+            tasks = os.path.join(tmp, "tasks.json")
+            out = os.path.join(tmp, "out.json")
+            with open(tasks, "w") as fh:
+                json.dump([{
+                    "task_id": "one",
+                    "prompt": "What is 2 + 2?",
+                    "reference": "answer to",
+                    "grader": "contains",
+                }], fh)
+            args = SimpleNamespace(
+                tasks=tasks,
+                out=out,
+                grades=None,
+                quality_threshold=0.6,
+                local_cost_per_second=2e-5,
+                cheap_in_per_mtok=settings.cheap_input_per_mtok,
+                cheap_out_per_mtok=settings.cheap_output_per_mtok,
+                strong_in_per_mtok=settings.strong_input_per_mtok,
+                strong_out_per_mtok=settings.strong_output_per_mtok,
+            )
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(collect(args), 0)
+            with open(out) as fh:
+                dataset = json.load(fh)
+            with open(out + ".work.jsonl") as fh:
+                row = json.loads(fh.readline())
+
+        self.assertEqual(dataset["meta"]["tier_mode"], "remote_pair")
+        self.assertEqual(dataset["meta"]["local_model"], settings.cheap_model_name)
+        self.assertEqual(dataset["meta"]["remote_model"], settings.strong_model_name)
+        self.assertEqual(row["cheap_provider"], "fireworks")
+        self.assertEqual(row["strong_provider"], "fireworks")
+
+    def test_numeric_grader_accepts_thousands_separators(self):
+        from scripts.collect_outcomes import grade
+
+        self.assertEqual(grade("numeric", "72000", "The answer is 72,000."), 1.0)
+        self.assertEqual(grade("numeric", "72,000", "Final: 72000"), 1.0)
+
+    def test_collection_cost_ceiling_counts_only_unfinished_remote_calls(self):
+        from scripts.collect_outcomes import configured_api_cost_ceiling
+
+        settings.tier_mode = "local_remote"
+        args = SimpleNamespace(
+            strong_in_per_mtok=1.0,
+            strong_out_per_mtok=2.0,
+            cheap_in_per_mtok=3.0,
+            cheap_out_per_mtok=4.0,
+        )
+        tasks = [
+            {"task_id": "done", "prompt": "a"},
+            {"task_id": "left", "prompt": "b"},
+        ]
+        local_remote = configured_api_cost_ceiling(tasks, {"done": {}}, args)
+        settings.tier_mode = "remote_pair"
+        remote_pair = configured_api_cost_ceiling(tasks, {"done": {}}, args)
+        self.assertGreater(local_remote, 0)
+        self.assertGreater(remote_pair, local_remote)
 
 
 class TestBatchMode(SettingsCase):

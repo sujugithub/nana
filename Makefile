@@ -1,6 +1,6 @@
 # Project shortcuts. `make test` before every commit.
 .PHONY: test test-wiring test-learned mock run demo toy-data train evaluate \
-	build build-cpu docker-run docker-run-gpu docker-run-harness \
+	ui ui-real build build-cpu docker-run docker-run-gpu docker-run-harness \
 	ghcr-login push push-cpu image-size
 
 # Public container registry (check the package's visibility settings on GHCR
@@ -28,6 +28,12 @@ evaluate:        ## one-shot TEST-split evaluation of the trained router
 	python3 -m evaluation.run --dataset data/toy_dataset.json \
 		--artifact artifacts/router.joblib --train-report reports/train \
 		--report reports/eval
+
+ui:              ## browser demo (mock-only; `make ui-real` allows billable calls)
+	python3 -m webui.server
+
+ui-real:         ## browser demo with REAL calls enabled — remote requests BILL Fireworks
+	python3 -m webui.server --real
 
 demo:            ## 🍌 banana demo: 8-category run + summary graph (real models)
 	python3 scripts/banana.py --demo

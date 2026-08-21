@@ -1,13 +1,13 @@
 """Operating-threshold selection from validation data.
 
 0.5 is not assumed to mean anything. The router outputs a calibrated
-P(local answer acceptable); where to cut it depends on what the deployment
+P(cheap-tier answer acceptable); where to cut it depends on the deployment
 is optimising, so the cut is chosen by POLICY against the actual
 quality/cost outcomes replayed on validation data (routing/simulate.py).
 
 Policies:
     quality_floor   cheapest threshold whose routed quality retains at least
-                    `min_quality_retention` of the all-remote quality.
+                    `min_quality_retention` of the all-strong quality.
     max_unsafe      highest local utilisation subject to
                     unsafe_local_rate <= `max_unsafe_rate`.
     utility         maximise  quality - cost_weight * cost_mean
@@ -15,9 +15,10 @@ Policies:
     remote_rate     hit `target_remote_rate` remote calls as closely as
                     possible (RouteLLM-style "calibrate to a spend budget").
 
-Threshold semantics everywhere in this project: route LOCAL iff
-p_local >= threshold. Candidate thresholds are the observed probabilities
-plus 0.0 (all local) and slightly above 1.0 (all remote) — sweeping between
+Threshold semantics everywhere in this project: route CHEAP iff
+p_local >= threshold (``p_local`` is the schema-1.0 compatibility name).
+Candidate thresholds are the observed probabilities plus 0.0 (all cheap) and
+slightly above 1.0 (all strong) — sweeping between
 observed values cannot change any decision, so this sweep is exhaustive.
 """
 from __future__ import annotations
