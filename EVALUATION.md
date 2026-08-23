@@ -4,13 +4,23 @@ How we will demonstrate that routing is worth doing. This is the backbone of
 the final report: if the numbers here are solid, the project stands up; if they
 are hand-waved, nothing else rescues it.
 
-> **Status:** the offline evaluator implementing this methodology exists —
-> `python3 -m evaluation.run` compares all-cheap, all-strong, seeded random
-> routing, the heuristic rules, every learned candidate, the selected
-> learned router, and the oracle, with bootstrap CIs, per-category results,
-> workload mixtures, and a Pareto chart. What still needs real data is the
-> dataset itself: graded outcomes from the eight categories below, collected
-> with `scripts/collect_outcomes.py`. See `docs/LEARNED_ROUTING.md`.
+> **Status (2026-08-21).** The evaluator implementing this methodology
+> exists — `python3 -m evaluation.run` compares all-cheap, all-strong,
+> seeded random routing, the heuristic rules, every learned candidate, the
+> selected learned router, and the oracle, with bootstrap CIs, per-category
+> results, workload mixtures, and a Pareto chart.
+>
+> It has been run once on **real** data: a 600-outcome Qwen 2.5 1.5B →
+> DeepSeek V4 Pro pilot (`reports/eval_qwen_pro_600/`). The learned router
+> leads the heuristic and the random line on point estimates but **no
+> quality comparison's confidence interval clears zero at n = 90**, and its
+> unsafe-local rate is worse than the heuristic's. Full numbers and caveats:
+> `docs/HANDOFF.md` §3 and `docs/LEARNED_ROUTING.md`.
+>
+> What is still missing against the plan below: **scale** (300–500 items per
+> category), **five of the eight categories** (the pilot covers math,
+> knowledge and reasoning only), **repeated seeds**, and the LLM judge with
+> its human validation and verbosity-bias check.
 
 ## What we are claiming
 
@@ -124,6 +134,7 @@ generation and discarded it. In `local_remote` that is local compute; in
 never describe the two-remote demo as local or free.
 
 Which is the deeper point: the cost model itself must be **real**. The
-competition scored local tokens as zero. Local inference costs compute time,
-energy, and hardware. Whatever we optimise — dollars, latency, or energy — must
-be something we can actually measure. See `ROADMAP.md`, workstream 4.
+earlier competition scored local tokens as zero. Local inference costs
+compute time, energy, and hardware. Whatever we optimise — dollars, latency,
+or energy — must be something we can actually measure. See `ROADMAP.md`,
+workstream 4.

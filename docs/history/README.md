@@ -10,8 +10,13 @@ accuracy gate, a leaderboard ranked by token count, a 10-minute runtime cap, a
 constraints apply any more.
 
 **Do not follow the instructions in these files.** Current documentation lives
-at the repository root: `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`,
-`EVALUATION.md`, and `CONTRIBUTING.md`.
+at the repository root — `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`,
+`EVALUATION.md`, `CONTRIBUTING.md` — and in `docs/`:
+[`HANDOFF.md`](../HANDOFF.md) (current state and next steps),
+[`LEARNED_ROUTING.md`](../LEARNED_ROUTING.md), [`DEMO_UI.md`](../DEMO_UI.md).
+
+In particular, `HANDOFF.md` in *this* folder is the July 2026 competition
+handoff. The current one is [`docs/HANDOFF.md`](../HANDOFF.md).
 
 ## Why they are worth keeping
 

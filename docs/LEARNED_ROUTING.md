@@ -136,12 +136,33 @@ MMLU, and 200 BIG-Bench Hard prompts. The group-aware split is 420/90/90 and
 the exact combined dataset hash is `30c51583d6c8ab07`.
 
 On the untouched 90-row test split, the selected logistic TF-IDF router sent
-60% of tasks to Pro and 40% to local, reached 0.789 quality, and beat seeded
-random routing at the same remote rate by +0.082. It also improved quality
-over the heuristic by +0.033 while reducing measured cost, but the quality
-confidence interval includes zero. Treat this as **real preliminary pilot
-evidence**, not a final statistical claim; more diverse data and repeated
-runs are still required for the FYP.
+60% of tasks to Pro and 40% to local, and reached 0.789 routed quality
+against 0.756 for the heuristic, 0.707 for seeded random routing at the same
+remote rate, 0.411 for all-local and 0.900 for all-remote (oracle 0.956).
+
+**What that does and does not establish.** Read these caveats before quoting
+any number above:
+
+- The +0.082 advantage over random at a matched remote rate is a **point
+  estimate whose bootstrap CI does not clear the random line**
+  (`CI-clears-random: False`). Encouraging, not demonstrated.
+- Against the heuristic the quality difference is **+0.033 with CI
+  [-0.056, +0.122]** — it includes zero. The cost reduction is the one
+  comparison whose CI excludes zero.
+- The learned router's **unsafe-local rate is worse** than the heuristic's
+  (18.9% vs 15.6%): it keeps more work on the cheap tier and pays in risk.
+  Retrain under the `max_unsafe` policy if safety is the priority.
+- Test ROC-AUC is **0.645** against **0.820** on validation — a real
+  generalisation drop at n = 90.
+- Per category the learned policy is largely "send math to Pro" (math 1.00
+  at 96% remote; local math quality is 0.179). Correct here, but shallow —
+  and the heuristic reaches the same conclusion on math.
+
+Treat this as **real preliminary pilot evidence**, not a final statistical
+claim. The honest one-line summary is: at n = 90 the learned router is not
+yet statistically distinguishable from the heuristic or from random at
+matched spend. More data and repeated seeds are required — see
+[`HANDOFF.md`](HANDOFF.md) §6.
 
 Reproducible local outputs:
 

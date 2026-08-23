@@ -18,12 +18,18 @@ baselines on the quality-versus-cost frontier — and beat *random* routing at
 the same spend? The local deployment additionally tests whether local token
 confidence improves the decision after generation.
 
+New to the repository, or picking it up after a break? Start with
+[`docs/HANDOFF.md`](docs/HANDOFF.md) — current state, what the evidence
+supports, and what to do next.
+
+Canonical public repository: [github.com/sujugithub/nana](https://github.com/sujugithub/nana).
+
 See [`EVALUATION.md`](EVALUATION.md) for how we intend to answer that,
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for how the system works, and
 [`ROADMAP.md`](ROADMAP.md) for what we're building next.
 
-> **Project history.** This began as a 4-day AMD Developer Competition
-> submission. The competition-era documents are archived in
+> **Project history.** This began as a 4-day prototype for an AMD developer
+> competition. The competition-era documents are archived in
 > [`docs/history/`](docs/history/) for provenance — including the measured
 > results — but they describe rules that no longer apply. In particular the
 > competition scored local tokens as **zero**; the capstone replaces that with
@@ -130,11 +136,36 @@ model outcomes), and `auto` (learned if its artifact loads, else heuristic
 with a warning). [`docs/LEARNED_ROUTING.md`](docs/LEARNED_ROUTING.md) covers
 dataset collection, training, threshold policies, and evaluation.
 
-This workspace also contains the real Qwen/DeepSeek-Pro pilot artifact at
-`artifacts/router_qwen_pro_600.joblib`. The local `.env` points the browser
-demo to it. Select **Hybrid → local + remote → Learned** to use the verified
-pair-specific router; switching to a different model pair correctly asks for
-retraining instead of reusing the artifact.
+### Where the results stand
+
+A **real 600-outcome pilot** has been collected and evaluated: Qwen 2.5 1.5B
+(local cheap tier) vs DeepSeek V4 Pro (strong tier) over 200 GSM8K, 200 MMLU
+and 200 BIG-Bench Hard prompts, split 420/90/90 group-aware.
+
+On the 90-row test split the learned router reached **0.789** routed quality
+against 0.756 (heuristic), 0.707 (random at the same 60% remote rate), 0.411
+(all-local) and 0.900 (all-remote), at lower cost than the heuristic.
+
+**That is not yet a claim.** No quality confidence interval clears zero at
+n = 90 — including the comparison against random — and the learned router's
+unsafe-local rate is *worse* than the heuristic's (18.9% vs 15.6%). The
+pipeline is real and the pilot is real; the statistics need more data. Full
+numbers, caveats and the next steps are in
+[`docs/HANDOFF.md`](docs/HANDOFF.md) §3.
+
+The pilot artifact lives at `artifacts/router_qwen_pro_600.joblib` and the
+local `.env` points the browser demo to it. Select **Hybrid → local + remote
+→ Learned** to use the verified pair-specific router; switching to a
+different model pair correctly asks for retraining instead of reusing the
+artifact. `artifacts/router.joblib` is the **synthetic toy** router — it
+validates the pipeline only and is labelled as such everywhere it appears.
+
+For the live demo, prefer **Hybrid → Local + remote → Learned**. The older
+`deepseek-v4-flash` serverless deployment used by the two-remote default has
+returned Fireworks `404 NOT_FOUND` for this account; that pair must be
+revalidated with an accessible model before presentation. Starting
+`make ui-real` enables real backends but spends nothing by itself—only an
+actual Fireworks request is billable.
 
 Never commit `.env` — it is gitignored and holds a live API key. Also do not
 run `scripts/collect_outcomes.py --run-paid-calls` until the intended

@@ -27,15 +27,28 @@ local tier raises the local share, which is the headline result.**
       VM and cannot see Metal, so containerised local inference is CPU-only.
 
 ## 2. Evaluation harness — the thing the project is graded on
-**Owner:** _unclaimed_ · **Touches:** new `eval/` · **P0**
+**Owner:** _unclaimed_ · **Touches:** `evaluation/`, `scripts/collect_outcomes.py` · **P0**
 
-Implements [`EVALUATION.md`](EVALUATION.md). Nothing else can be measured until
-this exists.
+Implements [`EVALUATION.md`](EVALUATION.md). The harness now EXISTS
+(`evaluation/run.py`) and has been run once on real data — the remaining work
+is scale and coverage, not machinery.
 
-- [ ] Dataset loaders for the eight categories, sampling 300–500 items each.
-- [ ] Programmatic graders (exact match, unit-test execution, span F1).
-- [ ] The four baselines: all-local, all-remote, random-at-rate-p, oracle.
-- [ ] Pareto plotting, bootstrap confidence intervals, paired tests.
+- [x] The four baselines: all-cheap, all-strong, random-at-rate-p, oracle
+      (plus the heuristic and every learned candidate).
+- [x] Pareto plotting, bootstrap confidence intervals, paired tests,
+      per-category results, workload mixtures.
+- [x] Programmatic graders: exact / numeric / contains / choice
+      (`scripts/collect_outcomes.py`).
+- [x] Three categories collected at pilot scale: 200 GSM8K, 200 MMLU,
+      200 BBH — 600 graded outcomes, 420/90/90 split.
+- [ ] **Scale to 300–500 items per category.** n = 90 test rows cannot
+      separate the routers; every quality CI currently includes zero. Build
+      a new, disjoint expansion with a preregistered split and evaluation
+      policy. The old local `real_extension_qwen_pro` work file is an
+      interrupted/obsolete collection, not the next evaluation set.
+- [ ] The remaining five categories: sentiment, NER, summarisation, code
+      generation, code debugging (the last two need unit-test execution).
+- [ ] Repeated seeds — report the spread across splits, not one lucky split.
 - [ ] LLM judge for summarisation, plus the human-validation sample and the
       verbosity-bias check.
 
@@ -46,22 +59,33 @@ The learned-router machinery is BUILT (see `docs/LEARNED_ROUTING.md`): a
 versioned outcome-dataset format, leakage-safe group splits, two trained +
 calibrated candidates, data-driven threshold policies, a full offline
 evaluator with all baselines, and `ROUTER_MODE=learned|auto` runtime
-integration — proven end-to-end on synthetic toy data. What remains is
-feeding it real data and hardening the post-generation side:
+integration. It is proven end-to-end on synthetic toy data AND trained once
+on a real 600-outcome pilot (`docs/HANDOFF.md` §3). What remains is more
+real data and hardening the post-generation side:
 
 - [x] **Learned router** — classifier on (prompt features →
       did-local-get-it-right); RouteLLM-style threshold calibration.
-      *(pipeline complete; needs the real dataset from workstream 2)*
 - [x] Report AUC for each signal separately (training report covers the
       heuristic reference, both candidates, and all three post-gen
       statistics).
 - [x] **Alternative post-gen statistics** — min token prob and low-confidence
       fraction are now computed, logged, gate-selectable
       (`LOCAL_CONF_STAT`), and AUC-compared per training run.
-- [ ] **Collect the real dataset** (`scripts/collect_outcomes.py`) and
-      retrain/evaluate; only then change any default.
-- [ ] **Calibrate the logprob gate** on real graded answers — the machinery
-      reports the AUCs; the calibration decision needs real data.
+- [x] **Collect a real dataset at pilot scale** — 600 graded Qwen-2.5-1.5B vs
+      DeepSeek-V4-Pro outcomes; trained, evaluated, artifact deployed to the
+      demo. Result: leads the heuristic and random on point estimates, but
+      **no quality CI clears zero at n = 90**, and unsafe-local is worse than
+      the heuristic (18.9% vs 15.6%). Not yet a claim.
+- [ ] **Scale that dataset** (workstream 2) and re-run before changing any
+      default or writing a results claim.
+- [ ] **Retrain under the `max_unsafe` policy** and report the safety/cost
+      frontier — the deployed artifact is the `quality_floor` pick, which is
+      the riskier of the two.
+- [ ] **Collect a `remote_pair` dataset.** No artifact exists for the
+      two-Fireworks pair, so that demo mode is heuristic-only by necessity.
+- [ ] **Calibrate the logprob gate** on real graded answers. Pilot post-gen
+      AUCs: mean 0.730, min 0.673, low_frac 0.630 — `mean` stays the default
+      until more data says otherwise.
 - [ ] **Self-consistency** — sample the local model k times and measure
       disagreement. This catches *confident-wrong*, which logprobs cannot, and
       local compute is cheap.
@@ -71,8 +95,9 @@ feeding it real data and hardening the post-generation side:
 ## 4. Cost model — replace the zero-token fiction
 **Owner:** _unclaimed_ · **Touches:** `token_tracker.py`, `scripts/calibrate.py` · **P1**
 
-The competition counted local tokens as zero. That was a scoring rule, not a
-fact. Without a real cost model the router is optimising nothing meaningful.
+The earlier competition counted local tokens as zero. That was a scoring
+rule, not a fact. Without a real cost model the router is optimising nothing
+meaningful.
 
 - [ ] Define the objective: API dollars + amortised local compute, and/or
       latency, and/or energy (macOS exposes real power metrics).
@@ -83,12 +108,19 @@ fact. Without a real cost model the router is optimising nothing meaningful.
 - [ ] Include discarded local generations from escalations in the accounting.
 
 ## 5. Demo and observability
-**Owner:** _unclaimed_ · **Touches:** `scripts/banana.py`, new dashboard · **P2**
+**Owner:** _unclaimed_ · **Touches:** `webui/`, `scripts/banana.py`, new dashboard · **P2**
 
-- [ ] Extend the `banana` CLI as the human-facing entry point.
+- [x] **Browser demo** (`webui/`, `make ui`): Hybrid / Remote / Fully-local
+      modes, per-session model selection, plain-language config, provider and
+      billing shown honestly, mock-only unless started with `--real`.
+      See [`docs/DEMO_UI.md`](docs/DEMO_UI.md).
+- [x] A live demo path suitable for the final presentation.
+- [ ] Extend the `banana` CLI as the terminal-side entry point.
 - [ ] A dashboard over `logs/usage.jsonl`: routing mix, cost over time,
       confidence distributions, escalation reasons.
-- [ ] A live demo path suitable for the final presentation.
+- [ ] Turn the single-prompt demo into a persistent chat UI: SQLite-backed
+      conversations, multi-turn context, history/search, streaming and stop.
+      RAG is optional and is not required for chat memory.
 
 ## 6. Report, reproducibility, CI
 **Owner:** _unclaimed_ · **Touches:** `docs/`, CI config · **P2**

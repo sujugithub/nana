@@ -82,6 +82,16 @@ a batch.
 be set by environment variable, so behaviour can change without editing code.
 Prefer adding a knob there over hardcoding a value.
 
+**Route name is not provider.** `cheap`/`strong` are policy tiers. What a
+call costs is decided by `Completion.provider` (`local` vs `fireworks`) —
+in `remote_pair` the cheap tier is a billable Fireworks call. Never infer
+billing, or the words "local" and "free", from the route name.
+
+**Artifacts are pair-specific.** A learned router encodes the cheap/strong
+pair it was trained on. Deploying it against another pair is refused
+(`LearnedRouter._validate_model_pair`), because a threshold calibrated for
+one pair means nothing for another.
+
 **Determinism where it matters.** Greedy decoding locally, `temperature=0`
 remotely — so accuracy measurements are reproducible and debugging isn't
 chasing sampling noise.
@@ -120,19 +130,39 @@ chasing sampling noise.
   remote unnecessarily. That trade is intentional; re-tune it against measured
   data rather than intuition.
 
+## Front ends are consumers, never a second implementation
+
+Three surfaces drive the same runtime: batch/CLI (`main.py`), the
+interactive terminal (`scripts/banana.py`), and the browser demo
+(`webui/`). All three call `build_router()`, `build_backends()` and
+`run_task()` — **no routing, cascade or accounting logic may be
+reimplemented in a front end.** If a UI needs behaviour the runtime lacks,
+add it to the runtime.
+
+The demo UI adds two things of its own, both deliberately outside the
+runtime: (a) *per-session* configuration, applied by snapshotting the
+`settings` singleton, mutating it under a lock, and restoring it afterwards
+— nothing from a browser is ever persisted or written to `.env`; and (b) two
+routing-bypass modes, `remote_only` and `local_only`, which construct
+exactly one backend so the other is unreachable *by construction* rather
+than by a flag check. See `docs/DEMO_UI.md`.
+
 ## Where things live
 
 The project root holds the agent modules; `routing/` is the learned
 pre-router package (dataset format, splits, training, artifact, runtime
-router); `evaluation/` is the offline evaluator; `tests/` is the
-deterministic offline suite for both; `scripts/` holds tooling that is not
-part of the agent itself (`banana.py`, `calibrate.py`,
+router); `evaluation/` is the offline evaluator; `webui/` is the browser
+demo (framework-free `service.py` + stdlib `server.py` + one static page);
+`tests/` is the deterministic offline suite for all of it; `scripts/` holds
+tooling that is not part of the agent itself (`banana.py`, `calibrate.py`,
 `make_toy_dataset.py`, `collect_outcomes.py`); `tasks/` holds task
 fixtures; `logs/usage.jsonl` is the append-only audit trail; `data/`,
-`artifacts/`, and `reports/` are gitignored working products (datasets,
-trained routers, reports — all reproducible from commands in
-`docs/LEARNED_ROUTING.md`); `docs/history/` is competition-era provenance and
-is not current guidance.
+`artifacts/`, and `reports/` hold learned-routing products. The curated
+`data/real_qwen_pro_600.json` evidence set is committed so the pilot is
+reproducible; other datasets, trained routers, and reports remain gitignored
+working products. See `docs/LEARNED_ROUTING.md`. `docs/HANDOFF.md` is the
+current-state takeover note; `docs/history/` is archival provenance and is
+not current guidance.
 
 One more sharp edge: **`artifacts/*.joblib` are executables.** joblib is
 pickle-based, so loading an artifact runs code embedded in it. Only ever

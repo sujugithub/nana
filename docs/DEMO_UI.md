@@ -72,6 +72,20 @@ local Qwen 2.5 1.5B → remote DeepSeek V4 Pro, which shows a green exact-pair
 note when **Learned** is selected. The two-Fireworks pair remains available
 with the heuristic until a separate artifact is collected for that pair.
 
+### Current live-demo recommendation
+
+Use **Hybrid → Local + remote → Learned** with Qwen 2.5 1.5B and DeepSeek V4
+Pro. The older `accounts/fireworks/models/deepseek-v4-flash` deployment has
+returned `404 NOT_FOUND` for this Fireworks account, so do not rely on the
+two-remote pair in a presentation until its replacement model is verified
+and, for learned routing, separately trained. Remote-only intentionally has
+no local fallback.
+
+This page is currently a **single-turn routing demo**, not a ChatGPT-style
+conversation product. It does not persist chats or send prior messages as
+context. Chat memory needs ordinary message storage plus bounded history (or
+summarisation); it does not require RAG.
+
 ## Safety rails
 
 - The server binds `127.0.0.1` only.
@@ -85,6 +99,9 @@ with the heuristic until a separate artifact is collected for that pair.
   (`tests/test_webui.py`).
 - Demo runs do not write to `logs/usage.jsonl` (that file is calibration
   data).
+- Docker is optional. Direct Python execution is the recommended Mac demo
+  path because Docker Desktop cannot expose Apple Metal acceleration to the
+  local model.
 
 ## Layout
 
