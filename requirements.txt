@@ -22,3 +22,5 @@ torch>=2.2
 # accelerate>=0.33     # device_map="auto", sharded/faster loading
 # sentencepiece        # required by some tokenizers (Llama/T5 families)
 # autoawq              # AWQ pre-quantized checkpoints
+#fastapi>=0.115
+#uvicorn[standard]>=0.30
