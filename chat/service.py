@@ -1,130 +1,128 @@
-from typing import Dict
+"""Persistent chat turns backed by the same mode-isolated execution as the demo."""
+from __future__ import annotations
 
-from schemas import Task
-from main import build_backends, build_router, run_task
-from token_tracker import TokenTracker
+import threading
+from dataclasses import asdict
+from typing import Any, Dict, Optional
 
-from .repository import (
-    add_message,
-    get_conversation,
-    list_messages,
-)
+from config import settings
+from webui.service import DemoConfig, config_from_payload, execute
+
+from .repository import add_turn, get_conversation, list_messages
+
+MAX_MESSAGE_CHARS = 10_000
+MAX_CONTEXT_CHARS = 32_000
+
+# A turn must read history, generate, then save both messages in order.
+_TURN_LOCK = threading.RLock()
 
 
-# Build these once when the service module loads.
-# That avoids rebuilding/loading the router and models for every message.
-router = build_router()
-tier_mode, cheap_backend, strong_backend = build_backends()
-tracker = TokenTracker()
+def conversation_config(mode: str, model: Optional[str], mock: bool) -> DemoConfig:
+    """Map saved chat choices to an executable and validated demo configuration."""
+    mode_map = {"hybrid": "hybrid", "remote": "remote_only", "local": "local_only"}
+    if mode not in mode_map:
+        raise ValueError("Mode must be hybrid, remote, or local")
+    if model is not None and (not isinstance(model, str) or not model.strip()):
+        raise ValueError("Model must not be empty")
+
+    payload = {
+        "mode": mode_map[mode],
+        "hybrid_pair": settings.tier_mode,
+        "router_kind": settings.router_mode if settings.router_mode != "auto" else "heuristic",
+        "local_model": model if mode == "local" and model else settings.local_model_name,
+        "cheap_model": settings.cheap_model_name,
+        "strong_model": model if mode == "hybrid" and model else settings.strong_model_name,
+        "remote_model": model if mode == "remote" and model else settings.strong_model_name,
+        "confidence_threshold": settings.confidence_threshold,
+        "enable_escalation": settings.enable_escalation,
+        "mock": mock,
+    }
+    config, errors = config_from_payload(payload)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return config
 
 
 def build_conversation_prompt(conversation_id: int, new_message: str) -> str:
-    """
-    Build a multi-turn prompt using the previous messages in the conversation.
+    """Include the newest complete history that fits a bounded prompt."""
+    current = f"User: {new_message}\n\nAssistant:"
+    if len(current) > MAX_CONTEXT_CHARS:
+        raise ValueError("Message is too long for the chat context")
 
-    Example:
-        User: What is binary search?
-        Assistant: Binary search is...
-        User: Explain the middle step again.
-    """
+    selected = []
+    used = len(current)
     messages = list_messages(conversation_id)
-
-    parts = []
-
-    for message in messages:
-        if message.role == "user":
-            parts.append(f"User: {message.content}")
-        elif message.role == "assistant":
-            parts.append(f"Assistant: {message.content}")
-
-    parts.append(f"User: {new_message}")
-    parts.append("Assistant:")
-
-    return "\n\n".join(parts)
+    # Keep complete turns only. Older data may contain a partial turn from
+    # before atomic writes were introduced, so ignore unpaired messages.
+    for index in range(len(messages) - 1, 0, -1):
+        assistant, user = messages[index], messages[index - 1]
+        if assistant.role != "assistant" or user.role != "user":
+            continue
+        parts = [f"User: {user.content}", f"Assistant: {assistant.content}"]
+        added = sum(len(part) + 2 for part in parts)
+        if used + added > MAX_CONTEXT_CHARS:
+            break
+        selected.extend(reversed(parts))
+        used += added
+    selected.reverse()
+    selected.append(current)
+    return "\n\n".join(selected)
 
 
 def send_message(
     conversation_id: int,
     content: str,
-) -> Dict:
-    """
-    Save the user message, run it through Transit,
-    save the assistant response, and return the result.
-    """
-
-    conversation = get_conversation(conversation_id)
-
-    if conversation is None:
-        raise ValueError(
-            f"Conversation with id {conversation_id} does not exist"
-        )
-
-    if not content.strip():
+    *,
+    mock: bool = True,
+    allow_real: bool = False,
+) -> Dict[str, Any]:
+    """Generate first, then atomically save both sides of a successful turn."""
+    content = content.strip()
+    if not content:
         raise ValueError("Message cannot be empty")
+    if len(content) > MAX_MESSAGE_CHARS:
+        raise ValueError(f"Message must be at most {MAX_MESSAGE_CHARS} characters")
 
-    # Important:
-    # build the prompt BEFORE saving the new user message,
-    # otherwise the newest message would appear twice.
-    prompt = build_conversation_prompt(
-        conversation_id=conversation_id,
-        new_message=content,
-    )
+    with _TURN_LOCK:
+        conversation = get_conversation(conversation_id)
+        if conversation is None:
+            raise LookupError("Conversation not found")
 
-    # Save the actual user message in SQLite.
-    user_message = add_message(
-        conversation_id=conversation_id,
-        role="user",
-        content=content,
-    )
+        effective_mock = mock or not allow_real
+        config = conversation_config(conversation.mode, conversation.model, effective_mock)
+        prompt = build_conversation_prompt(conversation_id, content)
+        result = execute(config, prompt)
+        if not result["ok"]:
+            raise RuntimeError(result["error"])
 
-    # Convert the chat request into the existing routing Task format.
-    task = Task(
-        task_id=f"conversation-{conversation_id}-message-{user_message.id}",
-        prompt=prompt,
-        metadata={
+        user_message, assistant_message = add_turn(
+            conversation_id=conversation_id,
+            user_content=content,
+            assistant_content=result["answer"],
+            route=result["route"],
+            model_name=result["final_model"],
+            latency_s=result["latency_s"],
+            estimated_cost_usd=result["estimated_cost_usd"],
+        )
+        routing = result["routing"]
+        return {
             "conversation_id": conversation_id,
-            "mode": conversation.mode,
-            "model": conversation.model,
-        },
-    )
-
-    # Reuse your teammate's existing router/model pipeline.
-    result = run_task(
-        task=task,
-        router=router,
-        cheap=cheap_backend,
-        strong=strong_backend,
-        tracker=tracker,
-    )
-
-    answer = result.get("answer", "")
-
-    # Save assistant response and routing metadata.
-    assistant_message = add_message(
-        conversation_id=conversation_id,
-        role="assistant",
-        content=answer,
-        route=result.get("route"),
-        model_name=result.get("model_name"),
-        latency_s=result.get("latency_s"),
-        estimated_cost_usd=result.get("estimated_cost_usd"),
-    )
-
-    return {
-        "conversation_id": conversation_id,
-        "user_message": user_message,
-        "assistant_message": assistant_message,
-        "routing": {
-            "route": result.get("route"),
-            "router": result.get("router"),
-            "confidence": result.get("confidence"),
-            "escalated": result.get("escalated"),
-            "model_name": result.get("model_name"),
-            "provider": result.get("provider"),
-            "billable_tokens": result.get("billable_tokens"),
-            "estimated_cost_usd": result.get("estimated_cost_usd"),
-            "signals": result.get("signals"),
-            "reason": result.get("reason"),
-            "post_check_problems": result.get("post_check_problems"),
-        },
-    }
+            "user_message": asdict(user_message),
+            "assistant_message": asdict(assistant_message),
+            "mock": effective_mock,
+            "billable": result["billable"],
+            "routing": {
+                "route": result["route"],
+                "router": routing["kind"],
+                "confidence": routing.get("confidence"),
+                "escalated": result["escalated"],
+                "model_name": result["final_model"],
+                "provider": result["provider"],
+                "billable_tokens": result["tokens"]["billable"],
+                "estimated_cost_usd": result["estimated_cost_usd"],
+                "mock_estimated_cost_usd": result["mock_estimated_cost_usd"],
+                "signals": routing.get("signals"),
+                "reason": routing.get("reason"),
+                "post_check_problems": result["problems"],
+            },
+        }

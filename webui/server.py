@@ -17,9 +17,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import parse_qs, urlsplit
 
 # Allow `python3 webui/server.py` from anywhere, like scripts/banana.py does.
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,17 +91,38 @@ class DemoHandler(BaseHTTPRequestHandler):
 
     # ── routes ───────────────────────────────────────────────────────────
     def do_GET(self) -> None:
-        path = self.path.split("?", 1)[0]
+        parsed = urlsplit(self.path)
+        path = parsed.path
         if path in ("/", "/index.html"):
             self._send_static("index.html", "text/html; charset=utf-8")
+        elif path == "/chat":
+            self._send_static("chat.html", "text/html; charset=utf-8")
         elif path == "/api/config":
             payload = service.frontend_config()
             payload["real_allowed"] = self.server.allow_real
             self._send_json(payload)
+        elif path == "/api/chat/config":
+            from config import settings
+            self._send_json({
+                "real_allowed": self.server.allow_real,
+                "known_local_models": service.KNOWN_LOCAL_MODELS,
+                "known_fireworks_models": service.KNOWN_FIREWORKS_MODELS,
+                "default_mode": "hybrid",
+                "default_models": {
+                    "hybrid": settings.strong_model_name,
+                    "remote": settings.strong_model_name,
+                    "local": settings.local_model_name,
+                },
+            })
+        elif path.startswith("/conversations"):
+            self._chat_request("GET", path, parse_qs(parsed.query))
         else:
             self._send_json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:
+        if urlsplit(self.path).path.startswith("/conversations"):
+            self._chat_request("POST", urlsplit(self.path).path)
+            return
         payload = self._read_json()
         if payload is None:
             self._send_json({"error": "invalid JSON body"}, status=400)
@@ -127,6 +151,106 @@ class DemoHandler(BaseHTTPRequestHandler):
             self._send_json(result, status=200 if result.get("ok") else 400)
         else:
             self._send_json({"error": "not found"}, status=404)
+
+    def do_PATCH(self) -> None:
+        self._chat_request("PATCH", urlsplit(self.path).path)
+
+    def do_DELETE(self) -> None:
+        self._chat_request("DELETE", urlsplit(self.path).path)
+
+    def _chat_request(self, method: str, path: str, query=None) -> None:
+        """Expose the persistent chat API on the existing localhost demo."""
+        from chat.database import initialise_database
+        from chat.repository import (
+            create_conversation, delete_conversation, get_conversation,
+            list_conversations, list_messages, rename_conversation,
+            search_conversations, update_conversation_settings,
+        )
+        from chat.service import MAX_MESSAGE_CHARS, conversation_config, send_message
+
+        if not path.startswith("/conversations"):
+            self._send_json({"error": "not found"}, status=404)
+            return
+        initialise_database()
+        payload = None
+        if method in ("POST", "PATCH"):
+            payload = self._read_json()
+            if payload is None:
+                self._send_json({"error": "invalid JSON body"}, status=400)
+                return
+        query = query or {}
+        match = re.fullmatch(r"/conversations/(\d+)(?:/(messages|title|settings))?", path)
+        try:
+            if method == "GET" and path == "/conversations":
+                result = [asdict(item) for item in list_conversations()]
+            elif method == "GET" and path == "/conversations/search":
+                term = (query.get("q") or [""])[0].strip()
+                if not term:
+                    raise ValueError("Search query is required")
+                result = [asdict(item) for item in search_conversations(term)]
+            elif method == "POST" and path == "/conversations":
+                title = str(payload.get("title", "New Chat")).strip()
+                mode = payload.get("mode", "hybrid")
+                model = payload.get("model")
+                if not title or len(title) > 200:
+                    raise ValueError("Title must be 1–200 characters")
+                conversation_config(mode, model, mock=True)
+                result = asdict(create_conversation(title, mode, model))
+            elif match:
+                conversation_id = int(match.group(1))
+                suffix = match.group(2)
+                if method == "GET" and suffix is None:
+                    conversation = get_conversation(conversation_id)
+                    if conversation is None:
+                        raise LookupError("Conversation not found")
+                    result = {
+                        "conversation": asdict(conversation),
+                        "messages": [asdict(item) for item in list_messages(conversation_id)],
+                    }
+                elif method == "DELETE" and suffix is None:
+                    if not delete_conversation(conversation_id):
+                        raise LookupError("Conversation not found")
+                    result = {"deleted": True, "conversation_id": conversation_id}
+                elif method == "POST" and suffix == "messages":
+                    content = payload.get("content", "")
+                    if not isinstance(content, str) or len(content) > MAX_MESSAGE_CHARS:
+                        raise ValueError(f"Message must be at most {MAX_MESSAGE_CHARS} characters")
+                    if payload.get("mock") is False and not self.server.allow_real:
+                        raise ValueError("Real calls are disabled; restart with --real")
+                    result = send_message(
+                        conversation_id, content,
+                        mock=payload.get("mock", True) is not False,
+                        allow_real=self.server.allow_real,
+                    )
+                elif method == "PATCH" and suffix == "title":
+                    title = str(payload.get("title", "")).strip()
+                    if not title or len(title) > 200:
+                        raise ValueError("Title must be 1–200 characters")
+                    conversation = rename_conversation(conversation_id, title)
+                    if conversation is None:
+                        raise LookupError("Conversation not found")
+                    result = asdict(conversation)
+                elif method == "PATCH" and suffix == "settings":
+                    mode = payload.get("mode")
+                    model = payload.get("model")
+                    conversation_config(mode, model, mock=True)
+                    conversation = update_conversation_settings(conversation_id, mode, model)
+                    if conversation is None:
+                        raise LookupError("Conversation not found")
+                    result = asdict(conversation)
+                else:
+                    raise LookupError("Route not found")
+            else:
+                raise LookupError("Route not found")
+            self._send_json(result)
+        except LookupError as err:
+            self._send_json({"error": str(err)}, status=404)
+        except ValueError as err:
+            self._send_json({"error": str(err)}, status=400)
+        except RuntimeError as err:
+            self._send_json({"error": str(err)}, status=502)
+        except Exception:
+            self._send_json({"error": "Chat request failed"}, status=500)
 
     def _send_static(self, name: str, content_type: str) -> None:
         path = os.path.join(_STATIC_DIR, name)

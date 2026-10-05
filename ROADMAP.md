@@ -118,9 +118,9 @@ meaningful.
 - [ ] Extend the `banana` CLI as the terminal-side entry point.
 - [ ] A dashboard over `logs/usage.jsonl`: routing mix, cost over time,
       confidence distributions, escalation reasons.
-- [ ] Turn the single-prompt demo into a persistent chat UI: SQLite-backed
-      conversations, multi-turn context, history/search, streaming and stop.
-      RAG is optional and is not required for chat memory.
+- [ ] Finish the persistent chat UI. SQLite-backed conversations, bounded
+      multi-turn context, and history/search are implemented; streaming and
+      stop-generation remain. RAG is optional and is not required for chat memory.
 
 ## 6. Report, reproducibility, CI
 **Owner:** _unclaimed_ · **Touches:** `docs/`, CI config · **P2**

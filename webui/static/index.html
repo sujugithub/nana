@@ -19,6 +19,7 @@
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
   header h1 { font-size: 22px; margin: 0; }
   header .sub { color: var(--dim); font-size: 13px; }
+  header .chat-link { margin-left: auto; color: var(--accent); font-size: 13px; }
   .badge {
     display: inline-block; padding: 2px 10px; border-radius: 12px;
     font-size: 12px; font-weight: 600; letter-spacing: .3px;
@@ -98,6 +99,7 @@
     <h1>🍌 banana</h1>
     <span class="sub">hybrid model-routing demo</span>
     <span id="serverBadge" class="badge mock">…</span>
+    <a class="chat-link" href="/chat">Open chat →</a>
   </header>
 
   <div class="modes" id="modes">
@@ -126,10 +128,10 @@
         <div class="field" id="f_pair">
           <label>Hybrid pair</label>
           <div class="radio-row">
-            <label><input type="radio" name="pair" value="remote_pair" checked> Cheap remote + strong remote</label>
+            <label><input type="radio" name="pair" value="remote_pair"> Cheap remote + strong remote</label>
           </div>
           <div class="radio-row">
-            <label><input type="radio" name="pair" value="local_remote"> Local + remote</label>
+            <label><input type="radio" name="pair" value="local_remote" checked> Local + remote</label>
           </div>
         </div>
 

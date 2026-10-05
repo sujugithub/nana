@@ -45,11 +45,10 @@ KNOWN_LOCAL_MODELS = [
     "Qwen/Qwen2.5-3B-Instruct",
 ]
 KNOWN_FIREWORKS_MODELS = [
-    "accounts/fireworks/models/deepseek-v4-flash",
-    "accounts/fireworks/models/deepseek-v4-pro",
-    "accounts/fireworks/models/kimi-k2p6",
-    "accounts/fireworks/models/glm-5p2",
+    "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
     "accounts/fireworks/models/gpt-oss-120b",
+    "accounts/fireworks/models/deepseek-v4p1-flash",
+    "accounts/fireworks/models/glm-5p2",
 ]
 
 # One request at a time: execution mutates the process-wide settings
@@ -63,9 +62,9 @@ class DemoConfig:
     hybrid_pair: str = "local_remote"
     router_kind: str = "heuristic"
     local_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
-    cheap_model: str = "accounts/fireworks/models/deepseek-v4-flash"
-    strong_model: str = "accounts/fireworks/models/deepseek-v4-pro"
-    remote_model: str = "accounts/fireworks/models/deepseek-v4-pro"  # remote_only
+    cheap_model: str = "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
+    strong_model: str = "accounts/fireworks/models/gpt-oss-120b"
+    remote_model: str = "accounts/fireworks/models/gpt-oss-120b"  # remote_only
     confidence_threshold: float = 0.55
     enable_escalation: bool = True
     mock: bool = True

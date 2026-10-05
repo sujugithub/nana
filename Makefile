@@ -1,6 +1,6 @@
 # Project shortcuts. `make test` before every commit.
 .PHONY: test test-wiring test-learned mock run demo toy-data train evaluate \
-	ui ui-real build build-cpu docker-run docker-run-gpu docker-run-harness \
+	ui ui-real api api-real build build-cpu docker-run docker-run-gpu docker-run-harness \
 	ghcr-login push push-cpu image-size
 
 # Public container registry (check the package's visibility settings on GHCR
@@ -34,6 +34,12 @@ ui:              ## browser demo (mock-only; `make ui-real` allows billable call
 
 ui-real:         ## browser demo with REAL calls enabled — remote requests BILL Fireworks
 	python3 -m webui.server --real
+
+api:             ## FastAPI chat backend (mock-only by default, localhost:8643)
+	python3 -m uvicorn api:app --host 127.0.0.1 --port 8643
+
+api-real:        ## explicitly permit real chat model calls (set FIREWORKS_API_KEY)
+	NANA_CHAT_ALLOW_REAL=1 python3 -m uvicorn api:app --host 127.0.0.1 --port 8643
 
 demo:            ## 🍌 banana demo: 8-category run + summary graph (real models)
 	python3 scripts/banana.py --demo

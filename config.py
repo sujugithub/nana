@@ -47,10 +47,10 @@ def _env_bool(name: str, default: bool) -> bool:
 @dataclass
 class Settings:
     # cheap tier backend:
-    #   remote_pair  -> DeepSeek-V4-Flash on Fireworks (demo, no local load)
+    #   remote_pair  -> Nemotron Lightning on Fireworks (demo, no local load)
     #   local_remote -> local_model.py / LOCAL_MODEL_NAME (original FYP mode)
     # The strong tier is Fireworks-hosted in both modes.
-    tier_mode: str = "remote_pair"
+    tier_mode: str = "local_remote"
 
     # ── Local cheap-tier backend ─────────────────────────────────────────
     # Used when TIER_MODE=local_remote. It is deliberately a first-class
@@ -61,27 +61,27 @@ class Settings:
     # ── Two Fireworks-hosted routing tiers ───────────────────────────────
     # In remote_pair these are both remote; the strong model is also used by
     # local_remote. Keep that distinction honest in logs and reports.
-    cheap_model_name: str = "accounts/fireworks/models/deepseek-v4-flash"
-    strong_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
+    cheap_model_name: str = "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
+    strong_model_name: str = "accounts/fireworks/models/gpt-oss-120b"
     cheap_max_tokens: int = 1024
     strong_max_tokens: int = 4096
     # Explicit USD / 1M-token assumptions for demo accounting. Override when
     # Fireworks pricing changes; actual token counts still come from `usage`.
-    cheap_input_per_mtok: float = 0.14
-    cheap_output_per_mtok: float = 0.28
-    strong_input_per_mtok: float = 1.74
-    strong_output_per_mtok: float = 3.48
+    cheap_input_per_mtok: float = 0.05
+    cheap_output_per_mtok: float = 0.20
+    strong_input_per_mtok: float = 0.15
+    strong_output_per_mtok: float = 0.60
 
     # Backward-compatible strong-tier settings used by the old harness and
     # archived deployment environment. New code should use strong_model_name.
-    remote_model_name: str = "accounts/fireworks/models/deepseek-v4-pro"
+    remote_model_name: str = "accounts/fireworks/models/gpt-oss-120b"
     # Optional allow-list: when ALLOWED_MODELS is set (comma-separated model
     # IDs), the remote model MUST come from it — useful for cost control or
     # when a deployment restricts which models may be called. Empty = use
     # remote_model_name. Selection: remote_client.resolve_remote_model().
     allowed_models: str = ""
     # Legacy single-remote tie-breaker, retained for compatibility helpers.
-    remote_model_preference: str = "deepseek-v4-pro"
+    remote_model_preference: str = "gpt-oss-120b"
     fireworks_api_key: str = ""  # set FIREWORKS_API_KEY; never commit a key
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
     # Legacy alias for strong_max_tokens.

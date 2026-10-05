@@ -1,8 +1,9 @@
+import os
 import sqlite3
 from pathlib import Path
 
 
-DB_PATH = Path("data/transit.db")
+DB_PATH = Path(os.environ.get("NANA_CHAT_DB", Path(__file__).resolve().parents[1] / "data" / "nana-chat.db"))
 
 
 def get_connection():

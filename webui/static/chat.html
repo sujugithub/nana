@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nana — chat</title>
+<style>
+  :root { color-scheme: dark; --bg:#14161a; --panel:#1d2026; --panel2:#242831; --line:#353a44; --text:#e8e9eb; --dim:#a4a9b2; --yellow:#f5c518; --green:#3fbf6f; --orange:#f08c3a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,sans-serif; }
+  button,select,input,textarea { font:inherit; }
+  button { border:0; border-radius:7px; background:var(--yellow); color:#171717; padding:9px 14px; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
+  a { color:var(--yellow); }
+  header { padding:14px 20px; display:flex; align-items:center; gap:16px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:20px; }
+  header a { margin-left:auto; font-size:13px; }
+  .layout { display:grid; grid-template-columns:260px minmax(0,1fr); min-height:calc(100vh - 64px); }
+  aside { padding:18px; border-right:1px solid var(--line); }
+  aside input { width:100%; margin:12px 0; }
+  #conversations { display:grid; gap:6px; }
+  .conversation { width:100%; text-align:left; background:var(--panel); color:var(--text); border:1px solid var(--line); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .conversation.active { border-color:var(--yellow); }
+  main { max-width:1000px; width:100%; margin:0 auto; padding:20px; display:flex; flex-direction:column; min-height:calc(100vh - 64px); }
+  .controls { display:flex; align-items:end; flex-wrap:wrap; gap:10px; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+  label { display:grid; gap:4px; font-size:12px; color:var(--dim); }
+  label.inline { display:flex; align-items:center; gap:6px; font-size:13px; }
+  select,input,textarea { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; }
+  #model { min-width:230px; max-width:100%; }
+  .hint { color:var(--dim); font-size:12px; }
+  #status { min-height:24px; color:var(--orange); font-size:13px; }
+  #messages { flex:1; display:flex; flex-direction:column; gap:12px; padding:20px 0; }
+  .message { padding:12px 14px; border:1px solid var(--line); border-radius:10px; max-width:85%; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .message.user { align-self:flex-end; background:#332d18; }
+  .message.assistant { align-self:flex-start; background:var(--panel); }
+  .message small { display:block; color:var(--dim); margin-top:8px; }
+  .composer { display:flex; align-items:end; gap:10px; }
+  textarea { flex:1; resize:vertical; min-height:70px; max-height:240px; }
+  @media(max-width:720px) { .layout { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--line); } main { min-height:70vh; } }
+</style>
+</head>
+<body>
+<header><h1>🍌 Nana chat</h1><span class="hint">Conversations saved on this machine</span><a href="/">Routing demo</a></header>
+<div class="layout">
+  <aside>
+    <button id="new">New chat</button>
+    <input id="search" type="search" placeholder="Search chats" aria-label="Search chats">
+    <div id="conversations"></div>
+  </aside>
+  <main>
+    <div class="controls">
+      <label>Mode<select id="mode"><option value="hybrid">Hybrid</option><option value="remote">Remote only</option><option value="local">Fully local</option></select></label>
+      <label>Model<select id="model"></select></label>
+      <label class="inline"><input id="mock" type="checkbox" checked> Preview / mock (canned replies)</label>
+      <button id="rename" class="secondary" disabled>Rename</button>
+      <button id="delete" class="secondary" disabled>Delete</button>
+      <div class="hint" id="modeHint" style="flex-basis:100%"></div>
+      <div class="hint" id="replyHint" style="flex-basis:100%"></div>
+    </div>
+    <div id="status" role="status"></div>
+    <div id="messages" aria-live="polite"><p class="hint">Choose a chat or create a new one.</p></div>
+    <div class="composer">
+      <textarea id="prompt" maxlength="10000" placeholder="Message Nana…" aria-label="Message"></textarea>
+      <button id="send" disabled>Send</button>
+    </div>
+  </main>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let serverConfig = null;
+let current = null;
+let busy = false;
+
+async function request(path, options = {}) {
+  const response = await fetch(path, {headers:{"Content-Type":"application/json"}, ...options});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || data.error || `HTTP ${response.status}`);
+  return data;
+}
+
+function status(message = "") { $("status").textContent = message; }
+function setBusy(value) { busy = value; $("send").disabled = value || !current; $("new").disabled = value; }
+function updateReplyHint() {
+  const mock = $("mock").checked;
+  $("send").textContent = mock ? "Send mock" : "Send real";
+  $("replyHint").textContent = mock
+    ? "Preview only: Nana will save a canned placeholder, not a model answer. Uncheck this for a real reply."
+    : $("mode").value === "local"
+      ? "Real local model: the first reply may download weights and take time. No Fireworks call."
+      : "Real Fireworks model: each sent message can incur an API charge.";
+}
+function modelChoices(mode, selected) {
+  const options = mode === "local" ? serverConfig.known_local_models : serverConfig.known_fireworks_models;
+  const defaultModel = serverConfig.default_models[mode];
+  $("model").replaceChildren();
+  for (const value of [...new Set([selected || defaultModel, ...options])]) {
+    const option = new Option(value.split("/").pop(), value);
+    $("model").add(option);
+  }
+  $("model").value = selected || defaultModel;
+  $("modeHint").textContent = mode === "local"
+    ? "Runs only on this machine; Fireworks is never contacted."
+    : mode === "remote"
+      ? "Uses the selected Fireworks model; real requests are billable."
+      : "The router chooses a cheap tier or the selected strong Fireworks model. Real requests may be billable.";
+  updateReplyHint();
+}
+
+async function loadList(search = "") {
+  const path = search ? `/conversations/search?q=${encodeURIComponent(search)}` : "/conversations";
+  const items = await request(path);
+  $("conversations").replaceChildren();
+  for (const item of items) {
+    const button = document.createElement("button");
+    button.className = "conversation" + (current?.id === item.id ? " active" : "");
+    button.textContent = item.title;
+    button.title = item.title;
+    button.onclick = () => openConversation(item.id);
+    $("conversations").append(button);
+  }
+}
+
+function renderMessages(messages) {
+  $("messages").replaceChildren();
+  if (!messages.length) {
+    const empty = document.createElement("p"); empty.className = "hint";
+    empty.textContent = "Start the conversation below."; $("messages").append(empty);
+  }
+  for (const message of messages) {
+    const node = document.createElement("div"); node.className = `message ${message.role}`;
+    const text = document.createElement("div"); text.textContent = message.content; node.append(text);
+    if (message.role === "assistant" && message.model_name) {
+      const meta = document.createElement("small");
+      meta.textContent = `${message.content.startsWith("[mock-") ? "MOCK placeholder · " : ""}${message.model_name} · ${message.route || ""} · ${Number(message.latency_s || 0).toFixed(2)}s`;
+      node.append(meta);
+    }
+    $("messages").append(node);
+  }
+  $("messages").lastElementChild?.scrollIntoView({block:"end"});
+}
+
+async function openConversation(id) {
+  try {
+    const detail = await request(`/conversations/${id}`);
+    current = detail.conversation;
+    $("mode").value = current.mode;
+    modelChoices(current.mode, current.model);
+    renderMessages(detail.messages);
+    $("rename").disabled = $("delete").disabled = false;
+    $("send").disabled = false;
+    await loadList($("search").value.trim());
+    status();
+  } catch (error) { status(error.message); }
+}
+
+$("new").onclick = async () => {
+  try {
+    const item = await request("/conversations", {method:"POST", body:JSON.stringify({mode:$("mode").value, model:$("model").value})});
+    await openConversation(item.id);
+  } catch (error) { status(error.message); }
+};
+
+$("send").onclick = async () => {
+  const content = $("prompt").value.trim();
+  if (!current || !content) return;
+  setBusy(true); status("Generating…");
+  try {
+    const result = await request(`/conversations/${current.id}/messages`, {
+      method:"POST", body:JSON.stringify({content, mock:$("mock").checked})
+    });
+    $("prompt").value = "";
+    await openConversation(current.id);
+    status(result.mock ? "Mock reply saved; no model call was made." :
+      result.billable ? "Fireworks request completed; estimated API cost $" + Number(result.routing.estimated_cost_usd).toFixed(6) : "Local reply saved; no API call.");
+  } catch (error) { status(error.message); }
+  finally { setBusy(false); }
+};
+
+$("prompt").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("send").click(); } };
+$("mock").onchange = updateReplyHint;
+$("search").oninput = () => loadList($("search").value.trim()).catch(error => status(error.message));
+$("mode").onchange = async () => {
+  modelChoices($("mode").value);
+  if (!current) return;
+  try { current = await request(`/conversations/${current.id}/settings`, {method:"PATCH", body:JSON.stringify({mode:$("mode").value, model:$("model").value})}); status("Settings saved."); }
+  catch (error) { status(error.message); }
+};
+$("model").onchange = async () => {
+  if (!current) return;
+  try { current = await request(`/conversations/${current.id}/settings`, {method:"PATCH", body:JSON.stringify({mode:$("mode").value, model:$("model").value})}); status("Settings saved."); }
+  catch (error) { status(error.message); }
+};
+$("rename").onclick = async () => {
+  const title = window.prompt("Chat title", current?.title || "");
+  if (!title?.trim() || !current) return;
+  try { current = await request(`/conversations/${current.id}/title`, {method:"PATCH", body:JSON.stringify({title:title.trim()})}); await loadList(); status("Renamed."); }
+  catch (error) { status(error.message); }
+};
+$("delete").onclick = async () => {
+  if (!current || !window.confirm(`Delete “${current.title}” and its messages?`)) return;
+  try {
+    await request(`/conversations/${current.id}`, {method:"DELETE"});
+    current = null; renderMessages([]); $("send").disabled = $("rename").disabled = $("delete").disabled = true;
+    await loadList(); status("Chat deleted.");
+  } catch (error) { status(error.message); }
+};
+
+async function init() {
+  try {
+    serverConfig = await request("/api/chat/config");
+    $("mode").value = serverConfig.default_mode;
+    modelChoices($("mode").value);
+    if (!serverConfig.real_allowed) { $("mock").checked = true; $("mock").disabled = true; }
+    updateReplyHint();
+    const items = await request("/conversations");
+    if (items.length) await openConversation(items[0].id);
+    else await loadList();
+  } catch (error) { status(error.message); }
+}
+init();
+</script>
+</body>
+</html>

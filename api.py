@@ -1,9 +1,25 @@
+import hmac
+import os
+from contextlib import asynccontextmanager
 from dataclasses import asdict
-from typing import Optional
+from pathlib import Path
+from typing import Literal, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+
+# Match the demo server: load local defaults before importing config.py.
+_REPO = Path(__file__).resolve().parent
+try:
+    for line in (_REPO / ".env").read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+except FileNotFoundError:
+    pass
 
 from chat.database import initialise_database
 from chat.repository import (
@@ -16,13 +32,26 @@ from chat.repository import (
     search_conversations,
     update_conversation_settings,
 )
-from chat.service import send_message
+from chat.service import MAX_MESSAGE_CHARS, conversation_config, send_message
+from config import settings
+from webui.service import KNOWN_FIREWORKS_MODELS, KNOWN_LOCAL_MODELS
+
+
+def real_calls_allowed() -> bool:
+    return os.environ.get("NANA_CHAT_ALLOW_REAL", "").strip().lower() in {"1", "true", "yes"}
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    initialise_database()
+    yield
 
 
 app = FastAPI(
-    title="Transit API",
-    description="Backend API for the Transit hybrid AI router",
+    title="Nana Chat API",
+    description="Persistent chat for the Nana hybrid router",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -38,9 +67,17 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def startup():
-    initialise_database()
+@app.middleware("http")
+async def local_or_token_access(request: Request, call_next):
+    """Private by default, including conversation reads and billable sends."""
+    if request.url.path.startswith("/conversations"):
+        token = os.environ.get("NANA_API_TOKEN", "")
+        supplied = request.headers.get("authorization", "")
+        local = bool(request.client and request.client.host in {"127.0.0.1", "::1", "localhost", "testclient"})
+        authorized = bool(token and hmac.compare_digest(supplied, f"Bearer {token}"))
+        if not local and not authorized:
+            return JSONResponse({"detail": "Local access only, or provide NANA_API_TOKEN"}, status_code=403)
+    return await call_next(request)
 
 
 # -------------------------------------------------------------------
@@ -49,7 +86,7 @@ def startup():
 
 class CreateConversationRequest(BaseModel):
     title: str = Field(default="New Chat", min_length=1, max_length=200)
-    mode: str = "hybrid"
+    mode: Literal["hybrid", "remote", "local"] = "hybrid"
     model: Optional[str] = None
 
 
@@ -58,12 +95,13 @@ class RenameConversationRequest(BaseModel):
 
 
 class ConversationSettingsRequest(BaseModel):
-    mode: str
+    mode: Literal["hybrid", "remote", "local"]
     model: Optional[str] = None
 
 
 class SendMessageRequest(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+    mock: bool = True
 
 
 # -------------------------------------------------------------------
@@ -74,7 +112,27 @@ class SendMessageRequest(BaseModel):
 def health():
     return {
         "status": "ok",
-        "service": "Transit API",
+        "service": "Nana Chat API",
+    }
+
+
+@app.get("/chat")
+def chat_page():
+    return FileResponse(Path(__file__).resolve().parent / "webui" / "static" / "chat.html")
+
+
+@app.get("/api/chat/config")
+def chat_config():
+    return {
+        "real_allowed": real_calls_allowed(),
+        "known_local_models": KNOWN_LOCAL_MODELS,
+        "known_fireworks_models": KNOWN_FIREWORKS_MODELS,
+        "default_mode": "hybrid",
+        "default_models": {
+            "hybrid": settings.strong_model_name,
+            "remote": settings.strong_model_name,
+            "local": settings.local_model_name,
+        },
     }
 
 
@@ -84,9 +142,16 @@ def health():
 
 @app.post("/conversations")
 def create_chat(request: CreateConversationRequest):
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title cannot be blank")
+    try:
+        conversation_config(request.mode, request.model, mock=True)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     try:
         conversation = create_conversation(
-            title=request.title.strip(),
+            title=title,
             mode=request.mode,
             model=request.model,
         )
@@ -96,7 +161,7 @@ def create_chat(request: CreateConversationRequest):
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=f"Could not create conversation: {error}",
+            detail="Could not create conversation",
         )
 
 
@@ -151,9 +216,12 @@ def rename_chat(
     conversation_id: int,
     request: RenameConversationRequest,
 ):
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title cannot be blank")
     conversation = rename_conversation(
         conversation_id=conversation_id,
-        title=request.title.strip(),
+        title=title,
     )
 
     if conversation is None:
@@ -170,23 +238,14 @@ def update_chat_settings(
     conversation_id: int,
     request: ConversationSettingsRequest,
 ):
-    allowed_modes = {
-        "hybrid",
-        "remote",
-        "local",
-    }
-
-    mode = request.mode.strip().lower()
-
-    if mode not in allowed_modes:
-        raise HTTPException(
-            status_code=400,
-            detail="Mode must be hybrid, remote, or local",
-        )
+    try:
+        conversation_config(request.mode, request.model, mock=True)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     conversation = update_conversation_settings(
         conversation_id=conversation_id,
-        mode=mode,
+        mode=request.mode,
         model=request.model,
     )
 
@@ -228,16 +287,23 @@ def create_message(
         return send_message(
             conversation_id=conversation_id,
             content=request.content.strip(),
+            mock=request.mock,
+            allow_real=real_calls_allowed(),
         )
 
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(
-            status_code=404,
+            status_code=400,
             detail=str(error),
         )
+
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
 
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=f"Transit failed to generate a response: {error}",
+            detail="Nana failed to save the chat turn",
         )

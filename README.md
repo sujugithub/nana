@@ -7,11 +7,13 @@ and evaluated with a real local model later:
 
 | `TIER_MODE` | Cheap tier | Strong tier | Purpose |
 | --- | --- | --- | --- |
-| `remote_pair` (default) | DeepSeek V4 Flash on Fireworks | DeepSeek V4 Pro on Fireworks | Convenient two-remote demo; both tiers are billed. |
-| `local_remote` | Qwen 2.5 1.5B on the machine | DeepSeek V4 Pro on Fireworks | Original local-vs-remote research deployment. |
+| `local_remote` (default) | Qwen 2.5 1.5B on the machine | gpt-oss-120b on Fireworks | Local cheap tier; local generation may load model weights. |
+| `remote_pair` | Nemotron Lightning 3.5 on Fireworks | gpt-oss-120b on Fireworks | Optional two-remote demo; both tiers are billed. |
 
 The router predicts *P(cheap-tier answer acceptable)*. A trained artifact is
-valid only for the exact model pair used to collect its outcome data.
+valid only for the exact model pair used to collect its outcome data. The
+existing learned artifact was trained on Qwen → DeepSeek V4 Pro, not these
+current live defaults; use the heuristic until new outcomes are collected.
 
 **The research question:** can an outcome-trained router beat single-model
 baselines on the quality-versus-cost frontier — and beat *random* routing at
@@ -99,6 +101,8 @@ every step ──▶ TokenTracker (logs/usage.jsonl + summary)           ▼
 | `scripts/make_toy_dataset.py` | Synthetic outcome dataset for offline end-to-end runs. |
 | `scripts/collect_outcomes.py` | Collect REAL both-model outcomes (requires explicit `--run-paid-calls`). |
 | `webui/` | Browser demo (Hybrid / Remote / Fully local), stdlib-only server. See [`docs/DEMO_UI.md`](docs/DEMO_UI.md). |
+| `chat/` | SQLite conversations, bounded multi-turn context, and atomic chat turns. |
+| `api.py` | Optional FastAPI endpoints for a separate frontend; local access by default. |
 
 ## Quickstart
 
@@ -127,6 +131,12 @@ ROUTER_MODE=learned python3 main.py --tasks tasks/sample_tasks.json --mock
 
 # 5) Browser demo UI (mock-only by default; --real enables billable calls):
 make ui                              # http://127.0.0.1:8642
+# Open http://127.0.0.1:8642/chat for persistent chat (mock by default).
+# make ui-real permits real calls; uncheck Mock in chat before sending.
+
+# Optional FastAPI server for another frontend (localhost:8643):
+make api                             # mock-only by default
+# make api-real permits real calls when Mock is explicitly false.
 ```
 
 The pre-router now has two implementations selected by `ROUTER_MODE`:
@@ -154,16 +164,17 @@ numbers, caveats and the next steps are in
 [`docs/HANDOFF.md`](docs/HANDOFF.md) §3.
 
 The pilot artifact lives at `artifacts/router_qwen_pro_600.joblib` and the
-local `.env` points the browser demo to it. Select **Hybrid → local + remote
-→ Learned** to use the verified pair-specific router; switching to a
-different model pair correctly asks for retraining instead of reusing the
-artifact. `artifacts/router.joblib` is the **synthetic toy** router — it
+local `.env` points the browser demo to it. It is valid only for the historical
+Qwen → DeepSeek V4 Pro pair; the current live defaults show a retraining
+warning when **Learned** is selected. `artifacts/router.joblib` is the
+**synthetic toy** router — it
 validates the pipeline only and is labelled as such everywhere it appears.
 
-For the live demo, prefer **Hybrid → Local + remote → Learned**. The older
-`deepseek-v4-flash` serverless deployment used by the two-remote default has
-returned Fireworks `404 NOT_FOUND` for this account; that pair must be
-revalidated with an accessible model before presentation. Starting
+For the live demo, prefer **Hybrid → Local + remote → Heuristic**, or
+**Remote → gpt-oss-120b**. The older `deepseek-v4-flash` and
+`deepseek-v4-pro` deployments both returned Fireworks `404 NOT_FOUND` for this
+account. The current model IDs appeared in a read-only account model list on
+2026-10-06, but generation is not yet verified. Starting
 `make ui-real` enables real backends but spends nothing by itself—only an
 actual Fireworks request is billable.
 

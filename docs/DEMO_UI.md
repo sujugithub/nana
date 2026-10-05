@@ -10,8 +10,24 @@ make ui        # mock-only demo at http://127.0.0.1:8642
 make ui-real   # allow REAL calls — remote requests BILL Fireworks
 ```
 
-No new dependencies: the server is stdlib `http.server`, the page is one
-static HTML file, and everything works offline in mock mode.
+The existing routing demo uses stdlib `http.server`. Its **Open chat** link
+opens `/chat`, a second static page backed by SQLite conversations. Chat
+history is persisted under `data/nana-chat.db` by default, or at
+`NANA_CHAT_DB` if set. Each new request includes the newest complete history
+that fits a 32,000-character budget. A successful user/assistant turn is
+saved in one database transaction; a failed generation saves neither message.
+
+Chat mode and model settings are enforced by the same execution functions as
+the routing demo. **Fully local** never calls Fireworks; **Remote only** never
+calls the local backend; **Hybrid** follows the configured tier pair. Chat
+starts in mock mode. `make ui-real` allows real requests only after Mock is
+unchecked in the chat page.
+
+An optional FastAPI entry point provides the same chat endpoints with
+`make api` on `127.0.0.1:8643`; `make api-real` permits real requests when
+the client also sends `"mock": false`. Requests from outside localhost need
+`NANA_API_TOKEN` as a Bearer token. The API reads `.env` at startup and does
+not expose the Fireworks key in responses.
 
 ## The three modes
 
@@ -21,13 +37,13 @@ static HTML file, and everything works offline in mock mode.
 | **Remote** | Exactly one chosen Fireworks model. Routing bypassed. A failure is reported as an error — the local backend is **never** invoked. | Every request is a billable Fireworks call |
 | **Fully local** | Exactly one local model. Routing bypassed. Fireworks is **never** contacted, not even as a fallback. | No API calls |
 
-Hybrid supports both pair types from the runtime:
+Hybrid defaults to **Local + remote** and supports both pair types from the runtime:
 
-- **Cheap remote + strong remote** (`remote_pair`): e.g. DeepSeek V4 Flash →
-  DeepSeek V4 Pro. **Both tiers are billable** — the UI never describes a
+- **Cheap remote + strong remote** (`remote_pair`): Nemotron Lightning 3.5 →
+  gpt-oss-120b. **Both tiers are billable** — the UI never describes a
   cheap Fireworks answer as local or free.
-- **Local + remote** (`local_remote`): e.g. Qwen 2.5 1.5B locally → DeepSeek
-  V4 Pro. The cheap tier has no API billing (compute/latency cost only); the
+- **Local + remote** (`local_remote`): Qwen 2.5 1.5B locally → gpt-oss-120b.
+  The cheap tier has no API billing (compute/latency cost only); the
   strong tier bills.
 
 ## What the UI shows
@@ -66,25 +82,25 @@ A learned artifact is tied to the exact cheap/strong pair it was trained on:
   every result carries a “TOY artifact — not real ML evidence” warning. In
   real mode it is rejected.
 
-The current local `.env` selects the real 600-outcome
-`router_qwen_pro_600.joblib` artifact. The default Hybrid pair is therefore
-local Qwen 2.5 1.5B → remote DeepSeek V4 Pro, which shows a green exact-pair
-note when **Learned** is selected. The two-Fireworks pair remains available
-with the heuristic until a separate artifact is collected for that pair.
+The current local `.env` selects the historical 600-outcome
+`router_qwen_pro_600.joblib` artifact, trained on Qwen → DeepSeek V4 Pro.
+The current live defaults use gpt-oss-120b instead, so **Learned** correctly
+shows a pair-mismatch warning and real learned runs are blocked until a new
+artifact is trained. Use **Heuristic** for the live pair.
 
 ### Current live-demo recommendation
 
-Use **Hybrid → Local + remote → Learned** with Qwen 2.5 1.5B and DeepSeek V4
-Pro. The older `accounts/fireworks/models/deepseek-v4-flash` deployment has
-returned `404 NOT_FOUND` for this Fireworks account, so do not rely on the
-two-remote pair in a presentation until its replacement model is verified
-and, for learned routing, separately trained. Remote-only intentionally has
-no local fallback.
+Use **Hybrid → Local + remote → Heuristic** or **Remote → gpt-oss-120b**.
+Both old DeepSeek V4 model IDs returned `404 NOT_FOUND` for this account. The
+replacement IDs appeared in the account's read-only inference model list on
+2026-10-06, but generation has not yet been verified. The existing learned
+artifact belongs to the historical Qwen → DeepSeek V4 Pro research pair and
+cannot be used for the new live pair without retraining. Remote-only
+intentionally has no local fallback.
 
-This page is currently a **single-turn routing demo**, not a ChatGPT-style
-conversation product. It does not persist chats or send prior messages as
-context. Chat memory needs ordinary message storage plus bounded history (or
-summarisation); it does not require RAG.
+The routing demo remains single-turn. The linked chat page stores multi-turn
+conversations and reuses the same mode-specific execution. Streaming and
+stop-generation are not implemented yet.
 
 ## Safety rails
 
@@ -110,6 +126,11 @@ webui/service.py       framework-free core: config validation, plain-language
                        describe(), execute() for all three modes
 webui/server.py        stdlib http.server wrapper + CLI (--port, --real)
 webui/static/index.html  the entire front-end (no build step, no CDN)
+webui/static/chat.html   persistent chat page
+chat/                    SQLite storage and chat execution
+api.py                   optional FastAPI endpoints
 tests/test_webui.py    29 offline tests: mode isolation, billing honesty,
                        pair/artifact handling, HTTP round-trips
+tests/test_chat.py      persistent chat, mode isolation, failure handling,
+                       FastAPI and stdlib HTTP tests
 ```

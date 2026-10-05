@@ -15,7 +15,7 @@ from unittest import mock
 
 from tests.util import trained_once
 
-from config import settings
+from config import Settings, settings
 from remote_client import RemoteError
 from routing.artifact import save_artifact
 from webui import service
@@ -56,6 +56,8 @@ class TestConfigValidation(SettingsCase):
         cfg, errors = config_from_payload({})
         self.assertEqual(errors, [])
         self.assertEqual(cfg.mode, "hybrid")
+        self.assertEqual(cfg.hybrid_pair, "local_remote")
+        self.assertEqual(Settings().tier_mode, "local_remote")
         self.assertTrue(cfg.mock)
 
     def test_bad_enum_values_rejected(self):
@@ -73,19 +75,19 @@ class TestConfigValidation(SettingsCase):
         self.assertTrue(any("confidence_threshold" in e for e in errors))
 
     def test_allowed_models_rejects_unlisted_model_no_substitution(self):
-        settings.allowed_models = "accounts/fireworks/models/deepseek-v4-pro"
+        settings.allowed_models = "accounts/fireworks/models/gpt-oss-120b"
         cfg, errors = config_from_payload(
             {"mode": "hybrid", "hybrid_pair": "remote_pair"}
         )
-        # default cheap model (flash) is not in the allow-list
+        # default cheap model is not in the allow-list
         self.assertTrue(any("cheap_model" in e for e in errors))
         # the config still carries the USER's model — nothing substituted
         self.assertEqual(
-            cfg.cheap_model, "accounts/fireworks/models/deepseek-v4-flash"
+            cfg.cheap_model, "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
         )
 
     def test_allowed_models_ignores_models_the_mode_never_uses(self):
-        settings.allowed_models = "accounts/fireworks/models/deepseek-v4-pro"
+        settings.allowed_models = "accounts/fireworks/models/gpt-oss-120b"
         _, errors = config_from_payload({"mode": "local_only"})
         self.assertEqual(errors, [])
         _, errors = config_from_payload(

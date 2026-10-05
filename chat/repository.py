@@ -258,6 +258,48 @@ def add_message(
         conn.close()
 
 
+def add_turn(
+    conversation_id: int,
+    user_content: str,
+    assistant_content: str,
+    route: Optional[str] = None,
+    model_name: Optional[str] = None,
+    latency_s: Optional[float] = None,
+    estimated_cost_usd: Optional[float] = None,
+) -> tuple[Message, Message]:
+    """Save a completed turn in one transaction, or save neither message."""
+    conn = get_connection()
+    try:
+        if conn.execute(
+            "SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)
+        ).fetchone() is None:
+            raise ValueError(f"Conversation with id {conversation_id} does not exist")
+
+        user_id = conn.execute(
+            "INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', ?)",
+            (conversation_id, user_content),
+        ).lastrowid
+        assistant_id = conn.execute(
+            """INSERT INTO messages
+               (conversation_id, role, content, route, model_name, latency_s, estimated_cost_usd)
+               VALUES (?, 'assistant', ?, ?, ?, ?, ?)""",
+            (conversation_id, assistant_content, route, model_name, latency_s, estimated_cost_usd),
+        ).lastrowid
+        conn.execute(
+            "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (conversation_id,),
+        )
+        user_row = conn.execute("SELECT * FROM messages WHERE id = ?", (user_id,)).fetchone()
+        assistant_row = conn.execute("SELECT * FROM messages WHERE id = ?", (assistant_id,)).fetchone()
+        conn.commit()
+        return Message(**dict(user_row)), Message(**dict(assistant_row))
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def list_messages(conversation_id: int) -> List[Message]:
     conn = get_connection()
 

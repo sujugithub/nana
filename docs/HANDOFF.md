@@ -2,7 +2,7 @@
 
 Point a new session (or a new teammate) at this file. It says what exists,
 what the measured evidence actually supports, what is safe to run, and what
-to do next. Last updated **2026-08-23**.
+to do next. Last updated **2026-10-02**.
 
 For the earlier competition-era handoff see
 [`history/HANDOFF.md`](history/HANDOFF.md)
@@ -17,7 +17,7 @@ with a pre-router deciding per prompt, plus a post-generation cascade that
 escalates bad cheap answers. Both the heuristic (keyword) router and a
 **learned, calibrated router trained on real observed outcomes** are
 implemented, along with a full offline evaluator, a reproducible training
-pipeline, a browser demo UI, and 147 deterministic offline tests. A **real
+pipeline, a browser demo UI with persistent chat, and 156 deterministic offline tests. A **real
 600-outcome pilot** (Qwen 2.5 1.5B local → DeepSeek V4 Pro) has been
 collected and evaluated. The learned router is **promising but not yet
 statistically conclusive** — see §3 before making any claim about it.
@@ -27,9 +27,10 @@ Canonical public repository: [github.com/sujugithub/nana](https://github.com/suj
 ## 1. What runs, and how
 
 ```bash
-make test                      # 147 offline tests, no network, no cost
+make test                      # 156 offline tests, no network, no cost
 make ui                        # browser demo, mock-only, 127.0.0.1:8642
 make ui-real                   # permit real backends; calls may bill Fireworks
+make api                       # FastAPI chat backend, mock-only, 127.0.0.1:8643
 python3 main.py --tasks tasks/sample_tasks.json --mock    # batch CLI, mock
 python3 scripts/banana.py                                  # interactive CLI
 ```
@@ -38,18 +39,18 @@ Two orthogonal switches drive everything:
 
 | Switch | Values | Meaning |
 | --- | --- | --- |
-| `TIER_MODE` | `local_remote` · `remote_pair` | what the **cheap tier** is: local Qwen, or Fireworks Flash |
+| `TIER_MODE` | `local_remote` · `remote_pair` | what the **cheap tier** is: local Qwen, or Fireworks Nemotron Lightning |
 | `ROUTER_MODE` | `heuristic` · `learned` · `auto` | who makes the **pre-route decision** |
 
-The strong tier is always Fireworks (DeepSeek V4 Pro by default). Routes are
+The strong tier is always Fireworks (gpt-oss-120b by default). Routes are
 named `cheap`/`strong` — policy tiers, not hosting. **Provider is recorded
 per completion** (`local` vs `fireworks`) and billing is derived from that,
 never inferred from the route name. In `remote_pair`, *both* tiers bill.
 
-For a live presentation use `local_remote` + `learned`. The older
-`accounts/fireworks/models/deepseek-v4-flash` deployment has returned
-Fireworks `404 NOT_FOUND` for this account, so the current `remote_pair`
-default is not a dependable live path until an accessible replacement is
+For a live presentation use `local_remote` + `heuristic` until a new learned
+artifact is trained for the current pair. Both older DeepSeek V4 model IDs
+returned Fireworks `404 NOT_FOUND` for this account. The replacement model
+IDs were listed by the account on 2026-10-06 but generation is not yet
 verified. `make ui-real` itself makes no model request; spending begins only
 when a real Fireworks-backed run is submitted.
 
@@ -218,9 +219,9 @@ must run the training command above before selecting Learned in the UI.
 - Cost rates in `config.py` are documented assumptions, not live pricing.
 - The demo server serialises requests (one settings singleton, one lock) —
   fine for a presentation, not for concurrent users.
-- The browser is a single-turn routing demo. It has no conversation database,
-  multi-turn context, history, streaming or stop-generation yet. Those need a
-  normal chat persistence/API layer; RAG is not required.
+- The browser offers both a single-turn routing demo and SQLite-backed chat
+  with bounded multi-turn context and conversation history/search. Streaming
+  and stop-generation remain unimplemented; RAG is not required.
 - Docker is optional and is not the recommended local-Mac path: Docker
   Desktop cannot expose Apple Metal acceleration to Qwen. Keep it for
   reproducible server/evaluator deployment if needed.
