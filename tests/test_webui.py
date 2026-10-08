@@ -361,6 +361,12 @@ class TestHttpFlow(SettingsCase):
         self.assertIn("banana", body)
         self.assertIn("Fully local", body)
 
+    def test_welcome_served(self):
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/welcome") as res:
+            body = res.read().decode()
+        self.assertIn("Try Nana", body)
+        self.assertIn("How it works", body)
+
     def test_run_mock_hybrid_round_trip(self):
         status, result = self._post("/api/run", {
             "config": {"mode": "hybrid", "hybrid_pair": "remote_pair",

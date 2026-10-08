@@ -220,6 +220,8 @@ class DemoHandler(BaseHTTPRequestHandler):
             self._send_static("chat.html", "text/html; charset=utf-8")
         elif path == "/workspace":
             self._send_static("workspace.html", "text/html; charset=utf-8")
+        elif path == "/welcome":
+            self._send_static("welcome.html", "text/html; charset=utf-8")
         elif path == "/api/config":
             payload = service.frontend_config()
             payload["real_allowed"] = self.server.allow_real
