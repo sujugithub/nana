@@ -1,4 +1,9 @@
-# banana — Hybrid Token-Efficient Routing Agent
+# Nana — Hybrid Token-Efficient Routing Agent
+
+Nana's native water chat and workspace run on port 8642. On the owner's Mac,
+connect the T7 and run `.venv/bin/python scripts/start_workspace.py --real`.
+See [handoff.md](handoff.md) for the current application state and next steps,
+and [workspace setup](docs/WORKSPACE.md) for installation and connections.
 
 A learned routing layer that decides, **per request**, whether the configured
 cheap tier is likely to be adequate or the task needs the strong tier. It has
@@ -174,7 +179,7 @@ For the live demo, prefer **Hybrid → Local + remote → Heuristic**, or
 **Remote → gpt-oss-120b**. The older `deepseek-v4-flash` and
 `deepseek-v4-pro` deployments both returned Fireworks `404 NOT_FOUND` for this
 account. The current model IDs appeared in a read-only account model list on
-2026-10-06, but generation is not yet verified. Starting
+2026-10-06, and real gpt-oss-120b replies were verified on 2026-10-08. Starting
 `make ui-real` enables real backends but spends nothing by itself—only an
 actual Fireworks request is billable.
 

@@ -7,9 +7,11 @@ DB_PATH = Path(os.environ.get("NANA_CHAT_DB", Path(__file__).resolve().parents[1
 
 
 def get_connection():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    from workspace.store import USER, home
+    path = DB_PATH if USER.get() == "local" else home() / "chat.db"
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn

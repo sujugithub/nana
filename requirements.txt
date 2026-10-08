@@ -4,6 +4,7 @@
 # (test_harness.py) runs on stdlib alone, anywhere.
 
 requests>=2.31
+certifi>=2024.7.4
 
 # Learned pre-router (routing/, evaluation/, tests/): training, calibration,
 # artifact serialisation. Heuristic mode (ROUTER_MODE=heuristic, the default)
@@ -24,3 +25,7 @@ torch>=2.2
 # autoawq              # AWQ pre-quantized checkpoints
 fastapi>=0.115
 uvicorn>=0.30
+
+# Optional isolated browser tools (install Chromium once via
+# python -m playwright install chromium). Chat/routing do not import this.
+playwright>=1.58

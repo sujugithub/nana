@@ -62,6 +62,7 @@ class DemoConfig:
     hybrid_pair: str = "local_remote"
     router_kind: str = "heuristic"
     local_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    local_backend: str = "transformers"
     cheap_model: str = "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
     strong_model: str = "accounts/fireworks/models/gpt-oss-120b"
     remote_model: str = "accounts/fireworks/models/gpt-oss-120b"  # remote_only
@@ -84,6 +85,9 @@ def config_from_payload(payload: Dict[str, Any]) -> Tuple[DemoConfig, List[str]]
     cfg.hybrid_pair = _str("hybrid_pair", cfg.hybrid_pair).lower()
     cfg.router_kind = _str("router_kind", cfg.router_kind).lower()
     cfg.local_model = _str("local_model", cfg.local_model)
+    cfg.local_backend = _str("local_backend", settings.local_backend)
+    if cfg.local_backend not in {"transformers", "ollama"}:
+        errors.append("local_backend must be transformers or ollama")
     cfg.cheap_model = _str("cheap_model", cfg.cheap_model)
     cfg.strong_model = _str("strong_model", cfg.strong_model)
     cfg.remote_model = _str("remote_model", cfg.remote_model)
@@ -344,6 +348,7 @@ _SETTINGS_FIELDS = (
     "tier_mode",
     "router_mode",
     "local_model_name",
+    "local_backend",
     "cheap_model_name",
     "strong_model_name",
     "remote_model_name",
@@ -360,10 +365,14 @@ def _session(cfg: DemoConfig):
     with _EXEC_LOCK:
         saved = {f: getattr(settings, f) for f in _SETTINGS_FIELDS}
         try:
+            from generation_stream import CURRENT
+            if CURRENT.get() is not None:
+                CURRENT.get().check()
             settings.mock_mode = cfg.mock
             settings.tier_mode = cfg.hybrid_pair
             settings.router_mode = cfg.router_kind
             settings.local_model_name = cfg.local_model
+            settings.local_backend = cfg.local_backend
             settings.cheap_model_name = cfg.cheap_model
             settings.strong_model_name = cfg.strong_model
             settings.remote_model_name = cfg.strong_model

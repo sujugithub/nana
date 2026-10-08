@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Sign in · Nana</title>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(120deg, #dfe8ff, #dad7f4);
+      font: 16px system-ui;
+      color: #1c2437;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    main {
+      padding: 40px;
+      border: 1px solid white;
+      background: #ffffffb0;
+      border-radius: 28px;
+      width: min(340px, 80vw);
+    }
+    h1 {
+      font: 48px Georgia;
+      margin: 0;
+    }
+    input,
+    button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 13px;
+      margin-top: 12px;
+      border: 1px solid #bbc3dc;
+      border-radius: 12px;
+      font: inherit;
+    }
+    button {
+      background: #202c47;
+      color: white;
+      cursor: pointer;
+    }
+    p {
+      color: #66708a;
+    }
+    #error {
+      color: #963e4e;
+    }
+  </style>
+  <main>
+    <h1>Nana</h1>
+    <p id="caption">Sign in to your workspace.</p>
+    <form id="form">
+      <input
+        id="username"
+        placeholder="Username"
+        autocomplete="username"
+        required
+      /><input
+        id="password"
+        type="password"
+        placeholder="Password"
+        autocomplete="current-password"
+        required
+      /><input
+        id="code"
+        placeholder="Authenticator code, if enabled"
+        inputmode="numeric"
+      /><button id="submit">Sign in</button>
+    </form>
+    <p id="error" role="alert"></p>
+  </main>
+  <script>
+    let enabled = true;
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((s) => {
+        enabled = s.enabled;
+        if (!enabled) {
+          document.querySelector("#caption").textContent =
+            "Create the owner account. Your existing chats will stay in this account.";
+          document.querySelector("#submit").textContent = "Create account";
+          document.querySelector("#password").minLength = 10;
+        }
+      });
+    document.querySelector("#form").onsubmit = async (e) => {
+      e.preventDefault();
+      let p = {
+        username: document.querySelector("#username").value,
+        password: document.querySelector("#password").value,
+        code: document.querySelector("#code").value,
+      };
+      try {
+        if (!enabled) {
+          let r = await fetch("/api/auth/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(p),
+          });
+          let d = await r.json();
+          if (!r.ok) throw Error(d.error);
+          enabled = true;
+        }
+        let r = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(p),
+        });
+        let d = await r.json();
+        if (!r.ok) throw Error(d.error);
+        location.href = "/workspace";
+      } catch (e) {
+        document.querySelector("#error").textContent = e.message;
+      }
+    };
+  </script>
+</html>
