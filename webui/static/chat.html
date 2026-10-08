@@ -3,76 +3,483 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nana — chat</title>
+<title>Nana chat</title>
 <style>
-  :root { color-scheme: dark; --bg:#14161a; --panel:#1d2026; --panel2:#242831; --line:#353a44; --text:#e8e9eb; --dim:#a4a9b2; --yellow:#f5c518; --green:#3fbf6f; --orange:#f08c3a; }
+  :root {
+    color-scheme: dark;
+    --bg:#0b0b0b; --ink:#f2ede5; --dim:#a8a39b; --faint:#716d67;
+    --line:rgba(242,237,229,.10); --warm:#e3ae7b;
+    --serif:"New York",ui-serif,"Iowan Old Style","Palatino Linotype",Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --side:284px;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,sans-serif; }
-  button,select,input,textarea { font:inherit; }
-  button { border:0; border-radius:7px; background:var(--yellow); color:#171717; padding:9px 14px; font-weight:700; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
-  a { color:var(--yellow); }
-  header { padding:14px 20px; display:flex; align-items:center; gap:16px; border-bottom:1px solid var(--line); }
-  header h1 { margin:0; font-size:20px; }
-  header a { margin-left:auto; font-size:13px; }
-  .layout { display:grid; grid-template-columns:260px minmax(0,1fr); min-height:calc(100vh - 64px); }
-  aside { padding:18px; border-right:1px solid var(--line); }
-  aside input { width:100%; margin:12px 0; }
-  #conversations { display:grid; gap:6px; }
-  .conversation { width:100%; text-align:left; background:var(--panel); color:var(--text); border:1px solid var(--line); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .conversation.active { border-color:var(--yellow); }
-  main { max-width:1000px; width:100%; margin:0 auto; padding:20px; display:flex; flex-direction:column; min-height:calc(100vh - 64px); }
-  .controls { display:flex; align-items:end; flex-wrap:wrap; gap:10px; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
-  label { display:grid; gap:4px; font-size:12px; color:var(--dim); }
-  label.inline { display:flex; align-items:center; gap:6px; font-size:13px; }
-  select,input,textarea { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; }
-  #model { min-width:230px; max-width:100%; }
-  .hint { color:var(--dim); font-size:12px; }
-  #status { min-height:24px; color:var(--orange); font-size:13px; }
-  #messages { flex:1; display:flex; flex-direction:column; gap:12px; padding:20px 0; }
-  .message { padding:12px 14px; border:1px solid var(--line); border-radius:10px; max-width:85%; white-space:pre-wrap; overflow-wrap:anywhere; }
-  .message.user { align-self:flex-end; background:#332d18; }
-  .message.assistant { align-self:flex-start; background:var(--panel); }
-  .message small { display:block; color:var(--dim); margin-top:8px; }
-  .composer { display:flex; align-items:end; gap:10px; }
-  textarea { flex:1; resize:vertical; min-height:70px; max-height:240px; }
-  @media(max-width:720px) { .layout { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--line); } main { min-height:70vh; } }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--ink); font:16px/1.6 var(--sans); -webkit-font-smoothing:antialiased; min-height:100vh; }
+  button,select,input,textarea { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; }
+  :focus-visible { outline:1.5px solid var(--ink); outline-offset:2px; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  .mono { font:500 11px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; }
+  svg { fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* Glyph band: only on the empty state, where nothing has to be read over it. */
+  #field { position:fixed; left:0; right:0; bottom:0; width:100%; height:40vh; z-index:0; pointer-events:none; transition:opacity .5s;
+    -webkit-mask-image:linear-gradient(to top,#000 55%,transparent 92%); mask-image:linear-gradient(to top,#000 55%,transparent 92%); }
+  body.has-chat #field { opacity:0; }
+
+  /* ── Glass ─────────────────────────────────────────────────────────────
+     The base (blur + tint + rim) works in every browser. In Chromium the
+     script replaces the blur with a per-element SVG lens whose displacement
+     map is computed from the bezel profile with Snell's law. */
+  .glass { position:relative; isolation:isolate; background:rgba(18,18,18,.5);
+    -webkit-backdrop-filter:blur(24px) saturate(1.4); backdrop-filter:blur(24px) saturate(1.4);
+    box-shadow:0 24px 60px -22px rgba(0,0,0,.85), 0 2px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
+  .glass::before { content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; pointer-events:none; z-index:2;
+    background:radial-gradient(190px circle at var(--mx,-999px) var(--my,-999px), rgba(255,255,255,.7), transparent 70%),
+      linear-gradient(150deg, rgba(255,255,255,.42), rgba(255,255,255,.07) 24%, rgba(255,255,255,.03) 60%, rgba(255,255,255,.18));
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; }
+  .glass::after { content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
+    background:radial-gradient(280px circle at var(--mx,-999px) var(--my,-999px), rgba(255,255,255,.055), transparent 65%); }
+  .glass > * { position:relative; z-index:1; }
+
+  .pill { border:0; border-radius:999px; background:var(--ink); color:#151413; padding:13px 18px; display:inline-flex; align-items:center; justify-content:space-between; gap:10px; white-space:nowrap; }
+  .pill:disabled { opacity:.5; cursor:not-allowed; }
+  .pill svg, .icon svg { width:16px; height:16px; flex:none; }
+  .icon { width:34px; height:34px; flex:none; border:0; border-radius:50%; background:none; color:var(--dim); display:grid; place-items:center; transition:color .2s, background .2s; }
+  .icon:hover { color:var(--ink); background:rgba(255,255,255,.08); }
+  .text { background:none; border:0; padding:10px 8px; color:var(--dim); }
+  .text:hover { color:var(--ink); }
+  .text.danger { color:var(--warm); }
+
+  /* ── Sidebar ───────────────────────────────────────────────────────── */
+  #sidebar { position:fixed; top:12px; bottom:12px; left:12px; width:260px; z-index:30; border-radius:28px; padding:18px 14px 12px; display:flex; flex-direction:column; gap:14px; }
+  .brand { display:flex; align-items:center; gap:10px; padding:2px 8px 4px; font:400 25px/1 var(--serif); letter-spacing:-.01em; text-decoration:none; }
+  .brand canvas { width:24px; height:24px; }
+  #new { width:100%; }
+  .search { width:100%; background:rgba(0,0,0,.3); border:0; border-radius:999px; padding:10px 15px; font-size:14px; box-shadow:inset 0 0 0 1px var(--line); }
+  .search::placeholder, textarea::placeholder { color:var(--faint); }
+  .search:focus { outline:0; box-shadow:inset 0 0 0 1px rgba(242,237,229,.4); }
+  .label { color:var(--faint); padding:6px 8px 0; }
+  #convWrap { position:relative; flex:1; min-height:0; overflow-y:auto; margin:-4px -4px 0; }
+  #conversations { position:relative; z-index:1; display:grid; padding:0 4px; }
+  .conversation { height:40px; width:100%; text-align:left; background:none; border:0; border-radius:13px; padding:0 13px; color:var(--dim);
+    font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:color .2s; }
+  .conversation:hover, .conversation.active { color:var(--ink); }
+  #indicator { position:absolute; left:4px; right:4px; top:0; height:40px; border-radius:13px; pointer-events:none; opacity:0; will-change:transform;
+    background:rgba(242,237,229,.09); box-shadow:inset 0 1px 0 rgba(255,255,255,.10), inset 0 0 0 1px rgba(255,255,255,.04); }
+  .empty-list { color:var(--faint); font-size:13.5px; padding:8px 13px; }
+  .side-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 8px 4px; border-top:1px solid var(--line); color:var(--dim); }
+  .side-foot a { text-decoration:none; padding:6px 0; }
+  .side-foot a:hover { color:var(--ink); }
+  .state { display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
+  .state i { width:6px; height:6px; border-radius:50%; background:var(--faint); }
+  .state.live { color:var(--warm); } .state.live i { background:var(--warm); }
+  #scrim { display:none; }
+
+  /* ── Floating title bar ────────────────────────────────────────────── */
+  .top { position:fixed; top:12px; left:var(--side); right:0; z-index:25; display:flex; justify-content:center; padding:0 16px; pointer-events:none; }
+  #bar { pointer-events:auto; height:46px; border-radius:23px; display:none; align-items:center; padding:0 6px 0 18px; min-width:0; max-width:min(620px,100%); }
+  body.has-chat #bar { display:flex; }
+  #barMain, #barConfirm { display:flex; align-items:center; gap:2px; min-width:0; }
+  #barConfirm, #bar.confirm #barMain { display:none; }
+  #bar.confirm #barConfirm { display:flex; }
+  #barConfirm span { font-size:14.5px; padding-right:8px; white-space:nowrap; }
+  #title, #bar input { font:400 18px/1.3 var(--serif); letter-spacing:-.005em; }
+  #title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:10px; }
+  #bar input { field-sizing:content; min-width:9ch; max-width:100%; width:22ch; background:none; border:0; padding:0; margin-right:10px; }
+  #bar input:focus { outline:0; }
+  #menu { display:none; margin-right:6px; }
+
+  /* ── Conversation ──────────────────────────────────────────────────── */
+  main { position:relative; z-index:10; margin-left:var(--side); padding:94px 24px 210px; }
+  .col { max-width:720px; margin:0 auto; }
+  .hero { padding-top:7vh; }
+  .eyebrow { display:flex; align-items:center; gap:10px; color:var(--dim); margin-bottom:26px; }
+  .eyebrow i { width:7px; height:7px; border-radius:50%; background:var(--ink); }
+  .hero h1 { margin:0 0 22px; font:400 clamp(40px,5.6vw,74px)/1.03 var(--serif); letter-spacing:-.025em; }
+  .hero p { margin:0 0 30px; max-width:31em; font-size:18.5px; line-height:1.5; color:var(--dim); }
+  .hero p b { font-weight:400; color:var(--ink); }
+  .tries { display:flex; flex-wrap:wrap; gap:8px; }
+  .try { border:0; border-radius:999px; padding:9px 15px; font-size:14px; background:rgba(11,11,11,.7); color:var(--dim); box-shadow:inset 0 0 0 1px var(--line); transition:color .2s, box-shadow .2s; }
+  .try:hover { color:var(--ink); box-shadow:inset 0 0 0 1px rgba(242,237,229,.32); }
+  .quiet { margin:9vh 0 0; color:var(--faint); font:400 28px/1.2 var(--serif); letter-spacing:-.01em; }
+
+  #messages { display:flex; flex-direction:column; gap:28px; }
+  .msg { display:flex; flex-direction:column; }
+  .msg.user { align-items:flex-end; }
+  .bubble { max-width:min(80%,540px); padding:11px 17px; border-radius:21px 21px 7px 21px; white-space:pre-wrap; overflow-wrap:anywhere;
+    background:rgba(242,237,229,.085); box-shadow:inset 0 0 0 1px rgba(255,255,255,.045), inset 0 1px 0 rgba(255,255,255,.06); }
+  .msg.assistant .body { white-space:pre-wrap; overflow-wrap:anywhere; font-size:16.5px; line-height:1.65; }
+  .meta { margin-top:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:6px 14px; line-height:1.5; }
+  .meta .mock { color:var(--warm); }
+  .thinking { flex-direction:row; align-items:center; gap:14px; }
+  .thinking canvas { width:38px; height:38px; flex:none; }
+  .thinking b { display:block; font-weight:500; font-size:15.5px; line-height:1.3; }
+  .thinking span { display:block; font-size:13px; color:var(--dim); line-height:1.4; }
+
+  /* ── Composer ──────────────────────────────────────────────────────── */
+  .dock { position:fixed; left:var(--side); right:0; bottom:0; z-index:20; padding:0 24px 10px; pointer-events:none; }
+  .dock::before { content:""; position:absolute; left:0; right:0; top:36px; bottom:0; background:linear-gradient(to bottom, transparent, var(--bg) 72px); }
+  #composer { pointer-events:auto; max-width:720px; margin:0 auto; border-radius:28px; padding:6px 8px 8px; background:rgba(16,16,16,.46); }
+  textarea { display:block; width:100%; background:transparent; border:0; resize:none; padding:13px 14px 9px; min-height:50px; max-height:210px; font-size:16.5px; line-height:1.5; }
+  textarea:focus { outline:0; }
+  .row { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding-left:2px; }
+  .row .grow { flex:1; }
+
+  .seg { position:relative; display:inline-flex; padding:3px; border-radius:999px; background:rgba(0,0,0,.32); box-shadow:inset 0 0 0 1px var(--line);
+    user-select:none; -webkit-user-select:none; touch-action:pan-y; cursor:pointer; }
+  .seg label { position:relative; z-index:1; padding:11px 13px; border-radius:999px; color:var(--dim); cursor:pointer; transition:color .2s; }
+  .seg input { position:absolute; opacity:0; pointer-events:none; }
+  .seg label:has(input:checked) { color:var(--ink); }
+  .seg:has(input:focus-visible) { outline:1.5px solid var(--ink); outline-offset:2px; }
+  #thumb { position:absolute; top:3px; bottom:3px; left:0; width:10px; border-radius:999px; will-change:transform; transition:background .25s, box-shadow .25s;
+    background:linear-gradient(180deg, rgba(255,255,255,.19), rgba(255,255,255,.08));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.34), inset 0 0 0 1px rgba(255,255,255,.06), 0 3px 10px rgba(0,0,0,.45); }
+  .seg.lifted #thumb { background:linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.12));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), inset 0 0 0 1px rgba(255,255,255,.12), 0 8px 22px rgba(0,0,0,.6); }
+
+  .select { position:relative; display:inline-flex; align-items:center; min-width:0; color:var(--dim); }
+  .select:hover { color:var(--ink); }
+  .select select { appearance:none; -webkit-appearance:none; background:none; border:0; border-radius:999px; padding:13px 26px 13px 10px; field-sizing:content; max-width:210px; text-overflow:ellipsis; cursor:pointer; }
+  .select::after { content:""; position:absolute; right:11px; top:50%; width:5px; height:5px; margin-top:-4px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; }
+  option { background:#161616; color:var(--ink); }
+
+  .switch { display:inline-flex; align-items:center; gap:9px; padding:8px 6px; color:var(--dim); cursor:pointer; }
+  .switch input { position:absolute; opacity:0; pointer-events:none; }
+  .track { position:relative; width:40px; height:24px; border-radius:999px; background:rgba(0,0,0,.4); box-shadow:inset 0 0 0 1px var(--line); transition:background .25s; }
+  .switch input:checked + .track { background:rgba(242,237,229,.34); }
+  .switch input:focus-visible + .track { outline:1.5px solid var(--ink); outline-offset:2px; }
+  .knob { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:999px; will-change:transform;
+    background:linear-gradient(180deg,#fffdf8,#d8d2c8); box-shadow:0 2px 5px rgba(0,0,0,.5), inset 0 1px 0 #fff; }
+  .locked { display:none; padding:8px 6px; color:var(--dim); }
+  .mock-only .switch { display:none; } .mock-only .locked { display:inline-flex; }
+
+  #send { width:40px; height:40px; flex:none; border:0; border-radius:50%; background:var(--ink); color:#151413; display:grid; place-items:center; transition:opacity .2s; }
+  #send svg { width:17px; height:17px; stroke-width:1.8; }
+  #send.idle { opacity:.4; } #send:disabled { opacity:.4; cursor:not-allowed; }
+
+  .hint { position:relative; max-width:720px; min-height:20px; margin:10px auto 0; padding:0 8px; text-align:center; font-size:12.5px; line-height:1.55; color:var(--faint); }
+  #status { color:var(--warm); }
+  .hint.has-status #replyHint { display:none; }
+
+  @media (max-width:820px) {
+    :root { --side:0px; }
+    #sidebar { width:min(300px,84vw); z-index:50; background:rgba(14,14,14,.78); transform:translateX(calc(-100% - 16px)); transition:transform .4s cubic-bezier(.2,.85,.2,1); }
+    #sidebar.open { transform:none; }
+    #scrim { display:block; position:fixed; inset:0; z-index:45; background:rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .3s; }
+    #scrim.open { opacity:1; pointer-events:auto; }
+    .top { justify-content:flex-start; padding:0 10px; }
+    #bar, body.has-chat #bar { display:flex; padding-left:6px; }
+    body:not(.has-chat) #bar { padding-right:20px; }
+    #barConfirm { padding-left:12px; }
+    body:not(.has-chat) #rename, body:not(.has-chat) #delete { display:none; }
+    #menu { display:grid; }
+    main { padding:86px 16px 240px; }
+    .dock { padding:0 10px 8px; }
+    .select select { max-width:136px; }
+  }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 </style>
 </head>
 <body>
-<header><h1>🍌 Nana chat</h1><span class="hint">Conversations saved on this machine</span><a href="/">Routing demo</a></header>
-<div class="layout">
-  <aside>
-    <button id="new">New chat</button>
-    <input id="search" type="search" placeholder="Search chats" aria-label="Search chats">
-    <div id="conversations"></div>
-  </aside>
-  <main>
-    <div class="controls">
-      <label>Mode<select id="mode"><option value="hybrid">Hybrid</option><option value="remote">Remote only</option><option value="local">Fully local</option></select></label>
-      <label>Model<select id="model"></select></label>
-      <label class="inline"><input id="mock" type="checkbox" checked> Preview / mock (canned replies)</label>
-      <button id="rename" class="secondary" disabled>Rename</button>
-      <button id="delete" class="secondary" disabled>Delete</button>
-      <div class="hint" id="modeHint" style="flex-basis:100%"></div>
-      <div class="hint" id="replyHint" style="flex-basis:100%"></div>
+<canvas id="field" aria-hidden="true"></canvas>
+<svg id="lenses" width="0" height="0" style="position:absolute" aria-hidden="true"></svg>
+
+<aside id="sidebar" class="glass lit" aria-label="Conversations">
+  <a class="brand" href="/chat" aria-label="Nana chat"><canvas id="mark" aria-hidden="true"></canvas>Nana</a>
+  <button class="pill mono" id="new" type="button">New chat<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg></button>
+  <input class="search" id="search" type="search" placeholder="Search chats" aria-label="Search chats" autocomplete="off">
+  <div class="label mono">Saved on this machine</div>
+  <div id="convWrap"><div id="indicator"></div><div id="conversations"></div></div>
+  <div class="side-foot mono">
+    <span class="state" id="serverState"><i></i><span>Connecting</span></span>
+    <a href="/">Routing demo</a>
+  </div>
+</aside>
+<div id="scrim"></div>
+
+<div class="top">
+  <div id="bar" class="glass lit" data-lens="16,20,8">
+    <div id="barMain">
+      <button class="icon" id="menu" type="button" aria-label="Open chat list" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.2h11M2.5 10.8h11"/></svg></button>
+      <span id="title">Nana</span>
+      <button class="icon" id="rename" type="button" aria-label="Rename chat" title="Rename"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.2 2.4l2.4 2.4L5.5 12.9l-3 .6.6-3z"/></svg></button>
+      <button class="icon" id="delete" type="button" aria-label="Delete chat" title="Delete"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.8 4.5h10.4M6.2 4.5V2.9h3.6v1.6M4.2 4.5l.6 8.6h6.4l.6-8.6"/></svg></button>
     </div>
-    <div id="status" role="status"></div>
-    <div id="messages" aria-live="polite"><p class="hint">Choose a chat or create a new one.</p></div>
-    <div class="composer">
-      <textarea id="prompt" maxlength="10000" placeholder="Message Nana…" aria-label="Message"></textarea>
-      <button id="send" disabled>Send</button>
+    <div id="barConfirm">
+      <span>Delete this chat?</span>
+      <button class="text mono" id="cancelDelete" type="button">Cancel</button>
+      <button class="text mono danger" id="confirmDelete" type="button">Delete</button>
     </div>
-  </main>
+  </div>
 </div>
+
+<main><div class="col"><div id="messages" aria-live="polite"></div></div></main>
+
+<div class="dock">
+  <form class="glass lit" id="composer" data-lens="24,30,6" autocomplete="off">
+    <textarea id="prompt" rows="1" maxlength="10000" placeholder="Message Nana" aria-label="Message"></textarea>
+    <div class="row">
+      <div class="seg mono" id="mode" role="radiogroup" aria-label="Mode">
+        <span id="thumb" aria-hidden="true"></span>
+        <label><input type="radio" name="mode" value="hybrid" checked>Hybrid</label>
+        <label><input type="radio" name="mode" value="remote">Remote</label>
+        <label><input type="radio" name="mode" value="local">Local</label>
+      </div>
+      <label class="select"><span class="sr">Model</span><select id="model" class="mono"></select></label>
+      <span class="grow"></span>
+      <label class="switch mono"><input id="mock" type="checkbox" checked><span class="track"><span class="knob" id="knob"></span></span><span>Mock</span></label>
+      <span class="locked mono" title="Start the server with --real to allow real model calls">Mock only</span>
+      <button id="send" class="idle" type="submit" aria-label="Send mock"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.2V3M3.6 7.3 8 2.9l4.4 4.4"/></svg></button>
+    </div>
+  </form>
+  <p class="hint" id="hint"><span id="status" role="status"></span><span id="replyHint"></span></p>
+</div>
+
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const SUGGESTIONS = ["What is the capital of France?", "Prove that the sum of two odd numbers is even.", "Summarise the plot of Hamlet in two sentences."];
 let serverConfig = null;
 let current = null;
 let busy = false;
+let shown = 0;          // messages already on screen, so only new ones animate in
 
+/* ── Spring physics ────────────────────────────────────────────────────
+   Every moving control is a damped spring (F = -k·x - c·v) integrated in
+   small fixed steps, so motion keeps its velocity when retargeted. */
+class Spring {
+  constructor(x, k = 420, c = 32) { this.x = x; this.to = x; this.v = 0; this.k = k; this.c = c; }
+  step(dt) {
+    let n = Math.ceil(dt / 0.004); const h = dt / n;
+    while (n--) { this.v += (-this.k * (this.x - this.to) - this.c * this.v) * h; this.x += this.v * h; }
+  }
+  snap(value) { this.x = this.to = value; this.v = 0; }
+  get rest() { return Math.abs(this.v) < 0.02 && Math.abs(this.x - this.to) < 0.002; }
+}
+const running = new Set(); let frame = 0, lastTime = 0;
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.034) || 0.016; lastTime = now;
+  for (const fn of running) if (fn(dt, now) === false) running.delete(fn);
+  frame = running.size ? requestAnimationFrame(loop) : 0;
+}
+function run(fn) { running.add(fn); if (!frame) { lastTime = performance.now(); frame = requestAnimationFrame(loop); } }
+function drive(springs, apply) {
+  if (apply.on) return; apply.on = true;
+  run(dt => {
+    let rest = true;
+    for (const s of springs) { if (REDUCED) s.snap(s.to); else s.step(dt); if (!s.rest) rest = false; }
+    if (rest) for (const s of springs) s.snap(s.to);
+    apply();
+    if (rest) { apply.on = false; return false; }
+  });
+}
+const stretch = (velocity, max) => Math.min(Math.abs(velocity) / 3000, max);
+function pressable(el) {
+  const s = new Spring(1, 700, 30);
+  const apply = () => { el.style.scale = s.x.toFixed(4); };
+  const set = value => { s.to = value; drive([s], apply); };
+  el.addEventListener("pointerdown", () => { if (!el.disabled) set(0.94); });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) el.addEventListener(type, () => set(1));
+}
+function enter(node, delay = 0) {
+  if (REDUCED) return;
+  const s = new Spring(0, 230, 24); s.to = 1; node.style.opacity = 0;
+  const apply = () => { node.style.opacity = Math.min(1, Math.max(0, s.x)).toFixed(3); node.style.translate = `0 ${((1 - s.x) * 18).toFixed(2)}px`; };
+  setTimeout(() => drive([s], apply), delay);
+  setTimeout(() => { if (s.x < 0.99) { s.snap(1); apply(); } }, delay + 1500);   // never leave a message invisible
+}
+
+/* ── Liquid glass lens ─────────────────────────────────────────────────
+   For a pixel at distance d inside the rim, the bezel is a squircle dome.
+   Its slope gives the angle of incidence; Snell's law (n = 1.5) gives the
+   refracted ray; the sideways shift of that ray is the displacement. The
+   result is baked into an SVG displacement map used as backdrop-filter,
+   with a slightly different strength per colour channel (dispersion). */
+const REFRACTS = !!window.chrome || /Chrome\//.test(navigator.userAgent);
+const BEZEL = (() => {
+  const n = 1.5, N = 256, out = new Float32Array(N); let max = 0;
+  for (let i = 0; i < N; i++) {
+    const u = 1 - (i + 0.5) / N, u4 = u ** 4;
+    const height = Math.pow(1 - u4, 0.25), slope = (u ** 3) / Math.pow(1 - u4, 0.75);
+    const incidence = Math.atan(slope * 0.9), refracted = Math.asin(Math.sin(incidence) / n);
+    out[i] = (0.25 + height) * Math.tan(incidence - refracted); max = Math.max(max, out[i]);
+  }
+  for (let i = 0; i < N; i++) out[i] /= max;
+  return out;
+})();
+let lensCount = 0;
+function buildLens(el) {
+  if (!REFRACTS) return;
+  const [bezelPx, depth, blur] = el.dataset.lens.split(",").map(Number);
+  const w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
+  if (w < 4 || h < 4 || el.lensSize === `${w}x${h}`) return;
+  el.lensSize = `${w}x${h}`;
+  const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
+  const bezel = Math.min(bezelPx, w / 2, h / 2), band = Math.ceil(Math.max(bezel, r));
+  const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d"), image = ctx.createImageData(w, h), data = image.data;
+  new Uint32Array(data.buffer).fill(0xff808080);                 // neutral: no displacement
+  for (let y = 0; y < h; y++) {
+    const edgeRow = y < band || y >= h - band;
+    for (let x = 0; x < w; x++) {
+      if (!edgeRow && x === band && w - band > band) x = w - band;   // the interior stays neutral
+      const px = x + 0.5 - w / 2, py = y + 0.5 - h / 2;
+      const qx = Math.abs(px) - (w / 2 - r), qy = Math.abs(py) - (h / 2 - r);
+      let d, nx = 0, ny = 0;
+      if (qx > 0 && qy > 0) { const len = Math.hypot(qx, qy) || 1; d = r - len; nx = qx / len * Math.sign(px); ny = qy / len * Math.sign(py); }
+      else if (qx > qy) { d = r - qx; nx = Math.sign(px); }
+      else { d = r - qy; ny = Math.sign(py); }
+      if (d < 0 || d >= bezel) continue;
+      const m = BEZEL[Math.min(255, Math.floor(d / bezel * 256))], i = (y * w + x) * 4;
+      data[i] = 127.5 - nx * m * 127.5; data[i + 1] = 127.5 - ny * m * 127.5;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  const id = `lens${++lensCount}`, scale = depth * 2, keep = "0 0 0 1 0";
+  const channel = (name, factor, matrix) =>
+    `<feDisplacementMap in="soft" in2="map" scale="${(scale * factor).toFixed(1)}" xChannelSelector="R" yChannelSelector="G" result="d${name}"/>` +
+    `<feColorMatrix in="d${name}" values="${matrix} ${keep}" result="${name}"/>`;
+  const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+  for (const [key, value] of Object.entries({id, x:0, y:0, width:w, height:h, filterUnits:"userSpaceOnUse", primitiveUnits:"userSpaceOnUse", "color-interpolation-filters":"sRGB"})) filter.setAttribute(key, value);
+  filter.innerHTML =
+    `<feImage href="${canvas.toDataURL()}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>` +
+    `<feGaussianBlur in="SourceGraphic" stdDeviation="${blur}" result="soft"/>` +
+    channel("r", 1, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0") + channel("g", 0.96, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0") + channel("b", 0.92, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0") +
+    `<feBlend in="r" in2="g" mode="screen" result="rg"/><feBlend in="rg" in2="b" mode="screen" result="rgb"/>` +
+    `<feColorMatrix in="rgb" type="saturate" values="1.25"/>`;
+  $("lenses").append(filter);
+  el.style.backdropFilter = `url(#${id})`;
+  el.lensNode?.remove(); el.lensNode = filter;
+}
+/* Rebuilt inside the resize observer, i.e. before paint, so a resized pane never shows a stale lens. */
+const lensObserver = new ResizeObserver(entries => { for (const entry of entries) buildLens(entry.target); });
+for (const el of document.querySelectorAll("[data-lens]")) { buildLens(el); lensObserver.observe(el); }
+
+/* The pointer acts as a light: the rim and surface brighten where it is closest. */
+const lit = [...document.querySelectorAll(".glass.lit")]; let pointer = null, lightQueued = false;
+addEventListener("pointermove", event => {
+  pointer = event; if (lightQueued) return; lightQueued = true;
+  requestAnimationFrame(() => {
+    lightQueued = false;
+    for (const el of lit) {
+      const box = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${(pointer.clientX - box.left).toFixed(0)}px`); el.style.setProperty("--my", `${(pointer.clientY - box.top).toFixed(0)}px`);
+    }
+  });
+});
+
+/* ── Thinking orb: a banded sphere with light travelling down it ─────── */
+function orb(canvas, size) {
+  const ratio = Math.min(devicePixelRatio || 1, 2); canvas.width = canvas.height = size * ratio;
+  const ctx = canvas.getContext("2d"), R = size / 2 - 0.5, bands = 7, idle = [1, .78, .56, .4, .28, .2, .14];
+  function draw(time) {
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, size, size);
+    ctx.save(); ctx.translate(size / 2, size / 2); ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.clip();
+    const step = 2 * R / bands, bow = R * 0.2, gap = Math.max(1, size * 0.035);
+    for (let i = 0; i < bands; i++) {
+      const light = time == null ? idle[i] : Math.pow(0.5 + 0.5 * Math.sin((time * 0.0052) - i * 0.8), 3);
+      const shade = Math.round(36 + light * 205);
+      ctx.fillStyle = `rgb(${shade},${Math.round(shade * .985)},${Math.round(shade * .95)})`;
+      const top = -R + i * step, bottom = top + step - gap;
+      ctx.beginPath(); ctx.moveTo(-R, top - bow); ctx.quadraticCurveTo(0, top + bow, R, top - bow);
+      ctx.lineTo(R, bottom - bow); ctx.quadraticCurveTo(0, bottom + bow, -R, bottom - bow); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  draw(null);
+  return { draw, spin() { if (REDUCED) return () => {}; let live = true; run((dt, now) => { if (!live) { draw(null); return false; } draw(now); }); return () => { live = false; }; } };
+}
+const mark = orb($("mark"), 24);
+
+/* ── Glyph band: "/" with clusters of ¢ (cheap tier) and $ (strong tier) ── */
+const field = (() => {
+  const canvas = $("field"), ctx = canvas.getContext("2d"); let w = 0, h = 0, last = 0;
+  function paint(now) {
+    const t = now / 1000; ctx.clearRect(0, 0, w, h); ctx.font = "13px ui-monospace, Menlo, monospace"; ctx.textBaseline = "top";
+    for (let row = 0; row * 19 < h; row++) for (let col = 0; col * 16 < w; col++) {
+      const v = Math.sin(col * .19 + t * .2) + Math.sin(row * .37 - t * .15) + Math.sin((col + row) * .11 + t * .11) + Math.sin(col * .053 - row * .21 + t * .07);
+      if (v < -0.4) continue;
+      const glyph = v > 1.75 ? "$" : v > 1.1 ? "¢" : v > 0.1 ? "/" : "·";
+      ctx.fillStyle = `rgba(242,237,229,${v > 1.75 ? .5 : v > 1.1 ? .32 : v > 0.1 ? .15 : .1})`;
+      ctx.fillText(glyph, col * 16, row * 19);
+    }
+  }
+  function size() { const ratio = Math.min(devicePixelRatio || 1, 2); w = canvas.clientWidth; h = canvas.clientHeight; canvas.width = w * ratio; canvas.height = h * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); paint(performance.now()); }
+  addEventListener("resize", size); size();
+  if (!REDUCED) run((dt, now) => { if (now - last > 140 && !document.body.classList.contains("has-chat")) { last = now; paint(now); } });
+})();
+
+/* ── Sprung controls ───────────────────────────────────────────────── */
+const indicator = { el: $("indicator"), y: new Spring(0, 420, 32), o: new Spring(0, 300, 34) };
+function applyIndicator() {
+  const s = stretch(indicator.y.v, 0.16);
+  indicator.el.style.transform = `translate3d(0,${indicator.y.x.toFixed(2)}px,0) scale(${(1 - s * .25).toFixed(4)},${(1 + s).toFixed(4)})`;
+  indicator.el.style.opacity = Math.max(0, Math.min(1, indicator.o.x)).toFixed(3);
+}
+function moveIndicator() {
+  const active = $("conversations").querySelector(".active");
+  if (!active) indicator.o.to = 0;
+  else { if (indicator.o.to === 0) indicator.y.snap(active.offsetTop); indicator.y.to = active.offsetTop; indicator.o.to = 1; }
+  drive([indicator.y, indicator.o], applyIndicator);
+}
+
+/* Mode selector: the thumb lifts under the finger, follows a drag, and settles on the nearest option. */
+const seg = $("mode"), segLabels = [...seg.querySelectorAll("label")];
+const thumb = { el: $("thumb"), x: new Spring(0, 520, 34), w: new Spring(10, 520, 38), s: new Spring(1, 620, 28), ready: false };
+function applyThumb() {
+  const st = stretch(thumb.x.v, 0.14), s = thumb.s.x;
+  thumb.el.style.width = `${thumb.w.x.toFixed(2)}px`;
+  thumb.el.style.transform = `translate3d(${thumb.x.x.toFixed(2)}px,0,0) scale(${(s * (1 + st)).toFixed(4)},${(s * (1 - st * .35)).toFixed(4)})`;
+}
+function moveThumb() {
+  const label = seg.querySelector("input:checked").parentElement;
+  if (!thumb.ready && label.offsetWidth) { thumb.x.snap(label.offsetLeft); thumb.w.snap(label.offsetWidth); thumb.ready = true; }
+  thumb.x.to = label.offsetLeft; thumb.w.to = label.offsetWidth;
+  drive([thumb.x, thumb.w, thumb.s], applyThumb);
+}
+function labelAt(clientX) {
+  const x = clientX - seg.getBoundingClientRect().left; let best = segLabels[0], gap = Infinity;
+  for (const label of segLabels) { const d = Math.abs(label.offsetLeft + label.offsetWidth / 2 - x); if (d < gap) { gap = d; best = label; } }
+  return best;
+}
+let segDrag = false;
+function segFollow(event) {
+  const box = seg.getBoundingClientRect(), width = labelAt(event.clientX).offsetWidth;
+  thumb.w.to = width; thumb.x.to = Math.max(3, Math.min(box.width - width - 3, event.clientX - box.left - width / 2));
+  drive([thumb.x, thumb.w, thumb.s], applyThumb);
+}
+function segEnd(event, commit) {
+  if (!segDrag) return; segDrag = false; seg.classList.remove("lifted"); thumb.s.to = 1;
+  const input = labelAt(event.clientX).querySelector("input");
+  if (commit && !input.checked) { input.checked = true; input.dispatchEvent(new Event("change", {bubbles:true})); }
+  moveThumb();
+}
+seg.addEventListener("pointerdown", event => { if (event.button) return; segDrag = true; seg.setPointerCapture(event.pointerId); seg.classList.add("lifted"); thumb.s.to = 1.08; segFollow(event); });
+seg.addEventListener("pointermove", event => { if (segDrag) segFollow(event); });
+seg.addEventListener("pointerup", event => segEnd(event, true));
+seg.addEventListener("pointercancel", event => segEnd(event, false));
+const modeValue = () => seg.querySelector("input:checked").value;
+function setMode(value) { const input = seg.querySelector(`input[value="${value}"]`); if (input) input.checked = true; moveThumb(); }
+
+const knob = { el: $("knob"), p: new Spring(1, 620, 34), s: new Spring(1, 620, 28) };
+function applyKnob() {
+  const st = stretch(knob.p.v * 400, 0.18), s = knob.s.x;
+  knob.el.style.transform = `translate3d(${(knob.p.x * 16).toFixed(2)}px,0,0) scale(${(s * (1 + st)).toFixed(4)},${(s * (1 - st * .3)).toFixed(4)})`;
+}
+function moveKnob() { knob.p.to = $("mock").checked ? 1 : 0; drive([knob.p, knob.s], applyKnob); }
+{ const label = $("mock").closest("label");
+  label.addEventListener("pointerdown", () => { knob.s.to = 1.14; drive([knob.p, knob.s], applyKnob); });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) label.addEventListener(type, () => { knob.s.to = 1; drive([knob.p, knob.s], applyKnob); }); }
+
+for (const el of document.querySelectorAll(".pill, .icon, #send")) pressable(el);
+addEventListener("resize", () => { thumb.ready = false; moveThumb(); moveIndicator(); });
+
+/* ── Chat ──────────────────────────────────────────────────────────── */
 async function request(path, options = {}) {
   const response = await fetch(path, {headers:{"Content-Type":"application/json"}, ...options});
   const data = await response.json();
@@ -80,16 +487,25 @@ async function request(path, options = {}) {
   return data;
 }
 
-function status(message = "") { $("status").textContent = message; }
-function setBusy(value) { busy = value; $("send").disabled = value || !current; $("new").disabled = value; }
+let statusTimer = 0;
+function status(message = "", sticky = false) {
+  clearTimeout(statusTimer); $("status").textContent = message; $("hint").classList.toggle("has-status", !!message);
+  if (message && !sticky) statusTimer = setTimeout(status, 6000);
+}
+const fail = error => status(error.message, true);
+function setBusy(value) { busy = value; $("send").disabled = value; $("new").disabled = value; }
 function updateReplyHint() {
-  const mock = $("mock").checked;
-  $("send").textContent = mock ? "Send mock" : "Send real";
-  $("replyHint").textContent = mock
-    ? "Preview only: Nana will save a canned placeholder, not a model answer. Uncheck this for a real reply."
-    : $("mode").value === "local"
-      ? "Real local model: the first reply may download weights and take time. No Fireworks call."
-      : "Real Fireworks model: each sent message can incur an API charge.";
+  const mock = $("mock").checked, mode = modeValue();
+  $("send").setAttribute("aria-label", mock ? "Send mock" : "Send real");
+  $("send").title = mock ? "Send (mock reply)" : "Send (real model call)";
+  const what = mode === "local" ? "Local runs only on this machine; Fireworks is never contacted."
+    : mode === "remote" ? "Remote always uses the selected Fireworks model."
+    : "Hybrid routes each message to a cheap tier or the selected strong model.";
+  const cost = mock ? "Mock is on: replies are canned placeholders and no model is called."
+    : mode === "local" ? "Real local model: the first reply may download weights and take time."
+    : "Real Fireworks calls: each sent message can incur an API charge.";
+  $("replyHint").textContent = `${what} ${cost}`;
+  moveKnob();
 }
 function modelChoices(mode, selected) {
   const options = mode === "local" ? serverConfig.known_local_models : serverConfig.known_fireworks_models;
@@ -100,11 +516,6 @@ function modelChoices(mode, selected) {
     $("model").add(option);
   }
   $("model").value = selected || defaultModel;
-  $("modeHint").textContent = mode === "local"
-    ? "Runs only on this machine; Fireworks is never contacted."
-    : mode === "remote"
-      ? "Uses the selected Fireworks model; real requests are billable."
-      : "The router chooses a cheap tier or the selected strong Fireworks model. Real requests may be billable.";
   updateReplyHint();
 }
 
@@ -114,110 +525,184 @@ async function loadList(search = "") {
   $("conversations").replaceChildren();
   for (const item of items) {
     const button = document.createElement("button");
+    button.type = "button";
     button.className = "conversation" + (current?.id === item.id ? " active" : "");
     button.textContent = item.title;
     button.title = item.title;
-    button.onclick = () => openConversation(item.id);
+    button.onclick = () => { openConversation(item.id); closeMenu(); };
     $("conversations").append(button);
   }
+  if (!items.length) $("conversations").append(el("div", "empty-list", search ? "No chats match." : "No chats yet."));
+  moveIndicator();
 }
 
-function renderMessages(messages) {
+function el(tag, className, text) { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; }
+function messageNode(message) {
+  const node = el("article", `msg ${message.role}`);
+  if (message.role === "user") { node.append(el("div", "bubble", message.content)); return node; }
+  node.append(el("div", "body", message.content));
+  if (message.model_name) {
+    const meta = el("div", "meta mono");
+    if (message.content.startsWith("[mock-")) meta.append(el("span", "mock", "Mock placeholder"));
+    meta.append(el("span", "", message.model_name.split("/").pop()));
+    if (message.route) meta.append(el("span", "", message.route));
+    meta.append(el("span", "", `${Number(message.latency_s || 0).toFixed(2)}s`));
+    node.append(meta);
+  }
+  return node;
+}
+function hero() {
+  const node = el("section", "hero"), eyebrow = el("div", "eyebrow mono"), copy = el("p"), tries = el("div", "tries");
+  eyebrow.append(el("i"), "Cost-aware model routing");
+  copy.append(el("b", "", "Nana sends each message to a cheap or a strong model, whichever it needs."), " Conversations are saved on this machine.");
+  for (const text of SUGGESTIONS) {
+    const button = el("button", "try", text); button.type = "button"; pressable(button);
+    button.onclick = () => { $("prompt").value = text; autosize(); $("prompt").focus(); };
+    tries.append(button);
+  }
+  node.append(eyebrow, el("h1", "", "The right model for every question"), copy, tries);
+  return node;
+}
+function renderMessages(messages, smooth = false) {
+  const from = shown; shown = messages.length;
   $("messages").replaceChildren();
-  if (!messages.length) {
-    const empty = document.createElement("p"); empty.className = "hint";
-    empty.textContent = "Start the conversation below."; $("messages").append(empty);
-  }
-  for (const message of messages) {
-    const node = document.createElement("div"); node.className = `message ${message.role}`;
-    const text = document.createElement("div"); text.textContent = message.content; node.append(text);
-    if (message.role === "assistant" && message.model_name) {
-      const meta = document.createElement("small");
-      meta.textContent = `${message.content.startsWith("[mock-") ? "MOCK placeholder · " : ""}${message.model_name} · ${message.route || ""} · ${Number(message.latency_s || 0).toFixed(2)}s`;
-      node.append(meta);
-    }
-    $("messages").append(node);
-  }
-  $("messages").lastElementChild?.scrollIntoView({block:"end"});
+  document.body.classList.toggle("has-chat", !!current);
+  $("bar").classList.remove("confirm");
+  $("title").textContent = current ? current.title : "Nana";
+  if (!current) { $("messages").append(hero()); return; }
+  if (!messages.length) $("messages").append(el("p", "quiet", "Start the conversation below."));
+  messages.forEach((message, index) => {
+    const node = messageNode(message); $("messages").append(node);
+    if (index >= from) enter(node, (index - from) * 70);
+  });
+  scrollToEnd(smooth);
 }
+function scrollToEnd(smooth) { scrollTo({top: document.documentElement.scrollHeight, behavior: smooth && !REDUCED ? "smooth" : "auto"}); }
 
-async function openConversation(id) {
+async function openConversation(id, keepShown = false) {
   try {
     const detail = await request(`/conversations/${id}`);
+    if (!keepShown) shown = Infinity;
     current = detail.conversation;
-    $("mode").value = current.mode;
+    setMode(current.mode);
     modelChoices(current.mode, current.model);
-    renderMessages(detail.messages);
-    $("rename").disabled = $("delete").disabled = false;
-    $("send").disabled = false;
+    renderMessages(detail.messages, keepShown);
     await loadList($("search").value.trim());
-    status();
-  } catch (error) { status(error.message); }
+  } catch (error) { fail(error); }
+}
+
+async function createConversation() {
+  return request("/conversations", {method:"POST", body:JSON.stringify({mode:modeValue(), model:$("model").value})});
 }
 
 $("new").onclick = async () => {
-  try {
-    const item = await request("/conversations", {method:"POST", body:JSON.stringify({mode:$("mode").value, model:$("model").value})});
-    await openConversation(item.id);
-  } catch (error) { status(error.message); }
+  try { const item = await createConversation(); status(); await openConversation(item.id); closeMenu(); $("prompt").focus(); }
+  catch (error) { fail(error); }
 };
 
-$("send").onclick = async () => {
+$("composer").onsubmit = async event => {
+  event.preventDefault();
   const content = $("prompt").value.trim();
-  if (!current || !content) return;
-  setBusy(true); status("Generating…");
+  if (busy || !content) return;
+  setBusy(true); status();
+  let stop = () => {}, stopMark = () => {};
   try {
-    const result = await request(`/conversations/${current.id}/messages`, {
-      method:"POST", body:JSON.stringify({content, mock:$("mock").checked})
-    });
-    $("prompt").value = "";
-    await openConversation(current.id);
+    if (!current) { const item = await createConversation(); await openConversation(item.id); }
+    const first = !$("messages").querySelector(".msg");
+    $("messages").querySelector(".quiet")?.remove();
+    const mine = messageNode({role:"user", content}); $("messages").append(mine); enter(mine);
+    const thinking = el("div", "msg thinking"), canvas = document.createElement("canvas"), words = el("div");
+    words.append(el("b", "", "Nana is thinking.."), el("span", "", $("mock").checked ? "Preparing a mock reply" : `Routing through ${modeValue()}`));
+    thinking.append(canvas, words); $("messages").append(thinking); enter(thinking, 90);
+    stop = orb(canvas, 38).spin(); stopMark = mark.spin(); scrollToEnd(true);
+    $("prompt").value = ""; autosize();
+    shown += 1;
+    let result;
+    try {
+      result = await request(`/conversations/${current.id}/messages`, {method:"POST", body:JSON.stringify({content, mock:$("mock").checked})});
+    } catch (error) { $("prompt").value = content; autosize(); throw error; }
+    if (first && /^new chat$/i.test(current.title)) {       // name the chat after its first message
+      const title = content.replace(/\s+/g, " ").slice(0, 60).trim();
+      try { await request(`/conversations/${current.id}/title`, {method:"PATCH", body:JSON.stringify({title})}); } catch {}
+    }
+    await openConversation(current.id, true);
     status(result.mock ? "Mock reply saved; no model call was made." :
       result.billable ? "Fireworks request completed; estimated API cost $" + Number(result.routing.estimated_cost_usd).toFixed(6) : "Local reply saved; no API call.");
-  } catch (error) { status(error.message); }
-  finally { setBusy(false); }
+  } catch (error) {
+    if (current) { shown = Infinity; await openConversation(current.id, true); }
+    fail(error);
+  }
+  finally { stop(); stopMark(); setBusy(false); }
 };
 
-$("prompt").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("send").click(); } };
+function autosize() {
+  const area = $("prompt"); area.style.height = "auto"; area.style.height = `${Math.min(area.scrollHeight, 210)}px`;
+  $("send").classList.toggle("idle", !area.value.trim());
+}
+$("prompt").oninput = autosize;
+$("prompt").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); $("composer").requestSubmit(); } };
 $("mock").onchange = updateReplyHint;
-$("search").oninput = () => loadList($("search").value.trim()).catch(error => status(error.message));
-$("mode").onchange = async () => {
-  modelChoices($("mode").value);
+$("search").oninput = () => loadList($("search").value.trim()).catch(fail);
+
+async function saveSettings() {
   if (!current) return;
-  try { current = await request(`/conversations/${current.id}/settings`, {method:"PATCH", body:JSON.stringify({mode:$("mode").value, model:$("model").value})}); status("Settings saved."); }
-  catch (error) { status(error.message); }
-};
-$("model").onchange = async () => {
+  try { current = await request(`/conversations/${current.id}/settings`, {method:"PATCH", body:JSON.stringify({mode:modeValue(), model:$("model").value})}); status("Settings saved."); }
+  catch (error) { fail(error); }
+}
+seg.onchange = async () => { moveThumb(); modelChoices(modeValue()); await saveSettings(); };
+$("model").onchange = saveSettings;
+
+function startRename() {
+  if (!current || $("bar").querySelector("input")) return;
+  const input = document.createElement("input"); input.value = current.title; input.maxLength = 200; input.setAttribute("aria-label", "Chat title");
+  const heading = $("title"); heading.replaceWith(input); input.focus(); input.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return; done = true;
+    const title = input.value.trim(); input.replaceWith(heading);
+    if (save && current && title && title !== current.title) {
+      try { current = await request(`/conversations/${current.id}/title`, {method:"PATCH", body:JSON.stringify({title})}); await loadList($("search").value.trim()); status("Renamed."); }
+      catch (error) { fail(error); }
+    }
+    heading.textContent = current ? current.title : "Nana";
+  };
+  input.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); finish(true); } if (event.key === "Escape") finish(false); };
+  input.onblur = () => finish(true);
+}
+$("rename").onclick = startRename;
+$("title").ondblclick = startRename;
+
+$("delete").onclick = () => { if (current) { $("bar").classList.add("confirm"); $("cancelDelete").focus(); } };
+$("cancelDelete").onclick = () => $("bar").classList.remove("confirm");
+$("confirmDelete").onclick = async () => {
   if (!current) return;
-  try { current = await request(`/conversations/${current.id}/settings`, {method:"PATCH", body:JSON.stringify({mode:$("mode").value, model:$("model").value})}); status("Settings saved."); }
-  catch (error) { status(error.message); }
-};
-$("rename").onclick = async () => {
-  const title = window.prompt("Chat title", current?.title || "");
-  if (!title?.trim() || !current) return;
-  try { current = await request(`/conversations/${current.id}/title`, {method:"PATCH", body:JSON.stringify({title:title.trim()})}); await loadList(); status("Renamed."); }
-  catch (error) { status(error.message); }
-};
-$("delete").onclick = async () => {
-  if (!current || !window.confirm(`Delete “${current.title}” and its messages?`)) return;
   try {
     await request(`/conversations/${current.id}`, {method:"DELETE"});
-    current = null; renderMessages([]); $("send").disabled = $("rename").disabled = $("delete").disabled = true;
-    await loadList(); status("Chat deleted.");
-  } catch (error) { status(error.message); }
+    current = null; shown = 0; renderMessages([]);
+    await loadList($("search").value.trim()); status("Chat deleted.");
+  } catch (error) { $("bar").classList.remove("confirm"); fail(error); }
 };
 
+function setMenu(open) { $("sidebar").classList.toggle("open", open); $("scrim").classList.toggle("open", open); $("menu").setAttribute("aria-expanded", String(open)); }
+const closeMenu = () => setMenu(false);
+$("menu").onclick = () => setMenu(!$("sidebar").classList.contains("open"));
+$("scrim").onclick = closeMenu;
+addEventListener("keydown", event => { if (event.key === "Escape") { closeMenu(); $("bar").classList.remove("confirm"); } });
+
 async function init() {
+  renderMessages([]); moveThumb(); applyKnob();
   try {
     serverConfig = await request("/api/chat/config");
-    $("mode").value = serverConfig.default_mode;
-    modelChoices($("mode").value);
-    if (!serverConfig.real_allowed) { $("mock").checked = true; $("mock").disabled = true; }
+    setMode(serverConfig.default_mode);
+    modelChoices(modeValue());
+    if (!serverConfig.real_allowed) { $("mock").checked = true; $("mock").disabled = true; $("composer").classList.add("mock-only"); }
+    $("serverState").lastElementChild.textContent = serverConfig.real_allowed ? "Real calls on" : "Mock only";
+    $("serverState").classList.toggle("live", !!serverConfig.real_allowed);
     updateReplyHint();
     const items = await request("/conversations");
     if (items.length) await openConversation(items[0].id);
     else await loadList();
-  } catch (error) { status(error.message); }
+  } catch (error) { fail(error); }
 }
 init();
 </script>
