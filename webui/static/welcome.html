@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nana · Local when possible. Powerful when needed.</title>
+    <style>
+      /* Launch page. Colours, type and surfaces follow chat.html so the three
+         pages read as one app; the water canvas itself stays in chat.html. */
+      :root {
+        color-scheme: light;
+        --ink: #171b2b;
+        --muted: #69748b;
+        --soft: #47536d;
+        --line: rgba(55, 70, 105, 0.12);
+        --glass: rgba(255, 255, 255, 0.55);
+        --edge: rgba(255, 255, 255, 0.7);
+        --accent: #5269ba;
+        --shadow: 0 12px 45px rgba(93, 109, 161, 0.1);
+        font:
+          15px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 96px;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #d7e4fb;
+        overflow-x: hidden;
+      }
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        cursor: pointer;
+        border: 0;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      a {
+        color: inherit;
+      }
+      button,
+      a,
+      input {
+        outline-offset: 4px;
+        -webkit-tap-highlight-color: transparent;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+      }
+      svg.icon {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 400;
+        margin: 0;
+      }
+
+      /* ── Background: same gradient and drifting clouds as the chat page ── */
+      .ambient {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        background: linear-gradient(
+          130deg,
+          #bbd5fc 0%,
+          #d4dfff 35%,
+          #e2ebfc 65%,
+          #bdbdf2 100%
+        );
+      }
+      .cloud {
+        position: absolute;
+        width: 70vw;
+        height: 75vh;
+        border-radius: 50%;
+        filter: blur(75px);
+        opacity: 0.65;
+        will-change: transform;
+        animation: drift 22s ease-in-out infinite alternate;
+      }
+      .cloud.one {
+        left: 12%;
+        top: -30%;
+        background: radial-gradient(
+          ellipse,
+          #f5f3ff 5%,
+          #b3aaf4 65%,
+          transparent 75%
+        );
+      }
+      .cloud.two {
+        right: -24%;
+        top: 10%;
+        background: radial-gradient(
+          ellipse,
+          #7dabef 0%,
+          #b7dfff 60%,
+          transparent 75%
+        );
+        animation-delay: -8s;
+      }
+      .cloud.three {
+        left: 3%;
+        bottom: -40%;
+        background: radial-gradient(
+          ellipse,
+          #f8fcff 0%,
+          #c6bbf8 65%,
+          transparent 75%
+        );
+        animation-delay: -15s;
+      }
+      @keyframes drift {
+        from {
+          transform: translate3d(-3%, 2%, 0) scale(1);
+        }
+        to {
+          transform: translate3d(8%, -6%, 0) scale(1.1);
+        }
+      }
+
+      /* ── Shared pieces ─────────────────────────────────────────────── */
+      .wrap {
+        position: relative;
+        width: 100%;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 28px;
+      }
+      .card {
+        background: var(--glass);
+        border: 1px solid var(--edge);
+        border-radius: 26px;
+        box-shadow: var(--shadow);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 22px;
+        border-radius: 26px;
+        border: 1px solid var(--edge);
+        background: rgba(255, 255, 255, 0.5);
+        font-weight: 500;
+        text-decoration: none;
+        white-space: nowrap;
+        transition:
+          background 0.2s,
+          transform 0.2s;
+      }
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.85);
+        transform: translateY(-1px);
+      }
+      .btn.primary {
+        background: #171a21;
+        border-color: #171a21;
+        color: white;
+      }
+      .btn.primary:hover {
+        background: #343b58;
+      }
+      .btn svg.icon {
+        width: 17px;
+        height: 17px;
+      }
+      .kicker {
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 16px;
+      }
+      section {
+        position: relative;
+        padding: 110px 0;
+      }
+      section h2 {
+        font-size: clamp(30px, 3.6vw, 48px);
+        line-height: 1.12;
+        letter-spacing: -1.2px;
+      }
+      .lede {
+        max-width: 640px;
+        margin: 18px 0 0;
+        font-size: 17px;
+        line-height: 1.6;
+        color: var(--soft);
+      }
+      .js .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 0.7s ease,
+          transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+        transition-delay: var(--delay, 0s);
+      }
+      .js .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+
+      /* ── Navigation ────────────────────────────────────────────────── */
+      .nav {
+        position: fixed;
+        top: 14px;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        pointer-events: none;
+      }
+      .nav-inner {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        padding: 9px 10px 9px 24px;
+        border-radius: 32px;
+        border: 1px solid transparent;
+        transition:
+          background 0.3s,
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      .nav.scrolled .nav-inner {
+        background: rgba(248, 248, 255, 0.62);
+        border-color: var(--edge);
+        box-shadow: var(--shadow);
+        -webkit-backdrop-filter: blur(24px);
+        backdrop-filter: blur(24px);
+      }
+      .brand {
+        font:
+          30px/1 Georgia,
+          serif;
+        letter-spacing: -1.1px;
+        text-decoration: none;
+      }
+      .nav-links {
+        display: flex;
+        gap: 4px;
+        margin-right: auto;
+      }
+      .nav-links a {
+        padding: 9px 13px;
+        border-radius: 14px;
+        font-size: 14px;
+        color: var(--soft);
+        text-decoration: none;
+      }
+      .nav-links a:hover {
+        background: rgba(255, 255, 255, 0.5);
+        color: var(--ink);
+      }
+      .preview-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #626e91;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .preview-badge::before {
+        content: "";
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #8695c0;
+      }
+      .nav .btn {
+        padding: 10px 18px;
+      }
+
+      /* ── Hero ──────────────────────────────────────────────────────── */
+      .hero {
+        min-height: 100dvh;
+        padding: 150px 0 70px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+      }
+      .hero h1 {
+        font-size: clamp(42px, 6.6vw, 88px);
+        line-height: 1.04;
+        letter-spacing: -2.6px;
+      }
+      .hero .lede {
+        margin: 26px auto 0;
+        max-width: 620px;
+        font-size: 18px;
+      }
+      .cta {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 34px;
+      }
+      .cta .btn {
+        padding: 15px 26px;
+        font-size: 16px;
+      }
+      .window {
+        position: relative;
+        max-width: 720px;
+        margin: 64px auto 0;
+        padding: 26px 26px 22px;
+        text-align: left;
+      }
+      .window-tag {
+        position: absolute;
+        top: -11px;
+        right: 22px;
+        padding: 3px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .turn {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .turn + .turn {
+        margin-top: 22px;
+      }
+      .said {
+        align-self: flex-end;
+        max-width: 84%;
+        padding: 12px 18px;
+        border-radius: 22px 22px 5px 22px;
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        overflow-wrap: anywhere;
+      }
+      .reply-label {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .mini-mark {
+        font:
+          19px Georgia,
+          serif;
+        font-weight: 400;
+      }
+      .tier {
+        padding: 3px 10px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--soft);
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+      }
+      .tier.strong {
+        color: #2f3f85;
+        background: rgba(145, 161, 218, 0.22);
+        border-color: rgba(82, 105, 186, 0.25);
+      }
+      .reply {
+        margin: 0;
+        line-height: 1.7;
+        color: #2a3145;
+      }
+      .scroll-cue {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 54px auto 0;
+        font-size: 13px;
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .scroll-cue svg.icon {
+        width: 16px;
+        height: 16px;
+        animation: nudge 2.2s ease-in-out infinite;
+      }
+      @keyframes nudge {
+        50% {
+          transform: translateY(5px);
+        }
+      }
+
+      /* ── What it is ────────────────────────────────────────────────── */
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 46px;
+      }
+      .feature {
+        padding: 28px 26px 30px;
+      }
+      .feature .glyph {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid var(--line);
+        color: var(--accent);
+        margin-bottom: 22px;
+      }
+      .feature h3 {
+        font-size: 23px;
+        letter-spacing: -0.5px;
+        margin-bottom: 10px;
+      }
+      .feature p {
+        margin: 0;
+        color: var(--soft);
+        line-height: 1.65;
+      }
+
+      /* ── How it works: sticky diagram, steps scroll past it ─────────── */
+      .how {
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+        gap: 56px;
+        margin-top: 50px;
+        align-items: start;
+      }
+      .how-visual {
+        position: sticky;
+        top: 104px;
+        padding: 22px;
+      }
+      .how-visual svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .node rect {
+        fill: rgba(255, 255, 255, 0.5);
+        stroke: rgba(55, 70, 105, 0.18);
+        stroke-width: 1.2;
+        transition:
+          fill 0.35s,
+          stroke 0.35s;
+      }
+      .node text {
+        fill: #6a7590;
+        font:
+          500 14px -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        text-anchor: middle;
+        transition: fill 0.35s;
+      }
+      .node text.sub {
+        font-size: 11px;
+        font-weight: 400;
+      }
+      .node.on rect {
+        fill: #fff;
+        stroke: var(--accent);
+        stroke-width: 1.8;
+      }
+      .node.on text {
+        fill: var(--ink);
+      }
+      .edge {
+        fill: none;
+        stroke: rgba(55, 70, 105, 0.24);
+        stroke-width: 1.5;
+        marker-end: url(#arrow);
+        transition:
+          stroke 0.35s,
+          stroke-width 0.35s;
+      }
+      .edge.dashed {
+        stroke-dasharray: 4 5;
+      }
+      .edge.on {
+        stroke: var(--accent);
+        stroke-width: 2.2;
+        marker-end: url(#arrowOn);
+      }
+      .note {
+        fill: #7b85a0;
+        font:
+          11px -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        text-anchor: middle;
+        transition: fill 0.35s;
+      }
+      .note.on {
+        fill: var(--accent);
+      }
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 18px;
+        padding: 34px 0;
+        min-height: 34vh;
+        align-content: center;
+        opacity: 0.42;
+        transition: opacity 0.4s;
+      }
+      .step.on {
+        opacity: 1;
+      }
+      .step-num {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid var(--edge);
+        font:
+          19px Georgia,
+          serif;
+        transition:
+          background 0.4s,
+          color 0.4s;
+      }
+      .step.on .step-num {
+        background: #171a21;
+        border-color: #171a21;
+        color: white;
+      }
+      .step h3 {
+        font-size: 25px;
+        letter-spacing: -0.5px;
+        margin: 6px 0 10px;
+      }
+      .step p {
+        margin: 0;
+        color: var(--soft);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      /* ── Live router ───────────────────────────────────────────────── */
+      .lab {
+        margin-top: 46px;
+        padding: 30px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 34px;
+        align-items: start;
+      }
+      .ask {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        border-radius: 29px;
+        padding: 8px 8px 8px 20px;
+        box-shadow: 0 12px 45px rgba(93, 109, 161, 0.08);
+      }
+      .ask:focus-within {
+        box-shadow:
+          0 12px 45px rgba(93, 109, 161, 0.13),
+          0 0 0 2px rgba(110, 131, 199, 0.25);
+      }
+      .ask input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-size: 16px;
+        padding: 9px 0;
+      }
+      .ask input::placeholder {
+        color: #758098;
+      }
+      .go {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: #171a21;
+        color: white;
+        flex-shrink: 0;
+        transition:
+          transform 0.2s,
+          background 0.2s;
+      }
+      .go:hover:enabled {
+        background: #343b58;
+        transform: translateY(-1px);
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .chip {
+        padding: 10px 15px;
+        border: 1px solid rgba(90, 103, 149, 0.1);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.4);
+        font-size: 13px;
+        color: var(--soft);
+        text-align: left;
+        transition:
+          background 0.2s,
+          transform 0.2s;
+      }
+      .chip:hover {
+        background: rgba(255, 255, 255, 0.75);
+        transform: translateY(-2px);
+      }
+      .fine {
+        margin: 18px 0 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .verdict {
+        min-height: 250px;
+        padding: 24px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid var(--edge);
+      }
+      .verdict-empty {
+        display: grid;
+        place-items: center;
+        min-height: 200px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .lanes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .lane {
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.35);
+        color: #7b85a0;
+        transition:
+          background 0.3s,
+          border-color 0.3s,
+          color 0.3s;
+      }
+      .lane strong {
+        display: block;
+        font:
+          21px Georgia,
+          serif;
+        font-weight: 400;
+        letter-spacing: -0.4px;
+      }
+      .lane span {
+        display: block;
+        margin-top: 3px;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .lane.on {
+        background: #fff;
+        border-color: var(--accent);
+        color: var(--ink);
+      }
+      .meter {
+        position: relative;
+        height: 8px;
+        margin: 24px 0 9px;
+        border-radius: 8px;
+        background: rgba(55, 70, 105, 0.12);
+      }
+      .meter i {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        transition: width 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+      }
+      .meter b {
+        position: absolute;
+        top: -5px;
+        bottom: -5px;
+        width: 2px;
+        margin-left: -1px;
+        border-radius: 2px;
+        background: var(--ink);
+      }
+      .meter-label {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .facts {
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--soft);
+      }
+      .facts b {
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .lab-error {
+        color: #9a3b3b;
+        font-size: 14px;
+      }
+
+      /* ── Modes ─────────────────────────────────────────────────────── */
+      .mode {
+        padding: 26px;
+      }
+      .mode h3 {
+        font-size: 23px;
+        letter-spacing: -0.5px;
+        margin-bottom: 10px;
+      }
+      .mode p {
+        margin: 0;
+        color: var(--soft);
+        line-height: 1.65;
+      }
+      .bill {
+        display: inline-block;
+        margin-top: 18px;
+        padding: 4px 11px;
+        border-radius: 10px;
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+        color: var(--soft);
+      }
+      .state {
+        margin-top: 18px;
+        padding: 18px 24px;
+        border-radius: 20px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        color: var(--soft);
+        line-height: 1.6;
+      }
+      .state::before {
+        content: "";
+        flex-shrink: 0;
+        width: 7px;
+        height: 7px;
+        margin-top: 8px;
+        border-radius: 50%;
+        background: #8695c0;
+      }
+
+      /* ── Closing call and footer ───────────────────────────────────── */
+      .closing {
+        text-align: center;
+        padding-bottom: 90px;
+      }
+      .closing h2 {
+        font-size: clamp(38px, 5.4vw, 70px);
+        letter-spacing: -2px;
+      }
+      .footer {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px 22px;
+        padding: 0 28px 34px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .footer a {
+        text-decoration: none;
+      }
+      .footer a:hover {
+        color: var(--ink);
+      }
+
+      @media (max-width: 900px) {
+        section {
+          padding: 78px 0;
+        }
+        .wrap {
+          padding: 0 18px;
+        }
+        .nav-links,
+        .preview-badge {
+          display: none;
+        }
+        .nav-inner {
+          justify-content: space-between;
+          padding-left: 18px;
+        }
+        .hero {
+          padding-top: 120px;
+        }
+        .hero h1 {
+          letter-spacing: -1.6px;
+        }
+        .window {
+          padding: 22px 18px 18px;
+        }
+        .grid3,
+        .lab {
+          grid-template-columns: 1fr;
+        }
+        .how {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .how-visual {
+          top: 78px;
+          z-index: 2;
+          padding: 12px;
+          background: rgba(248, 248, 255, 0.86);
+        }
+        .how-visual svg {
+          max-height: 34vh;
+        }
+        .step {
+          min-height: 40vh;
+        }
+        .lab {
+          padding: 20px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        .cloud,
+        .scroll-cue svg.icon {
+          animation: none;
+        }
+        .js .reveal {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+        * {
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </symbol>
+        <symbol id="i-down" viewBox="0 0 24 24">
+          <path d="M12 5v14M6 13l6 6 6-6" />
+        </symbol>
+        <symbol id="i-chat" viewBox="0 0 24 24">
+          <path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z" />
+        </symbol>
+        <symbol id="i-route" viewBox="0 0 24 24">
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="19" cy="6" r="2" />
+          <circle cx="19" cy="18" r="2" />
+          <path d="M7 12h3c3 0 3-6 7-6M10 12c3 0 3 6 7 6" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="7" height="7" rx="2" />
+          <rect x="13" y="4" width="7" height="7" rx="2" />
+          <rect x="4" y="13" width="7" height="7" rx="2" />
+          <rect x="13" y="13" width="7" height="7" rx="2" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="ambient" aria-hidden="true">
+      <div class="cloud one"></div>
+      <div class="cloud two"></div>
+      <div class="cloud three"></div>
+    </div>
+
+    <header class="nav" id="nav">
+      <div class="wrap">
+        <div class="nav-inner">
+          <a class="brand" href="/welcome" aria-label="Nana home">Nana</a>
+          <nav class="nav-links" aria-label="Sections">
+            <a href="#what">What it is</a>
+            <a href="#how">How it works</a>
+            <a href="/workspace">Workspace</a>
+            <a href="/">Routing demo</a>
+          </nav>
+          <span class="preview-badge" id="previewBadge" hidden
+            >Preview mode</span
+          >
+          <a class="btn primary" href="/chat"
+            >Try Nana<svg class="icon"><use href="#i-arrow" /></svg
+          ></a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="wrap">
+          <h1 class="reveal">
+            Local when possible.<br />Powerful when needed.
+          </h1>
+          <p class="lede reveal" style="--delay: 0.08s">
+            Nana is a chat assistant that decides, message by message, whether
+            a small model is enough or a stronger one is needed.
+          </p>
+          <div class="cta reveal" style="--delay: 0.16s">
+            <a class="btn primary" href="/chat"
+              >Try Nana<svg class="icon"><use href="#i-arrow" /></svg
+            ></a>
+            <a class="btn" href="#how">See how it works</a>
+          </div>
+
+          <div class="window card reveal" style="--delay: 0.26s">
+            <span class="window-tag">Illustration</span>
+            <div class="turn">
+              <div class="said">What is the capital of France?</div>
+              <div class="reply-label">
+                <span class="mini-mark">N</span>Nana
+                <span class="tier">Cheap tier</span>
+              </div>
+              <p class="reply">Paris.</p>
+            </div>
+            <div class="turn">
+              <div class="said">
+                Debug this Python function and explain why the recursion never
+                terminates: def f(n): return f(n-1) + f(n-2)
+              </div>
+              <div class="reply-label">
+                <span class="mini-mark">N</span>Nana
+                <span class="tier strong">Strong tier</span>
+              </div>
+              <p class="reply">
+                There is no base case, so every call makes two more and none
+                of them ever returns.
+              </p>
+            </div>
+          </div>
+
+          <a class="scroll-cue" href="#what"
+            >What Nana is and how it works<svg class="icon">
+              <use href="#i-down" /></svg
+          ></a>
+        </div>
+      </section>
+
+      <section id="what">
+        <div class="wrap">
+          <p class="kicker reveal">What it is</p>
+          <h2 class="reveal">One assistant, two tiers of model.</h2>
+          <p class="lede reveal">
+            Most questions do not need the biggest model. Nana keeps the easy
+            ones on a cheap tier and pays for a strong tier only when the
+            question calls for it.
+          </p>
+          <div class="grid3">
+            <article class="feature card reveal">
+              <div class="glyph">
+                <svg class="icon"><use href="#i-chat" /></svg>
+              </div>
+              <h3>A chat that stays with you</h3>
+              <p>
+                Conversations are saved on this machine and can be searched.
+                Replies stream in as they are written, and you can stop one
+                part-way.
+              </p>
+            </article>
+            <article class="feature card reveal" style="--delay: 0.08s">
+              <div class="glyph">
+                <svg class="icon"><use href="#i-route" /></svg>
+              </div>
+              <h3>A router, not one model</h3>
+              <p>
+                Every message is scored before a model runs. Each reply shows
+                which model answered and which route it took.
+              </p>
+            </article>
+            <article class="feature card reveal" style="--delay: 0.16s">
+              <div class="glyph">
+                <svg class="icon"><use href="#i-grid" /></svg>
+              </div>
+              <h3>A workspace beside it</h3>
+              <p>
+                Notes, tasks, documents, memory, model comparison and agent
+                runs live next to the chat. Some connections still need
+                setting up.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="how">
+        <div class="wrap">
+          <p class="kicker reveal">How it works</p>
+          <h2 class="reveal">What happens after you press send.</h2>
+          <div class="how">
+            <div class="how-visual card" aria-hidden="true">
+              <svg viewBox="0 0 400 456" id="diagram">
+                <defs>
+                  <marker
+                    id="arrow"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto"
+                  >
+                    <path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#9aa3ba" stroke-width="1.5" />
+                  </marker>
+                  <marker
+                    id="arrowOn"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto"
+                  >
+                    <path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#5269ba" stroke-width="1.6" />
+                  </marker>
+                </defs>
+                <path class="edge" data-s="2" d="M200 58V94" />
+                <path class="edge" data-s="3" d="M160 146C160 174 99 166 99 192" />
+                <path class="edge" data-s="5" d="M240 146C240 174 301 166 301 192" />
+                <path class="edge" data-s="4" d="M99 248V286" />
+                <path class="edge dashed" data-s="4 5" d="M174 312C236 312 280 296 284 252" />
+                <path class="edge" data-s="6" d="M99 334C99 360 172 350 172 372" />
+                <path class="edge" data-s="6" d="M326 248C326 330 232 336 230 372" />
+                <text class="note" data-s="4 5" x="246" y="326">escalate</text>
+                <g class="node" data-s="1">
+                  <rect x="120" y="14" width="160" height="44" rx="16" />
+                  <text x="200" y="41">Your message</text>
+                </g>
+                <g class="node" data-s="2">
+                  <rect x="120" y="98" width="160" height="48" rx="16" />
+                  <text x="200" y="120">Router</text>
+                  <text class="sub" x="200" y="136">scores the prompt</text>
+                </g>
+                <g class="node" data-s="3">
+                  <rect x="24" y="196" width="150" height="52" rx="16" />
+                  <text x="99" y="220">Cheap tier</text>
+                  <text class="sub" x="99" y="236">small model</text>
+                </g>
+                <g class="node" data-s="5">
+                  <rect x="226" y="196" width="150" height="52" rx="16" />
+                  <text x="301" y="220">Strong tier</text>
+                  <text class="sub" x="301" y="236">bigger model</text>
+                </g>
+                <g class="node" data-s="4">
+                  <rect x="24" y="290" width="150" height="44" rx="16" />
+                  <text x="99" y="317">Answer check</text>
+                </g>
+                <g class="node" data-s="6">
+                  <rect x="120" y="376" width="160" height="44" rx="16" />
+                  <text x="200" y="403">Your answer</text>
+                </g>
+                <text class="note" data-s="6" x="200" y="444">
+                  recorded: model · route · tokens · estimated cost
+                </text>
+              </svg>
+            </div>
+            <ol class="steps" id="steps">
+              <li class="step" data-step="1">
+                <span class="step-num">1</span>
+                <div>
+                  <h3>You ask something</h3>
+                  <p>
+                    Type a message as you would in any chat. Nana keeps the
+                    recent conversation as context, so follow-ups make sense.
+                  </p>
+                </div>
+              </li>
+              <li class="step" data-step="2">
+                <span class="step-num">2</span>
+                <div>
+                  <h3>The router scores it</h3>
+                  <p>
+                    Before any model runs, the router estimates whether the
+                    cheap tier is likely to be good enough. It looks at the
+                    length of the prompt and at signs of maths, code, logic or
+                    multi-part reasoning.
+                  </p>
+                </div>
+              </li>
+              <li class="step" data-step="3">
+                <span class="step-num">3</span>
+                <div>
+                  <h3>Easy questions stay on the cheap tier</h3>
+                  <p>
+                    If the score clears the threshold, the small model
+                    answers. In the local setup that model runs on your own
+                    machine, so there is no API charge.
+                  </p>
+                </div>
+              </li>
+              <li class="step" data-step="4">
+                <span class="step-num">4</span>
+                <div>
+                  <h3>The answer is checked</h3>
+                  <p>
+                    Nana looks at the cheap answer for signs it went wrong:
+                    nothing written, repeating itself, echoing the question,
+                    or hedging. A local answer also has to clear a confidence
+                    check. If it fails, the question is escalated.
+                  </p>
+                </div>
+              </li>
+              <li class="step" data-step="5">
+                <span class="step-num">5</span>
+                <div>
+                  <h3>Hard questions go to the strong tier</h3>
+                  <p>
+                    Prompts that score low, and cheap answers that fail the
+                    check, are sent to a larger model on Fireworks. Those
+                    requests are billable.
+                  </p>
+                </div>
+              </li>
+              <li class="step" data-step="6">
+                <span class="step-num">6</span>
+                <div>
+                  <h3>Everything is accounted for</h3>
+                  <p>
+                    You get one answer. Alongside it Nana records which model
+                    wrote it, the route it took, the tokens used and an
+                    estimated cost.
+                  </p>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section id="router">
+        <div class="wrap">
+          <p class="kicker reveal">Try the router</p>
+          <h2 class="reveal">Watch it decide.</h2>
+          <p class="lede reveal">
+            This runs Nana's router on whatever you type and shows where the
+            message would go. No model is called from this page.
+          </p>
+          <div class="lab card reveal">
+            <div>
+              <form class="ask" id="ask" autocomplete="off">
+                <input
+                  id="askInput"
+                  maxlength="2000"
+                  placeholder="Type a question to route"
+                  aria-label="Question to route"
+                />
+                <button class="go" id="askGo" type="submit" aria-label="Route it">
+                  <svg class="icon"><use href="#i-arrow" /></svg>
+                </button>
+              </form>
+              <div class="chips" id="chips">
+                <button
+                  class="chip"
+                  type="button"
+                  data-prompt="What is the capital of France?"
+                >
+                  What is the capital of France?
+                </button>
+                <button
+                  class="chip"
+                  type="button"
+                  data-prompt="Summarise the plot of Hamlet in two sentences."
+                >
+                  Summarise Hamlet in two sentences
+                </button>
+                <button
+                  class="chip"
+                  type="button"
+                  data-prompt="Debug this Python function and explain why the recursion never terminates: def f(n): return f(n-1) + f(n-2)"
+                >
+                  Debug a recursive function
+                </button>
+                <button
+                  class="chip"
+                  type="button"
+                  data-prompt="Calculate the derivative of x^3 * sin(x) and then integrate the result from 0 to pi."
+                >
+                  Differentiate, then integrate
+                </button>
+              </div>
+              <p class="fine">
+                The decision comes from Nana's keyword router in Hybrid mode
+                with its default settings. This page always asks for a mock
+                run, so it never loads a model or spends anything.
+              </p>
+            </div>
+            <div class="verdict" id="verdict" aria-live="polite">
+              <div class="verdict-empty">
+                Pick an example or type your own to see the route.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="modes">
+        <div class="wrap">
+          <p class="kicker reveal">Three ways to run it</p>
+          <h2 class="reveal">You choose how much leaves your machine.</h2>
+          <div class="grid3">
+            <article class="mode card reveal">
+              <h3>Hybrid</h3>
+              <p>The router picks a cheap or strong tier for each prompt.</p>
+              <span class="bill">may bill Fireworks</span>
+            </article>
+            <article class="mode card reveal" style="--delay: 0.08s">
+              <h3>Remote</h3>
+              <p>
+                Always one chosen Fireworks model. No routing and no local
+                fallback.
+              </p>
+              <span class="bill">bills Fireworks per request</span>
+            </article>
+            <article class="mode card reveal" style="--delay: 0.16s">
+              <h3>Fully local</h3>
+              <p>Always one local model. Fireworks is never contacted.</p>
+              <span class="bill">no API calls</span>
+            </article>
+          </div>
+          <div class="state card reveal" id="serverState" hidden></div>
+        </div>
+      </section>
+
+      <section class="closing">
+        <div class="wrap">
+          <h2 class="reveal">Ask it something.</h2>
+          <div class="cta reveal" style="--delay: 0.1s">
+            <a class="btn primary" href="/chat"
+              >Try Nana<svg class="icon"><use href="#i-arrow" /></svg
+            ></a>
+            <a class="btn" href="/workspace">Open the workspace</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Local when possible. Powerful when needed.</span>
+      <a href="/chat">Chat</a>
+      <a href="/workspace">Workspace</a>
+      <a href="/">Routing demo</a>
+    </footer>
+
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      document.documentElement.classList.add("js");
+
+      // Sections fade up once as they scroll into view.
+      const reveal = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            entry.target.classList.add("in");
+            reveal.unobserve(entry.target);
+          }
+        },
+        { rootMargin: "0px 0px -8% 0px" },
+      );
+      for (const node of document.querySelectorAll(".reveal"))
+        reveal.observe(node);
+
+      const nav = $("nav");
+      const onScroll = () => nav.classList.toggle("scrolled", scrollY > 24);
+      addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+
+      // How it works: the step crossing the middle of the screen lights its
+      // part of the diagram.
+      const steps = [...document.querySelectorAll(".step")];
+      const parts = [...$("diagram").querySelectorAll("[data-s]")];
+      function showStep(number) {
+        for (const step of steps)
+          step.classList.toggle("on", step.dataset.step === number);
+        for (const part of parts)
+          part.classList.toggle("on", part.dataset.s.split(" ").includes(number));
+      }
+      const stepWatch = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries)
+            if (entry.isIntersecting) showStep(entry.target.dataset.step);
+        },
+        { rootMargin: "-48% 0px -48% 0px" },
+      );
+      for (const step of steps) stepWatch.observe(step);
+      showStep("1");
+
+      // Server state, shown with the same wording as the chat page's badge.
+      fetch("/api/chat/config")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((config) => {
+          if (!config) return;
+          $("previewBadge").hidden = !!config.real_allowed;
+          const state = $("serverState");
+          state.textContent = config.real_allowed
+            ? "Real model calls are enabled on this server. Requests that reach Fireworks are billable."
+            : "This server is in preview mode. Replies in the chat are mocked, so you can explore without loading a model or spending anything.";
+          state.hidden = false;
+        })
+        .catch(() => {});
+
+      // Live router. Always a mock run: the pre-route decision is the real
+      // one, no backend is called.
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = text;
+        return node;
+      }
+      function fact(label, text) {
+        const item = el("li");
+        item.append(el("b", "", label + " "), text);
+        return item;
+      }
+      function showVerdict(result) {
+        const strong = result.route === "strong";
+        const model = String(result.final_model || "").split("/").pop();
+        const where =
+          result.provider === "local" ? "on this machine" : "Fireworks API";
+        const lanes = el("div", "lanes");
+        for (const [name, on] of [
+          ["Cheap tier", !strong],
+          ["Strong tier", strong],
+        ]) {
+          const lane = el("div", on ? "lane on" : "lane");
+          lane.append(
+            el("strong", "", name),
+            el("span", "", on ? `${model} · ${where}` : "not used"),
+          );
+          lanes.append(lane);
+        }
+        const nodes = [lanes];
+        const routing = result.routing || {};
+        if (
+          typeof routing.confidence === "number" &&
+          typeof routing.threshold === "number"
+        ) {
+          const meter = el("div", "meter"),
+            fill = el("i"),
+            mark = el("b");
+          mark.style.left = `${Math.min(100, Math.max(0, routing.threshold * 100))}%`;
+          meter.append(fill, mark);
+          requestAnimationFrame(() => {
+            fill.style.width = `${Math.min(100, Math.max(0, routing.confidence * 100))}%`;
+          });
+          nodes.push(
+            meter,
+            el(
+              "p",
+              "meter-label",
+              `Confidence the cheap tier is enough: ${routing.confidence.toFixed(3)}. The line marks the threshold, ${routing.threshold.toFixed(2)}.`,
+            ),
+          );
+        }
+        const facts = el("ul", "facts");
+        if (nodes.length > 1)
+          facts.append(
+            fact(
+              "Why:",
+              routing.confidence >= routing.threshold
+                ? "the score clears the threshold, so the cheap tier answers."
+                : "the score is below the threshold, so this goes straight to the strong tier.",
+            ),
+          );
+        else if (routing.reason) facts.append(fact("Why:", routing.reason));
+        if (result.escalated)
+          facts.append(
+            fact(
+              "Escalated:",
+              "the cheap answer failed its check and was retried on the strong tier.",
+            ),
+          );
+        const cost = Number(result.mock_estimated_cost_usd || 0);
+        facts.append(
+          fact(
+            "Cost:",
+            result.would_bill
+              ? `a real run would be a billable Fireworks request${cost ? ` (about $${cost.toFixed(6)})` : ""}.`
+              : "no API cost for this one.",
+          ),
+        );
+        nodes.push(facts);
+        $("verdict").replaceChildren(...nodes);
+      }
+      async function routePrompt(prompt) {
+        $("askGo").disabled = true;
+        try {
+          const response = await fetch("/api/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt,
+              config: { mode: "hybrid", router_kind: "heuristic", mock: true },
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok)
+            throw new Error(
+              result.error ||
+                (result.problems || []).join("; ") ||
+                `HTTP ${response.status}`,
+            );
+          showVerdict(result);
+        } catch (error) {
+          $("verdict").replaceChildren(
+            el("p", "lab-error", `Could not route that: ${error.message}`),
+          );
+        } finally {
+          $("askGo").disabled = false;
+        }
+      }
+      $("ask").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const prompt = $("askInput").value.trim();
+        if (prompt) routePrompt(prompt);
+      });
+      $("chips").addEventListener("click", (event) => {
+        const chip = event.target.closest(".chip");
+        if (!chip) return;
+        $("askInput").value = chip.dataset.prompt;
+        routePrompt(chip.dataset.prompt);
+      });
+    </script>
+  </body>
+</html>

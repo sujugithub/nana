@@ -151,9 +151,11 @@ webui/service.py       framework-free core: config validation, plain-language
 webui/server.py        stdlib http.server wrapper + CLI (--port, --real)
 webui/static/index.html  the entire front-end (no build step, no CDN)
 webui/static/chat.html   persistent chat page
+webui/static/welcome.html  launch page at /welcome: what Nana is, how routing
+                         works, and a live mock-only view of the router's decision
 chat/                    SQLite storage and chat execution
 api.py                   optional FastAPI endpoints
-tests/test_webui.py    29 offline tests: mode isolation, billing honesty,
+tests/test_webui.py    30 offline tests: mode isolation, billing honesty,
                        pair/artifact handling, HTTP round-trips
 tests/test_chat.py      persistent chat, mode isolation, failure handling,
                        FastAPI and stdlib HTTP tests
