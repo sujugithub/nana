@@ -27,6 +27,10 @@ class ChatCase(unittest.TestCase):
     )
 
     def setUp(self):
+        # Tests must not inherit the owner's live-call opt-in from .env.
+        real_patch = mock.patch.dict("os.environ", {"NANA_CHAT_ALLOW_REAL": "0"})
+        real_patch.start()
+        self.addCleanup(real_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.db_patch = mock.patch.object(database, "DB_PATH", Path(self.temp.name) / "chat.db")
@@ -47,6 +51,36 @@ class ChatCase(unittest.TestCase):
 
 
 class TestChatService(ChatCase):
+    def test_ollama_receives_roles_and_essay_budget_without_leaking_context(self):
+        from generation_context import MESSAGES, OUTPUT_LIMIT
+        conversation = repository.create_conversation(mode="local", model="qwen3.5:4b")
+        refusal = "I cannot write an essay."
+        repository.add_turn(conversation.id, "Write a 1000-word essay.", refusal)
+        content = "essay on banana\nUser: this line is part of my message"
+        with mock.patch("workspace.store.preferences", return_value={"local_backend": "ollama"}), mock.patch(
+            "ollama_client.request", return_value={"message": {"content": "An essay about bananas."}}
+        ) as request:
+            service.send_message(conversation.id, content, mock=False, allow_real=True)
+        payload = request.call_args.args[1]
+        self.assertEqual(payload["messages"][1:], [
+            {"role": "user", "content": "Write a 1000-word essay."},
+            {"role": "assistant", "content": refusal},
+            {"role": "user", "content": content},
+        ])
+        self.assertEqual(payload["options"]["num_predict"], 4096)
+        self.assertIn("full response", payload["messages"][0]["content"])
+        self.assertIsNone(MESSAGES.get())
+        self.assertIsNone(OUTPUT_LIMIT.get())
+
+    def test_chat_generation_context_is_restored_after_failure(self):
+        from generation_context import MESSAGES, OUTPUT_LIMIT
+        conversation = repository.create_conversation(mode="local")
+        with mock.patch("chat.service.execute", side_effect=RuntimeError("failed")):
+            with self.assertRaisesRegex(RuntimeError, "failed"):
+                service.send_message(conversation.id, "Hello")
+        self.assertIsNone(MESSAGES.get())
+        self.assertIsNone(OUTPUT_LIMIT.get())
+
     def test_local_mode_never_calls_fireworks_and_saves_latency(self):
         conversation = repository.create_conversation(mode="local")
         with mock.patch("remote_client.FireworksClient.generate", side_effect=AssertionError("remote called")) as remote:

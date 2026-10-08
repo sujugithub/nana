@@ -56,6 +56,8 @@ class Settings:
     # Used when TIER_MODE=local_remote. It is deliberately a first-class
     # runtime option, not merely training-data compatibility.
     local_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    local_backend: str = "transformers"
+    ollama_base_url: str = "http://127.0.0.1:11434"
     local_max_new_tokens: int = 512
 
     # ── Two Fireworks-hosted routing tiers ───────────────────────────────
@@ -170,6 +172,8 @@ class Settings:
         s = cls()
         s.tier_mode = _env_str("TIER_MODE", s.tier_mode)
         s.local_model_name = _env_str("LOCAL_MODEL_NAME", s.local_model_name)
+        s.local_backend = _env_str("LOCAL_BACKEND", s.local_backend)
+        s.ollama_base_url = _env_str("OLLAMA_BASE_URL", s.ollama_base_url)
         s.local_max_new_tokens = _env_int("LOCAL_MAX_NEW_TOKENS", s.local_max_new_tokens)
         s.cheap_model_name = _env_str("CHEAP_MODEL_NAME", s.cheap_model_name)
         # REMOTE_MODEL_NAME remains a supported fallback for existing .env

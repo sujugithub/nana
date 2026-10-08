@@ -16,6 +16,31 @@ from typing import Optional
 
 from config import ROUTE_CHEAP, ROUTE_STRONG, settings
 from schemas import Completion
+from generation_context import completion_messages, output_limit
+
+
+def _tool_call_text(calls):
+    """Preserve tool requests for a caller explicitly using fenced transport."""
+    import json
+    import re
+    from generation_stream import TEXT_TOOL_PROTOCOL
+    if not calls or not TEXT_TOOL_PROTOCOL.get():
+        return ""
+    blocks = []
+    for call in calls:
+        function = call.get("function") or {}
+        name = function.get("name", "")
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,99}", name):
+            raise RemoteError("Provider returned an invalid tool name")
+        try:
+            arguments = json.loads(function.get("arguments") or "{}")
+        except (TypeError, ValueError):
+            raise RemoteError("Provider returned incomplete tool arguments") from None
+        if not isinstance(arguments, dict):
+            raise RemoteError("Provider returned non-object tool arguments")
+        encoded = json.dumps(arguments, ensure_ascii=False).replace("`", "\\u0060")
+        blocks.append(f"```{name}\n{encoded}\n```")
+    return "\n\n".join(blocks)
 
 
 class RemoteError(RuntimeError):
@@ -117,6 +142,9 @@ class FireworksClient:
 
     def generate(self, prompt: str) -> Completion:
         started = time.time()
+        from generation_stream import CURRENT
+        if CURRENT.get() is not None and not settings.mock_mode:
+            return self._stream(prompt, CURRENT.get())
         if settings.mock_mode:
             adjective = "concise" if self.route == ROUTE_CHEAP else "detailed"
             completion_tokens = 12 if self.route == ROUTE_CHEAP else 24
@@ -148,14 +176,11 @@ class FireworksClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        messages = []
-        if settings.system_prompt:
-            messages.append({"role": "system", "content": settings.system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages = completion_messages(prompt, settings.system_prompt)
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": self.max_tokens,
+            "max_tokens": output_limit(self.max_tokens),
             "temperature": 0,
         }
 
@@ -205,6 +230,9 @@ class FireworksClient:
 
         choice = data["choices"][0]
         text = ((choice.get("message") or {}).get("content") or "").strip()
+        tool_text = _tool_call_text((choice.get("message") or {}).get("tool_calls"))
+        if tool_text:
+            text = "\n\n".join(part for part in (text, tool_text) if part)
         usage = data.get("usage") or {}
         if not usage:
             print(
@@ -225,6 +253,63 @@ class FireworksClient:
             model_name=self.model_name,
             provider="fireworks",
         )
+
+    def _stream(self, prompt, stream):
+        import json
+        import requests
+        if not self.model_name or not self.api_key:
+            raise RemoteError("Configure a permitted Fireworks model and API key")
+        started = time.monotonic()
+        messages = completion_messages(prompt, settings.system_prompt)
+        payload = {"model": self.model_name, "messages": messages, "max_tokens": output_limit(self.max_tokens),
+                   "temperature": 0, "stream": True, "stream_options": {"include_usage": True}}
+        stream.start("fireworks", self.model_name)
+        pieces, usage, tool_calls = [], {}, {}
+        try:
+            with requests.post(self.base_url + "/chat/completions", json=payload,
+                               headers={"Authorization": "Bearer " + self.api_key}, stream=True,
+                               timeout=(settings.connect_timeout_s, settings.request_timeout_s)) as response:
+                if response.status_code != 200:
+                    raise RemoteError(f"Fireworks streaming returned HTTP {response.status_code}")
+                for line in response.iter_lines(chunk_size=1):
+                    stream.check()
+                    if not line.startswith(b"data: "):
+                        continue
+                    raw = line[6:]
+                    if raw == b"[DONE]":
+                        break
+                    data = json.loads(raw)
+                    if data.get("error"):
+                        raise RemoteError("Fireworks reported a streaming error")
+                    if data.get("usage"):
+                        usage = data["usage"]
+                        stream.usage(usage)
+                    choices = data.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        for call in delta.get("tool_calls") or []:
+                            index = call.get("index", 0)
+                            target = tool_calls.setdefault(index, {"function": {"name": "", "arguments": ""}})
+                            function = call.get("function") or {}
+                            for key in ("name", "arguments"):
+                                target["function"][key] += function.get(key) or ""
+                        text = delta.get("content") or ""
+                        if text:
+                            pieces.append(text)
+                            stream.delta(text)
+        except requests.RequestException:
+            raise RemoteError("Fireworks streaming connection failed; not retried to avoid duplicate billing") from None
+        tool_text = _tool_call_text([tool_calls[index] for index in sorted(tool_calls)])
+        if tool_text:
+            suffix = ("\n\n" if pieces else "") + tool_text
+            pieces.append(suffix)
+            stream.delta(suffix)
+            stream.attempts[-1]["native_tool_calls_converted"] = len(tool_calls)
+        text = "".join(pieces).strip()
+        return Completion(text=text, prompt_tokens=int(usage.get("prompt_tokens", max(1, len(prompt)//4))),
+                          completion_tokens=int(usage.get("completion_tokens", max(1, len(text)//4))),
+                          source=self.route, latency_s=time.monotonic()-started,
+                          model_name=self.model_name, provider="fireworks")
 
 
 class CheapRemoteClient(FireworksClient):

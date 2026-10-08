@@ -20,14 +20,33 @@ saved in one database transaction; a failed generation saves neither message.
 Chat mode and model settings are enforced by the same execution functions as
 the routing demo. **Fully local** never calls Fireworks; **Remote only** never
 calls the local backend; **Hybrid** follows the configured tier pair. Chat
-starts in mock mode. `make ui-real` allows real requests only after Mock is
-unchecked in the chat page.
+starts in preview mode on a mock-only server. `make ui-real` starts chat in
+live mode unless **Settings → Preview mode** was previously enabled. The
+browser remembers preview and chat-mode choices across refreshes. Real
+requests remain blocked by a mock-only server regardless of saved preferences.
 
 An optional FastAPI entry point provides the same chat endpoints with
 `make api` on `127.0.0.1:8643`; `make api-real` permits real requests when
 the client also sends `"mock": false`. Requests from outside localhost need
 `NANA_API_TOKEN` as a Bearer token. The API reads `.env` at startup and does
 not expose the Fireworks key in responses.
+
+## Chat interface
+
+Open `/chat` for the Nana chat workspace: a translucent history sidebar,
+centered message composer, and a blue/lavender cloud background with a water
+surface: moving the mouse leaves a rippling wake and clicking makes a splash.
+The ripples come from a small wave-equation simulation on a canvas that
+sleeps once the water is calm. The background respects the system's
+reduced-motion preference.
+On phones, chat history opens as a drawer using the sidebar button.
+
+Type a message to start a saved conversation automatically; **New chat**
+returns to the welcome screen. Enter sends, Shift+Enter adds a line, and the
+suggestion buttons fill the composer without sending. The header selects
+Hybrid, Remote, or Local mode. **Settings** (also the composer plus button)
+contains model selection, preview mode, rename, and delete. Preview replies
+are labelled; mock-only servers always enforce preview mode. File uploads are not implemented.
 
 ## The three modes
 
@@ -36,6 +55,11 @@ not expose the Fireworks key in responses.
 | **Hybrid** | The pre-router (heuristic or learned) picks a cheap or strong tier per prompt; the runtime cascade (post-check, confidence gate, escalation, safe fallbacks) is unchanged. | Depends on the pair (below) |
 | **Remote** | Exactly one chosen Fireworks model. Routing bypassed. A failure is reported as an error — the local backend is **never** invoked. | Every request is a billable Fireworks call |
 | **Fully local** | Exactly one local model. Routing bypassed. Fireworks is **never** contacted, not even as a fallback. | No API calls |
+
+Chat providers receive separate user/assistant messages, with the newest complete
+turns kept within the context limit. Chat replies allow up to 4,096 output tokens
+so essays can finish; simple questions still receive short answers. Batch and
+routing-demo token limits remain configured independently.
 
 Hybrid defaults to **Local + remote** and supports both pair types from the runtime:
 
@@ -93,14 +117,14 @@ artifact is trained. Use **Heuristic** for the live pair.
 Use **Hybrid → Local + remote → Heuristic** or **Remote → gpt-oss-120b**.
 Both old DeepSeek V4 model IDs returned `404 NOT_FOUND` for this account. The
 replacement IDs appeared in the account's read-only inference model list on
-2026-10-06, but generation has not yet been verified. The existing learned
+2026-10-06, and real gpt-oss-120b replies were verified on 2026-10-08. The existing learned
 artifact belongs to the historical Qwen → DeepSeek V4 Pro research pair and
 cannot be used for the new live pair without retraining. Remote-only
 intentionally has no local fallback.
 
 The routing demo remains single-turn. The linked chat page stores multi-turn
-conversations and reuses the same mode-specific execution. Streaming and
-stop-generation are not implemented yet.
+conversations and reuses the same mode-specific execution. Fireworks and Ollama
+chat support token streaming and stop-generation; unfinished turns are discarded.
 
 ## Safety rails
 

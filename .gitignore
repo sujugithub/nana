@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.venv-odysseus/
 venv/
 .env
 logs/
@@ -17,3 +18,10 @@ data/*
 !data/real_qwen_pro_600.json
 artifacts/
 reports/
+# Separate local workspace experiment; excluded from Nana 2.0 publishing.
+vendor/odysseus/
+odysseus_integration/
+scripts/start_odysseus.py
+tests/test_odysseus_provider.py
+docs/ODYSSEUS.md
+THIRD_PARTY_NOTICES.md

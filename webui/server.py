@@ -86,32 +86,157 @@ class DemoHandler(BaseHTTPRequestHandler):
             return None
         return data if isinstance(data, dict) else None
 
+    def _google_error(self, message: str) -> None:
+        import html
+        body = ("<!doctype html><html lang=en><meta charset=utf-8>"
+                "<meta name=viewport content='width=device-width,initial-scale=1'>"
+                "<title>Nana · Google connection</title>"
+                "<style>body{font:18px system-ui;margin:0;background:#e6e5fa;color:#232538}"
+                "main{max-width:560px;margin:12vh auto;padding:32px;background:#fff;border-radius:24px}"
+                "a{display:inline-block;padding:12px 20px;background:#232538;color:white;border-radius:12px;text-decoration:none}"
+                "p{line-height:1.6}</style><main><h1>Reconnect Google</h1><p>" + html.escape(message) +
+                "</p><p>Return to Connections and select Connect Google to start a fresh sign-in. "
+                "Your saved client credentials are still available.</p>"
+                "<a href='/workspace#connections'>Return to Connections</a></main></html>").encode()
+        self.send_response(400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, fmt: str, *args) -> None:  # quiet default logging
+        if "google/callback" in self.path:
+            sys.stderr.write("webui: Google authorization callback\n")
+            return
         sys.stderr.write("webui: " + fmt % args + "\n")
+
+    def _guard(self) -> bool:
+        """Local origin checks and optional accounts for all workspace/chat routes."""
+        from workspace import auth, store, connections
+        port = self.server.server_address[1]
+        hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        host = self.headers.get("Host", "")
+        if host not in hosts:
+            self._send_json({"error": "Invalid local host"}, 403)
+            return False
+        if self.command != "GET" and self.headers.get("Origin") not in {None, *("http://" + h for h in hosts)}:
+            self._send_json({"error": "Cross-origin action rejected"}, 403)
+            return False
+        self.account = auth.session(self.headers)
+        store.USER.set(self.account["user_id"] if self.account else "local")
+        parsed = urlsplit(self.path)
+        if parsed.path == "/api/workspace/google/callback":
+            query = parse_qs(parsed.query)
+            state = (query.get("state") or [""])[0]
+            # OAuth callbacks can arrive in a different browser; the random,
+            # one-use state binds the response to the initiating Nana user.
+            found = False
+            for home in store.ROOT.iterdir() if store.ROOT.exists() else []:
+                if not home.is_dir():
+                    continue
+                store.USER.set(home.name)
+                if connections.google_has_pending(state):
+                    found = True
+                    break
+            try:
+                if not found:
+                    raise ValueError("This Google sign-in link has already been used or is no longer valid.")
+                connections.google_callback(query)
+                self.send_response(303)
+                self.send_header("Location", "/workspace#connections")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
+            except Exception as exc:
+                self._google_error(str(exc))
+            return False
+        if parsed.path.startswith("/api/auth"):
+            try:
+                data = self._read_json() if self.command == "POST" else {}
+                if data is None:
+                    raise ValueError("Invalid JSON body")
+                name = self.account["username"] if self.account else None
+                if parsed.path == "/api/auth/status" and self.command == "GET":
+                    self._send_json({"enabled": bool(auth.read_users()), "username": name})
+                elif parsed.path == "/api/auth/create" and self.command == "POST":
+                    self._send_json(auth.create(data.get("username", ""), data.get("password", ""), name))
+                elif parsed.path == "/api/auth/login" and self.command == "POST":
+                    token = auth.login(data)
+                    self.send_response(200)
+                    self.send_header("Set-Cookie", f"nana_session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200")
+                    self.send_header("Content-Length", "2")
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(b"{}")
+                elif parsed.path == "/api/auth/logout" and self.command == "POST":
+                    from http.cookies import SimpleCookie
+                    cookie = SimpleCookie(self.headers.get("Cookie", ""))
+                    if "nana_session" in cookie:
+                        auth.SESSIONS.pop(cookie["nana_session"].value, None)
+                    self.send_response(200)
+                    self.send_header("Set-Cookie", "nana_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0")
+                    self.send_header("Content-Length", "2")
+                    self.end_headers()
+                    self.wfile.write(b"{}")
+                elif parsed.path == "/api/auth/totp/setup" and self.command == "POST":
+                    self._send_json(auth.setup_totp(name))
+                elif parsed.path == "/api/auth/totp/confirm" and self.command == "POST" and name:
+                    self._send_json(auth.confirm_totp(name, data.get("code", "")))
+                else:
+                    self._send_json({"error": "Route not found"}, 404)
+            except PermissionError as exc:
+                self._send_json({"error": str(exc)}, 403)
+            except (ValueError, TypeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return False
+        if parsed.path == "/auth":
+            self._send_static("auth.html", "text/html; charset=utf-8")
+            return False
+        if auth.read_users() and not self.account:
+            if self.command == "GET" and not parsed.path.startswith(("/api/", "/conversations")):
+                self.send_response(303)
+                self.send_header("Location", "/auth")
+                self.end_headers()
+            else:
+                self._send_json({"error": "Sign in to Nana"}, 401)
+            return False
+        if parsed.path.startswith("/api/workspace"):
+            from workspace.api import handle
+            handle(self, self.command)
+            return False
+        return True
 
     # ── routes ───────────────────────────────────────────────────────────
     def do_GET(self) -> None:
+        if not self._guard():
+            return
         parsed = urlsplit(self.path)
         path = parsed.path
         if path in ("/", "/index.html"):
             self._send_static("index.html", "text/html; charset=utf-8")
         elif path == "/chat":
             self._send_static("chat.html", "text/html; charset=utf-8")
+        elif path == "/workspace":
+            self._send_static("workspace.html", "text/html; charset=utf-8")
         elif path == "/api/config":
             payload = service.frontend_config()
             payload["real_allowed"] = self.server.allow_real
             self._send_json(payload)
         elif path == "/api/chat/config":
             from config import settings
+            from workspace.store import preferences
+            prefs = preferences()
             self._send_json({
                 "real_allowed": self.server.allow_real,
-                "known_local_models": service.KNOWN_LOCAL_MODELS,
+                "known_local_models": list(dict.fromkeys([prefs.get("local_model", settings.local_model_name), *service.KNOWN_LOCAL_MODELS])),
                 "known_fireworks_models": service.KNOWN_FIREWORKS_MODELS,
                 "default_mode": "hybrid",
                 "default_models": {
                     "hybrid": settings.strong_model_name,
                     "remote": settings.strong_model_name,
-                    "local": settings.local_model_name,
+                    "local": prefs.get("local_model", settings.local_model_name),
                 },
             })
         elif path.startswith("/conversations"):
@@ -120,6 +245,8 @@ class DemoHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:
+        if not self._guard():
+            return
         if urlsplit(self.path).path.startswith("/conversations"):
             self._chat_request("POST", urlsplit(self.path).path)
             return
@@ -153,9 +280,13 @@ class DemoHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, status=404)
 
     def do_PATCH(self) -> None:
+        if not self._guard():
+            return
         self._chat_request("PATCH", urlsplit(self.path).path)
 
     def do_DELETE(self) -> None:
+        if not self._guard():
+            return
         self._chat_request("DELETE", urlsplit(self.path).path)
 
     def _chat_request(self, method: str, path: str, query=None) -> None:
@@ -167,6 +298,25 @@ class DemoHandler(BaseHTTPRequestHandler):
             search_conversations, update_conversation_settings,
         )
         from chat.service import MAX_MESSAGE_CHARS, conversation_config, send_message
+
+        stream_cancel = re.fullmatch(r"/conversations/streams/([a-f0-9-]+)/cancel", path)
+        if method == "POST" and stream_cancel:
+            from chat.streaming import cancel
+            self._send_json(cancel(stream_cancel.group(1)))
+            return
+        stream_match = re.fullmatch(r"/conversations/(\d+)/stream", path)
+        if method == "POST" and stream_match:
+            from chat.streaming import serve
+            payload = self._read_json()
+            try:
+                if payload is None:
+                    raise ValueError("Invalid JSON body")
+                if get_conversation(int(stream_match.group(1))) is None:
+                    raise LookupError("Conversation not found")
+                serve(self, int(stream_match.group(1)), payload)
+            except (ValueError, LookupError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
 
         if not path.startswith("/conversations"):
             self._send_json({"error": "not found"}, status=404)
@@ -284,6 +434,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     server = make_server(port=args.port, allow_real=args.real)
+    from workspace.scheduler import Scheduler
+    scheduler = Scheduler(args.real)
     mode = "REAL CALLS ALLOWED (billable)" if args.real else "mock-only"
     print(
         f"banana demo UI: http://127.0.0.1:{server.server_address[1]}  [{mode}]"
@@ -299,6 +451,7 @@ def main(argv=None) -> int:
     except KeyboardInterrupt:
         print("\nshutting down")
     finally:
+        scheduler.stop.set()
         server.server_close()
     return 0
 

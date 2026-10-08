@@ -20,6 +20,7 @@ from typing import Optional
 
 from config import ROUTE_LOCAL, settings
 from schemas import Completion
+from generation_context import completion_messages, output_limit
 
 
 class LocalModel:
@@ -35,6 +36,8 @@ class LocalModel:
 
     @property
     def loaded(self) -> bool:
+        if settings.local_backend == "ollama":
+            return self._model is not None
         return self._model is not None
 
     def load(self) -> None:
@@ -42,6 +45,13 @@ class LocalModel:
         so the first task doesn't pay the cold-start."""
         if settings.mock_mode or self.loaded:
             return
+        if settings.local_backend == "ollama":
+            from ollama_client import request
+            request("/api/show", {"model": self.model_name})
+            self._model = True
+            return
+        if settings.local_backend != "transformers":
+            raise ValueError("LOCAL_BACKEND must be transformers or ollama")
         import torch  # heavy import, deliberately deferred
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -90,6 +100,9 @@ class LocalModel:
             return self._generate_locked(prompt, started)
 
     def _generate_locked(self, prompt: str, started: float) -> Completion:
+        if settings.local_backend == "ollama":
+            from ollama_client import generate
+            return generate(self.model_name, prompt)
         if not self.loaded:
             self.load()
         import torch
@@ -101,12 +114,7 @@ class LocalModel:
             # Same concise-answer directive as the remote side: local tokens
             # cost no API spend, but a rambling answer is more likely to be
             # graded wrong (observed: "mixed" in reply to an options question).
-            messages = []
-            if settings.system_prompt:
-                messages.append(
-                    {"role": "system", "content": settings.system_prompt}
-                )
-            messages.append({"role": "user", "content": prompt})
+            messages = completion_messages(prompt, settings.system_prompt)
             rendered = self._tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
@@ -138,7 +146,7 @@ class LocalModel:
             # forward pass already produced, so it costs only memory.
             outputs = self._model.generate(
                 **encoded,
-                max_new_tokens=settings.local_max_new_tokens,
+                max_new_tokens=output_limit(settings.local_max_new_tokens),
                 do_sample=False,
                 pad_token_id=pad_id,
                 output_scores=True,

@@ -70,14 +70,23 @@ app.add_middleware(
 @app.middleware("http")
 async def local_or_token_access(request: Request, call_next):
     """Private by default, including conversation reads and billable sends."""
+    from workspace import auth, store
+    session = auth.session(request.headers)
+    if auth.read_users() and session is None:
+        return JSONResponse({"detail": "Sign in to Nana"}, status_code=401)
+    context = store.USER.set(session["user_id"] if session else "local")
     if request.url.path.startswith("/conversations"):
         token = os.environ.get("NANA_API_TOKEN", "")
         supplied = request.headers.get("authorization", "")
         local = bool(request.client and request.client.host in {"127.0.0.1", "::1", "localhost", "testclient"})
         authorized = bool(token and hmac.compare_digest(supplied, f"Bearer {token}"))
         if not local and not authorized:
+            store.USER.reset(context)
             return JSONResponse({"detail": "Local access only, or provide NANA_API_TOKEN"}, status_code=403)
-    return await call_next(request)
+    try:
+        return await call_next(request)
+    finally:
+        store.USER.reset(context)
 
 
 # -------------------------------------------------------------------
