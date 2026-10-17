@@ -48,6 +48,17 @@ def initialise_database():
                 REFERENCES conversations(id)
                 ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS message_attachments (
+            message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+            data TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS chat_tool_turns (
+            run_id TEXT PRIMARY KEY,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            content TEXT NOT NULL, attachments TEXT NOT NULL,
+            user_message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+            assistant_message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE
+        );
         """
     )
 

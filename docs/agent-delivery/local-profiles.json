@@ -1,0 +1,1213 @@
+{
+  "mock": false,
+  "runtime": {
+    "version": "0.40.0"
+  },
+  "before": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   554539.\nPages active:                                 344936.\nPages inactive:                               217659.\nPages speculative:                            126580.\nPages throttled:                                   0.\nPages wired down:                             211354.\nPages purgeable:                               17112.\n\"Translation faults\":                      317200098.\nPages copy-on-write:                         5170878.\nPages zero filled:                         410400077.\nPages reactivated:                          22036704.\nPages purged:                                6999345.\nFile-backed pages:                            283219.\nAnonymous pages:                              405956.\nPages stored in compressor:                   449916.\nPages occupied by compressor:                  58657.\nDecompressions:                             37514471.\nCompressions:                               47156062.\nPageins:                                     9519716.\nPageouts:                                     601202.\nSwapins:                                     2564296.\nSwapouts:                                    3158596.\nPages tagged:                                 125511.\nPages tagged resident:                        105982.\nPages tagged compressed:                       19529.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5543.\nPages tag-storage free:                        17107.\nPages tag-storage non-tag pageable:            26422.\nPages tag-storage non-tag wired:                  80.\nBytes of compressed tags:                    2835712.\nTagged compressions:                         1729623.\nTagged decompressions:                       1520775.\n",
+    "swap": "vm.swapusage: total = 4096.00M  used = 2783.38M  free = 1312.62M  (encrypted)"
+  },
+  "results": [
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-notes",
+      "repeat": 1,
+      "success": false,
+      "prompt_eval_count": 365,
+      "eval_count": 25,
+      "load_duration": 5229672709,
+      "eval_duration": 811090250,
+      "total_duration": 6422794709,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4073821712,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 6.446
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-note",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 11859083,
+      "eval_duration": 878584375,
+      "total_duration": 1217667708,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4241856016,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.24
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "save-note",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 429,
+      "eval_count": 54,
+      "load_duration": 12669959,
+      "eval_duration": 1739054875,
+      "total_duration": 2132503125,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4357084688,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 2.155
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "email-draft",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 432,
+      "eval_count": 51,
+      "load_duration": 11729083,
+      "eval_duration": 1619521459,
+      "total_duration": 2015700416,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4527248912,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 2.039
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "calendar-draft",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 435,
+      "eval_count": 52,
+      "load_duration": 12713917,
+      "eval_duration": 1674757792,
+      "total_duration": 1767762208,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4684846608,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.791
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "search",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 352,
+      "eval_count": 29,
+      "load_duration": 12177708,
+      "eval_duration": 938542083,
+      "total_duration": 1234944291,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4788262416,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.259
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-source",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 18295125,
+      "eval_duration": 912130417,
+      "total_duration": 1261426375,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 4955018768,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.287
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "load-skill",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 17714458,
+      "eval_duration": 900580834,
+      "total_duration": 1251410333,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5070231056,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.275
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-files",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 15094458,
+      "eval_duration": 438693000,
+      "total_duration": 740749833,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5235676688,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.766
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-file",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 17489000,
+      "eval_duration": 821100292,
+      "total_duration": 1168914834,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5350888976,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.193
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-notes",
+      "repeat": 2,
+      "success": false,
+      "prompt_eval_count": 365,
+      "eval_count": 25,
+      "load_duration": 17549000,
+      "eval_duration": 818830375,
+      "total_duration": 876488209,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5415044624,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.903
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-note",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 17315125,
+      "eval_duration": 900281167,
+      "total_duration": 956915292,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5415474704,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.982
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "save-note",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 429,
+      "eval_count": 54,
+      "load_duration": 17039000,
+      "eval_duration": 1740068125,
+      "total_duration": 1796037959,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418231312,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.824
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "email-draft",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 432,
+      "eval_count": 51,
+      "load_duration": 17564542,
+      "eval_duration": 1667576167,
+      "total_duration": 1724969417,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417956880,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.753
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "calendar-draft",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 435,
+      "eval_count": 52,
+      "load_duration": 18394625,
+      "eval_duration": 1690072208,
+      "total_duration": 1745267042,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5419230736,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.772
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "search",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 352,
+      "eval_count": 29,
+      "load_duration": 17433750,
+      "eval_duration": 952728500,
+      "total_duration": 1009252417,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418513936,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.036
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-source",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 17558125,
+      "eval_duration": 929805916,
+      "total_duration": 987413458,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417747984,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.015
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "load-skill",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 16869583,
+      "eval_duration": 907108208,
+      "total_duration": 965321292,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418620432,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.991
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-files",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 17818625,
+      "eval_duration": 443313000,
+      "total_duration": 498479750,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417694736,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.525
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-file",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 18176375,
+      "eval_duration": 825150959,
+      "total_duration": 882276708,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417760272,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.91
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-notes",
+      "repeat": 3,
+      "success": false,
+      "prompt_eval_count": 365,
+      "eval_count": 25,
+      "load_duration": 17310875,
+      "eval_duration": 823554542,
+      "total_duration": 878366791,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418620432,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.903
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-note",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 18601916,
+      "eval_duration": 906528709,
+      "total_duration": 964499125,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418046992,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.991
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "save-note",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 429,
+      "eval_count": 54,
+      "load_duration": 16990209,
+      "eval_duration": 1752454792,
+      "total_duration": 1811279750,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418296848,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.838
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "email-draft",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 432,
+      "eval_count": 51,
+      "load_duration": 16679500,
+      "eval_duration": 1667594959,
+      "total_duration": 1721923084,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418440208,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.749
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "calendar-draft",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 435,
+      "eval_count": 52,
+      "load_duration": 17508458,
+      "eval_duration": 1700267417,
+      "total_duration": 1756486958,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5419521552,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.782
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "search",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 352,
+      "eval_count": 29,
+      "load_duration": 17432083,
+      "eval_duration": 951448667,
+      "total_duration": 1006409291,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417874960,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.033
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-source",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 17362000,
+      "eval_duration": 916516792,
+      "total_duration": 971401167,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417891344,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.998
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "load-skill",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 17434250,
+      "eval_duration": 915800625,
+      "total_duration": 972757417,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5418620432,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.997
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-files",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 17339958,
+      "eval_duration": 443760417,
+      "total_duration": 502125000,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417694736,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.529
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-file",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 19625500,
+      "eval_duration": 820626625,
+      "total_duration": 880061125,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5417760272,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.907
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "list-notes",
+      "repeat": 1,
+      "success": false,
+      "error": "timed out",
+      "latency_s": 45.002
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-note",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 72172750,
+      "eval_duration": 2869366166,
+      "total_duration": 26905682542,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 19148285668,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 26.92
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "save-note",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 429,
+      "eval_count": 54,
+      "load_duration": 46711833,
+      "eval_duration": 3412104000,
+      "total_duration": 5759086333,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 19482341080,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 5.785
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "email-draft",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 432,
+      "eval_count": 50,
+      "load_duration": 23179208,
+      "eval_duration": 3776809792,
+      "total_duration": 6253666125,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 20431333100,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 6.268
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "calendar-draft",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 435,
+      "eval_count": 73,
+      "load_duration": 22449875,
+      "eval_duration": 4856928292,
+      "total_duration": 5326886417,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 21352771308,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 5.338
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "search",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 352,
+      "eval_count": 25,
+      "load_duration": 25018333,
+      "eval_duration": 1597208250,
+      "total_duration": 3929465958,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 21660483288,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.939
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-source",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 26090958,
+      "eval_duration": 1760318500,
+      "total_duration": 3941788208,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 22601543404,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.952
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "load-skill",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 21476625,
+      "eval_duration": 1763956666,
+      "total_duration": 4019136208,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 23387608812,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.029
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "list-files",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 21274750,
+      "eval_duration": 1352149875,
+      "total_duration": 3294106458,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 24478635756,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.305
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-file",
+      "repeat": 1,
+      "success": true,
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 27532583,
+      "eval_duration": 2263686959,
+      "total_duration": 5424617292,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 25103851224,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 5.468
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "list-notes",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 365,
+      "eval_count": 25,
+      "load_duration": 32561167,
+      "eval_duration": 3039063750,
+      "total_duration": 3109914000,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 25129864920,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.128
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-note",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 22515250,
+      "eval_duration": 2632444958,
+      "total_duration": 3273443000,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 25129864920,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.331
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "save-note",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 429,
+      "eval_count": 54,
+      "load_duration": 22018667,
+      "eval_duration": 5191256292,
+      "total_duration": 5806041542,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 25895714520,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 5.83
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "email-draft",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 432,
+      "eval_count": 50,
+      "load_duration": 27217792,
+      "eval_duration": 4209251125,
+      "total_duration": 4900514209,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 25443024600,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.924
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "calendar-draft",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 435,
+      "eval_count": 68,
+      "load_duration": 29563958,
+      "eval_duration": 6135881125,
+      "total_duration": 6934901125,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 25901645528,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 6.951
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "search",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 352,
+      "eval_count": 25,
+      "load_duration": 34481125,
+      "eval_duration": 3185317375,
+      "total_duration": 3954647875,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26355711704,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.997
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-source",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 33055125,
+      "eval_duration": 3040740458,
+      "total_duration": 3824764167,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26657111768,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.867
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "load-skill",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 23320959,
+      "eval_duration": 2500750750,
+      "total_duration": 3327100584,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26356219608,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 3.363
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "list-files",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 27774042,
+      "eval_duration": 1382094916,
+      "total_duration": 2227394625,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26356276952,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 2.263
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-file",
+      "repeat": 2,
+      "success": true,
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 26912167,
+      "eval_duration": 3239224584,
+      "total_duration": 4053999917,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26809433816,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.107
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "list-notes",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 365,
+      "eval_count": 25,
+      "load_duration": 32895042,
+      "eval_duration": 3339626166,
+      "total_duration": 4420238792,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26204864216,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.448
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-note",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 57762084,
+      "eval_duration": 3769084500,
+      "total_duration": 4700612084,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26204864216,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.775
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "save-note",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 429,
+      "eval_count": 54,
+      "load_duration": 51201042,
+      "eval_duration": 10159100458,
+      "total_duration": 11314578792,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26511097560,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 11.38
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "email-draft",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 432,
+      "eval_count": 50,
+      "load_duration": 60880125,
+      "eval_duration": 8957518208,
+      "total_duration": 9924843958,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26962034392,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 9.953
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "calendar-draft",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 435,
+      "eval_count": 73,
+      "load_duration": 48043417,
+      "eval_duration": 12302003375,
+      "total_duration": 12458681042,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26660929240,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 12.489
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "search",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 352,
+      "eval_count": 25,
+      "load_duration": 39422125,
+      "eval_duration": 4573521417,
+      "total_duration": 5751861833,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26660437720,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 5.788
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-source",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 56623625,
+      "eval_duration": 4694968541,
+      "total_duration": 5760611333,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26659667672,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 5.817
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "load-skill",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 72143417,
+      "eval_duration": 4947121417,
+      "total_duration": 6251924375,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26509295320,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 6.311
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "list-files",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 52876250,
+      "eval_duration": 3106093625,
+      "total_duration": 4382927125,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26056638168,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.454
+    },
+    {
+      "model": "qwen3.8:27b",
+      "context": 2048,
+      "task": "read-file",
+      "repeat": 3,
+      "success": true,
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 53683583,
+      "eval_duration": 3477738791,
+      "total_duration": 4551956292,
+      "loaded": [
+        {
+          "name": "qwen3.8:27b",
+          "size_vram": 26056638168,
+          "context_length": 2048
+        }
+      ],
+      "latency_s": 4.612
+    }
+  ],
+  "qwen3.5:4b_memory": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                    44973.\nPages active:                                 464154.\nPages inactive:                               250871.\nPages speculative:                            271611.\nPages throttled:                                   0.\nPages wired down:                             425361.\nPages purgeable:                                2895.\n\"Translation faults\":                      317516178.\nPages copy-on-write:                         5179687.\nPages zero filled:                         411461159.\nPages reactivated:                          22036824.\nPages purged:                                7015123.\nFile-backed pages:                            470364.\nAnonymous pages:                              516272.\nPages stored in compressor:                   449652.\nPages occupied by compressor:                  58678.\nDecompressions:                             37514736.\nCompressions:                               47156062.\nPageins:                                     9561421.\nPageouts:                                     601202.\nSwapins:                                     2564428.\nSwapouts:                                    3158596.\nPages tagged:                                 125806.\nPages tagged resident:                        106277.\nPages tagged compressed:                       19529.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5543.\nPages tag-storage free:                        15933.\nPages tag-storage non-tag pageable:            27598.\nPages tag-storage non-tag wired:                  78.\nBytes of compressed tags:                    2835712.\nTagged compressions:                         1729623.\nTagged decompressions:                       1520775.\n",
+    "swap": "vm.swapusage: total = 4096.00M  used = 2783.38M  free = 1312.62M  (encrypted)"
+  },
+  "qwen3.8:27b_memory": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                    51055.\nPages active:                                 117728.\nPages inactive:                                49102.\nPages speculative:                              2137.\nPages throttled:                                   0.\nPages wired down:                            1215973.\nPages purgeable:                                  19.\n\"Translation faults\":                      323539532.\nPages copy-on-write:                         5243655.\nPages zero filled:                         429162834.\nPages reactivated:                          24129351.\nPages purged:                                8315004.\nFile-backed pages:                             30853.\nAnonymous pages:                              138114.\nPages stored in compressor:                  1268912.\nPages occupied by compressor:                  90618.\nDecompressions:                             48467864.\nCompressions:                               63277503.\nPageins:                                    10587795.\nPageouts:                                     607364.\nSwapins:                                     4102138.\nSwapouts:                                    5335447.\nPages tagged:                                 120034.\nPages tagged resident:                         74091.\nPages tagged compressed:                       45943.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5543.\nPages tag-storage free:                         4383.\nPages tag-storage non-tag pageable:            39140.\nPages tag-storage non-tag wired:                  86.\nBytes of compressed tags:                    7719744.\nTagged compressions:                         1964558.\nTagged decompressions:                       1725055.\n",
+    "swap": "vm.swapusage: total = 13312.00M  used = 12777.00M  free = 535.00M  (encrypted)"
+  },
+  "after": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   101686.\nPages active:                                 134117.\nPages inactive:                                64095.\nPages speculative:                              2159.\nPages throttled:                                   0.\nPages wired down:                            1134665.\nPages purgeable:                                  19.\n\"Translation faults\":                      323541257.\nPages copy-on-write:                         5243925.\nPages zero filled:                         429163528.\nPages reactivated:                          24129351.\nPages purged:                                8315004.\nFile-backed pages:                             30887.\nAnonymous pages:                              169483.\nPages stored in compressor:                  1268098.\nPages occupied by compressor:                  90172.\nDecompressions:                             48468043.\nCompressions:                               63277503.\nPageins:                                    10587815.\nPageouts:                                     607364.\nSwapins:                                     4102338.\nSwapouts:                                    5335447.\nPages tagged:                                 120027.\nPages tagged resident:                         74087.\nPages tagged compressed:                       45940.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5543.\nPages tag-storage free:                         4415.\nPages tag-storage non-tag pageable:            39108.\nPages tag-storage non-tag wired:                  86.\nBytes of compressed tags:                    7719552.\nTagged compressions:                         1964558.\nTagged decompressions:                       1725057.\n",
+    "swap": "vm.swapusage: total = 13312.00M  used = 12777.00M  free = 535.00M  (encrypted)"
+  }
+}

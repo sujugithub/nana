@@ -31,7 +31,8 @@ def main():
         if str(model_dir).startswith("/Volumes/") and not model_dir.parents[0].exists():
             raise SystemExit("Connect the model SSD before starting the local runtime.")
         model_dir.mkdir(parents=True, exist_ok=True)
-        env = {**os.environ, "OLLAMA_HOST": address, "OLLAMA_MODELS": str(model_dir), "OLLAMA_NO_CLOUD": "1"}
+        env = {**os.environ, "OLLAMA_HOST": address, "OLLAMA_MODELS": str(model_dir), "OLLAMA_NO_CLOUD": "1",
+               "OLLAMA_NUM_PARALLEL": "1", "OLLAMA_MAX_LOADED_MODELS": "1"}
         log_path = ROOT / "logs/ollama-server.log"
         log_path.parent.mkdir(exist_ok=True)
         with log_path.open("ab") as log:

@@ -1,0 +1,214 @@
+{
+  "fixture": "Public Ollama documentation question; disposable database and workspace",
+  "passed": true,
+  "duration_s": 6.37,
+  "model": "qwen3.5:4b",
+  "web": {
+    "enabled": true,
+    "provider": "exa",
+    "sources": [
+      {
+        "url": "https://docs.ollama.com/capabilities/tool-calling",
+        "title": "Tool calling",
+        "kind": "Search excerpt"
+      },
+      {
+        "url": "https://github.com/ollama/ollama/blob/main/docs/capabilities/tool-calling.mdx",
+        "title": "docs/capabilities/tool-calling.mdx at main \u00b7 ollama/ollama",
+        "kind": "Search excerpt"
+      },
+      {
+        "url": "https://github.com/ollama/ollama/blob/main/docs/api.md",
+        "title": "ollama/docs/api.md at main",
+        "kind": "Search excerpt"
+      }
+    ],
+    "context_estimate": "3 characters per token",
+    "requested_context_tokens": 8192
+  },
+  "answer": "Ollama supports tool calling by providing a list of tools in the `tools` parameter of the chat request. Source: https://docs.ollama.com/capabilities/tool-calling\n\nSources:\n1. https://docs.ollama.com/capabilities/tool-calling (Search excerpt)\n2. https://github.com/ollama/ollama/blob/main/docs/capabilities/tool-calling.mdx (Search excerpt)\n3. https://github.com/ollama/ollama/blob/main/docs/api.md (Search excerpt)",
+  "attempts": [
+    {
+      "provider": "local",
+      "model": "qwen3.5:4b",
+      "characters": 0,
+      "usage": {
+        "prompt_tokens": 762,
+        "completion_tokens": 29
+      }
+    },
+    {
+      "provider": "local",
+      "model": "qwen3.5:4b",
+      "characters": 161,
+      "usage": {
+        "prompt_tokens": 1543,
+        "completion_tokens": 38
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "web",
+      "phase": "query",
+      "provider": "exa"
+    },
+    {
+      "type": "web",
+      "phase": "search",
+      "provider": "exa"
+    },
+    {
+      "type": "web",
+      "phase": "sources",
+      "sources": [
+        {
+          "url": "https://docs.ollama.com/capabilities/tool-calling",
+          "title": "Tool calling",
+          "kind": "Search excerpt"
+        },
+        {
+          "url": "https://github.com/ollama/ollama/blob/main/docs/capabilities/tool-calling.mdx",
+          "title": "docs/capabilities/tool-calling.mdx at main \u00b7 ollama/ollama",
+          "kind": "Search excerpt"
+        },
+        {
+          "url": "https://github.com/ollama/ollama/blob/main/docs/api.md",
+          "title": "ollama/docs/api.md at main",
+          "kind": "Search excerpt"
+        }
+      ]
+    },
+    {
+      "type": "attempt",
+      "provider": "local",
+      "model": "qwen3.5:4b"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    },
+    {
+      "type": "delta"
+    }
+  ],
+  "persisted_messages": 2,
+  "api_cost_usd": 0,
+  "runtime_models": [
+    {
+      "name": "qwen3.5:4b",
+      "size_vram": 4330558992,
+      "context_length": 4096
+    }
+  ],
+  "swap_before": "vm.swapusage: total = 5120.00M  used = 3798.94M  free = 1321.06M  (encrypted)",
+  "swap_after": "vm.swapusage: total = 5120.00M  used = 3798.94M  free = 1321.06M  (encrypted)",
+  "context_note": "8192 requested; Ollama api/ps reports 4096. Short public fixtures passed; full-window retention is not established."
+}

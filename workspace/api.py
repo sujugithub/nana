@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, urlsplit
 
-from . import store, runs, tools, connections, auth
+from . import store, runs, tools, connections, auth, effects
 
 
 def safe_run(run):
@@ -125,33 +125,41 @@ def handle(handler, method):
         elif path == "/mail/send" and method == "POST":
             if data.get("confirm") is not True:
                 raise ValueError("Review the recipient and message before sending")
-            result = connections.mail_send(str(data.get("draft_id", "")))
+            item_id = str(data.get("draft_id", ""))
+            result = effects.publish("mail_send", item_id, data.get("expected_updated"), lambda item: connections.mail_send(item_id, item))
         elif path == "/mail/labels" and method == "POST":
-            result = connections.google("gmail/v1/users/me/messages/" + str(data["id"]) + "/modify",
-                                        {"addLabelIds": data.get("add", []), "removeLabelIds": data.get("remove", [])})
+            from urllib.parse import quote
+            args = {"id": data["id"], "add": data.get("add", []), "remove": data.get("remove", [])}
+            result = effects.submit("mail_labels", args, data.get("operation_id"), lambda: connections.google("gmail/v1/users/me/messages/" + quote(args["id"], safe="") + "/modify", {"addLabelIds": args["add"], "removeLabelIds": args["remove"]}))
         elif path == "/calendar" and method == "GET":
             result = connections.calendar_list()
         elif path == "/calendar/publish" and method == "POST":
             if data.get("confirm") is not True:
                 raise ValueError("Review the event before publishing")
-            result = connections.calendar_publish(str(data.get("id", "")))
+            item_id = str(data.get("id", ""))
+            result = effects.publish("calendar_publish", item_id, data.get("expected_updated"), lambda item: connections.calendar_publish(item_id, item))
         elif path == "/calendar/delete" and method == "POST":
             if data.get("confirm") is not True:
                 raise ValueError("Confirm event deletion")
             from urllib.parse import quote
-            result = connections.google("calendar/v3/calendars/primary/events/" + quote(str(data["google_id"]), safe=""), method="DELETE")
+            args = {"google_id": data["google_id"]}
+            result = effects.submit("calendar_delete", args, data.get("operation_id"), lambda: connections.google("calendar/v3/calendars/primary/events/" + quote(args["google_id"], safe=""), method="DELETE"))
         elif path == "/runs" and method == "POST":
             result = safe_run(runs.start(data.get("kind", "agent"), data, handler.server.allow_real))
         elif path == "/runs" and method == "GET":
             result = [safe_run(r) for r in store.run_list()]
-        elif match := re.fullmatch(r"/runs/([a-f0-9]+)(?:/(cancel|review|reveal|apply))?", path):
+        elif match := re.fullmatch(r"/runs/([a-f0-9]+)(?:/(cancel|review|reveal|apply|resume))?", path):
             run_id, action = match.groups()
             if method == "GET" and action is None:
                 result = safe_run(store.run_get(run_id))
             elif method == "POST" and action == "cancel":
                 result = safe_run(runs.cancel(run_id))
+            elif method == "POST" and action == "resume":
+                result = safe_run(runs.resume_interrupted(run_id, handler.server.allow_real))
             elif method == "POST" and action == "review":
-                result = safe_run(runs.review(run_id, data.get("approve") is True, handler.server.allow_real))
+                if not data.get("action_id"):
+                    raise ValueError("Review the current tool request first")
+                result = safe_run(runs.review(run_id, data.get("approve") is True, handler.server.allow_real, data["action_id"]))
             elif method == "POST" and action == "reveal":
                 run = store.run_get(run_id)
                 if run["kind"] != "compare" or run["status"] != "completed":
@@ -171,6 +179,13 @@ def handle(handler, method):
                 result = store.save({"content": run["result"]["answer"]}, item["id"])
             else:
                 raise LookupError("Route not found")
+        elif path == "/actions" and method == "GET":
+            with store.db() as conn:
+                result = [dict(row) for row in conn.execute("SELECT * FROM actions ORDER BY created DESC LIMIT 100")]
+        elif match := re.fullmatch(r"/actions/([a-f0-9]+)/reconcile", path):
+            if method != "POST":
+                raise LookupError("Route not found")
+            result = effects.reconcile(match[1], data.get("outcome"), data.get("evidence"))
         elif path == "/jobs" and method == "POST":
             result = {"id": store.job_save(data)}
         elif path == "/jobs" and method == "GET":
@@ -179,6 +194,13 @@ def handle(handler, method):
             with store.db() as conn:
                 conn.execute("UPDATE jobs SET status='cancelled',updated=? WHERE id=? AND status='pending'", (store.now(), path.split("/")[-1]))
             result = {"cancelled": True}
+        elif path == "/chat/attachments" and method == "POST":
+            from chat.attachments import upload
+            result = upload(data)
+        elif path == "/chat/capabilities" and method == "GET":
+            from chat.attachments import capabilities
+            result = {**capabilities((query.get("mode") or ["local"])[0], (query.get("model") or [None])[0]), "tools": tools.TOOLS,
+                      "formats": ["PDF", "images", "text/code", "CSV", "DOCX", "XLSX", "PPTX"], "max_bytes": 10*1024*1024}
         elif path == "/files" and method == "POST":
             name = str(data.get("name", ""))
             raw = base64.b64decode(data.get("data", ""), validate=True)

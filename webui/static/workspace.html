@@ -473,6 +473,7 @@
         ["task", "Tasks & reminders"],
         ["document", "Documents"],
         ["memory", "Memory"],
+        ["skill", "Skills"],
         ["mail", "Gmail"],
         ["event", "Calendar"],
         ["asset", "Gallery & files"],
@@ -491,6 +492,7 @@
         task: "Make room for what matters next.",
         document: "Write, revise and review AI suggestions.",
         memory: "You choose what Nana remembers across conversations.",
+        skill: "Versioned instructions. Approve a skill before Nana can load it.",
         mail: "Read your inbox and review drafts before sending.",
         event: "Plan here and publish reviewed events to Google Calendar.",
         asset: "Your uploaded files and generated images.",
@@ -601,7 +603,7 @@
         $("view").replaceChildren();
         if (page === "home") overview();
         else if (
-          ["note", "task", "document", "memory", "event", "preset"].includes(
+          ["note", "task", "document", "memory", "skill", "event", "preset"].includes(
             page,
           )
         )
@@ -770,6 +772,14 @@
           panel.insertBefore(formatting, body.wrap);
         }
         title.input.oninput = body.input.oninput = () => (dirty = true);
+        let memoryFields = {};
+        if (item.kind === "memory") {
+          for (const [key, label, value] of [["category", "Category: preference, fact, task_state or transcript", item.meta.category || "fact"], ["scope", "Scope: user, chat:<id> or project:<name>", item.meta.scope || "user"], ["confidence", "Confidence (0 to 1)", item.meta.confidence ?? 1], ["provenance", "Source / provenance", item.meta.provenance || "workspace editor"]]) {
+            memoryFields[key] = field(label, "text", String(value));
+            memoryFields[key].input.oninput = () => dirty = true;
+            panel.append(memoryFields[key].wrap);
+          }
+        }
         let extra = {};
         if (item.kind === "task") {
           extra.due = field(
@@ -792,6 +802,7 @@
         actions.style.marginTop = "18px";
         const save = async () => {
           let meta = { ...item.meta };
+          for (const [key, f] of Object.entries(memoryFields)) meta[key] = key === "confidence" ? Number(f.input.value) : f.input.value;
           for (const [key, f] of Object.entries(extra))
             meta[key] = f.input.value
               ? new Date(f.input.value).toISOString()
@@ -837,6 +848,12 @@
                 render();
               }),
             );
+          if (item.kind === "skill") actions.append(button(item.meta.approved ? "Revoke skill approval" : "Approve this skill", async () => {
+            const current = dirty ? await save() : item;
+            await api("/items/" + current.id, "PATCH", {expected_updated: current.updated, meta: {...current.meta, approved: !current.meta.approved}});
+            await refresh(); render();
+          }));
+          if (["memory", "skill"].includes(item.kind)) actions.append(el("p", `Version ${item.meta.version || 1} · ${item.meta.scope || "user"} · ${item.meta.provenance || "workspace editor"}`));
           if (item.kind === "preset")
             actions.append(
               button("Use in chat & agents", async () => {
@@ -852,12 +869,13 @@
                 const saved = await save();
                 if (
                   !confirm(
-                    "Publish “" + saved.title + "” to your Google Calendar?",
+                    "Publish “" + saved.title + "” to your Google Calendar?\n" + saved.meta.start + " → " + saved.meta.end + "\n\n" + saved.content,
                   )
                 )
                   return;
                 await api("/calendar/publish", "POST", {
                   id: saved.id,
+                  expected_updated: saved.updated,
                   confirm: true,
                 });
                 toast("Published");
@@ -955,13 +973,19 @@
               ["reminder", "Reminder in Nana"],
               ["agent", "Run a read-only agent"],
             ]),
-            repeat = field("Repeat every N minutes (0 = once)", "number", 0);
+            repeat = field("Repeat every N minutes (0 = once)", "number", 0),
+            recurrence = select("Recurrence", [["interval", "Once or interval"], ["daily", "Daily at this local time"]]);
+          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          recurrence.input.onchange = () => { repeat.input.disabled = recurrence.input.value === "daily"; };
           d.append(
             title.wrap,
             when.wrap,
             type.wrap,
             content.wrap,
+            recurrence.wrap,
             repeat.wrap,
+            el("p", "Daily timezone: " + timezone + ". Missed times coalesce into one occurrence; tasks do not overlap."),
+            el("p", "Scheduled agents use your selected local model: " + (state.preferences.local_model || state.local_model)),
             el(
               "p",
               "Nana must be running. After a crash, interrupted actions are shown rather than silently repeated.",
@@ -974,7 +998,10 @@
                 type: type.input.value,
                 content: content.input.value,
                 prompt: content.input.value,
-                repeat_minutes: Number(repeat.input.value),
+                repeat_minutes: recurrence.input.value === "daily" ? 0 : Number(repeat.input.value),
+                ...(recurrence.input.value === "daily" ? {recurrence: "daily", timezone} : {}),
+                mode: "local",
+                model: state.preferences.local_model || state.local_model,
               });
               d.close();
               await refresh();
@@ -998,7 +1025,7 @@
             ["hybrid", "Hybrid"],
             ["local", "Local"],
           ],
-          state.preferences.agent_mode || "remote",
+          state.preferences.agent_mode || "local",
         );
         const model = field(
           "Model override (optional)",
@@ -1115,6 +1142,16 @@
           ),
           el("p", run.status),
         );
+        if (run.result.phase === "tool") d.append(el("p", "Running tool: " + run.result.tool));
+        if (run.result.progress) d.append(el("p", "Generating…"), el("pre", run.result.progress));
+        if (run.result.usage) {
+          const u = run.result.usage;
+          d.append(el("p", `${u.requests} model requests · ${u.tokens} tokens · $${Number(u.cost_usd).toFixed(6)} · ${Number(u.active_seconds).toFixed(1)}s active`));
+        }
+        if (run.result.usage_complete === false) d.append(el("p", "Usage for the unfinished call may be incomplete."));
+        if (run.status === "interrupted") d.append(button("Resume read-only work", async () => {
+          await api("/runs/" + id + "/resume", "POST", {}); showRun(id);
+        }));
         if (run.result.error) d.append(el("p", run.result.error, "error"));
         if (run.kind === "compare") {
           const grid = el("div", undefined, "columns");
@@ -1200,13 +1237,13 @@
             button(
               "Approve this tool call",
               async () => {
-                await api("/runs/" + id + "/review", "POST", { approve: true });
+                await api("/runs/" + id + "/review", "POST", { approve: true, action_id: run.result.pending_tool.action_id });
                 showRun(id);
               },
               "primary",
             ),
             button("Decline", async () => {
-              await api("/runs/" + id + "/review", "POST", { approve: false });
+              await api("/runs/" + id + "/review", "POST", { approve: false, action_id: run.result.pending_tool.action_id });
               showRun(id);
             }),
           );
@@ -1217,7 +1254,7 @@
           ["queued", "running"].includes(run.status)
         )
           d.append(
-            button("Stop after current call", async () => {
+            button("Stop run", async () => {
               await api("/runs/" + id + "/cancel", "POST", {});
               showRun(id);
             }),
@@ -1294,6 +1331,7 @@
                 }),
                 button("Mark read", async () => {
                   await api("/mail/labels", "POST", {
+                    operation_id: crypto.randomUUID(),
                     id: msg.id,
                     remove: ["UNREAD"],
                   });
@@ -1301,6 +1339,7 @@
                 }),
                 button("Star", async () => {
                   await api("/mail/labels", "POST", {
+                    operation_id: crypto.randomUUID(),
                     id: msg.id,
                     add: ["STARRED"],
                   });
@@ -1369,6 +1408,7 @@
                   return;
                 await api("/mail/send", "POST", {
                   draft_id: draft.id,
+                  expected_updated: draft.updated,
                   confirm: true,
                 });
                 d.close();
@@ -1413,6 +1453,7 @@
                 )
                   return;
                 await api("/calendar/delete", "POST", {
+                  operation_id: crypto.randomUUID(),
                   google_id: event.id,
                   confirm: true,
                 });
@@ -1717,19 +1758,29 @@
           el("h2", "Web search"),
           el(
             "p",
-            "Use a SearXNG instance with its JSON API enabled. Web reading works independently with public source URLs.",
+            "Exa offers hosted search without an API key; search queries go to Exa. Or use your own SearXNG JSON endpoint. Public URL reading works independently.",
           ),
         );
+        const provider = el("select");
+        provider.setAttribute("aria-label", "Web search provider");
+        for (const [value, label] of [["off", "Off — public URLs only"], ["exa", "Exa — no API key"], ["searxng", "SearXNG — your server"]]) {
+          const option = el("option", label);
+          option.value = value;
+          provider.append(option);
+        }
+        provider.value = state.preferences.search_provider || (state.preferences.searxng_url ? "searxng" : "off");
         const endpoint = field(
           "SearXNG URL",
           "url",
           state.preferences.searxng_url || "",
         );
         search.append(
+          provider,
           endpoint.wrap,
           button("Save search connection", async () => {
             await api("/preferences", "POST", {
               searxng_url: endpoint.input.value,
+              search_provider: provider.value,
             });
             toast("Saved");
           }),
@@ -1891,6 +1942,27 @@
         const jobs = el("div", undefined, "panel");
         jobs.style.marginTop = "20px";
         jobs.append(el("h2", "Schedules"));
+        jobs.append(button("Inspect action outcomes", async () => {
+          const actions = await api("/actions");
+          modal("Action outcomes", d => {
+            d.append(el("p", "An uncertain result must be checked in the destination service before another attempt. Recording an outcome does not send or publish anything."));
+            for (const action of actions) {
+              const details = el("details");
+              details.append(el("summary", action.status + " · " + action.id.slice(0, 12)), el("pre", JSON.stringify({...action, request: JSON.parse(action.request), result: JSON.parse(action.result)}, null, 2)));
+              if (action.status === "uncertain") {
+                const evidence = field("How did you verify the outcome?", "textarea");
+                details.append(evidence.wrap);
+                for (const [outcome, label] of [["confirmed_completed", "I verified it completed"], ["confirmed_not_applied", "I verified it did not happen"]]) {
+                  details.append(button(label, async () => {
+                    await api("/actions/" + action.id + "/reconcile", "POST", {outcome, evidence: evidence.input.value});
+                    d.close(); toast("User verification recorded; nothing was replayed.");
+                  }));
+                }
+              }
+              d.append(details);
+            }
+          });
+        }));
         for (const job of state.jobs) {
           const row = el("div", undefined, "row");
           row.append(
@@ -1913,6 +1985,11 @@
             );
           if (job.run_id)
             row.append(button("View run", () => showRun(job.run_id)));
+          if (job.occurrences && job.occurrences.length) {
+            const history = el("details");
+            history.append(el("summary", "Occurrence history"), el("pre", JSON.stringify(job.occurrences, null, 2)));
+            row.append(history);
+          }
           jobs.append(row);
         }
         $("view").append(jobs);

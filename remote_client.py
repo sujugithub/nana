@@ -184,6 +184,9 @@ class FireworksClient:
             "temperature": 0,
         }
 
+        from generation_context import TOOLS
+        if TOOLS.get():
+            payload["tools"] = TOOLS.get()
         data = None
         for attempt in range(settings.max_retries + 1):
             try:
@@ -246,6 +249,7 @@ class FireworksClient:
         )
         return Completion(
             text=text,
+            tool_calls=(choice.get("message") or {}).get("tool_calls", []),
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             source=self.route,
@@ -263,12 +267,16 @@ class FireworksClient:
         messages = completion_messages(prompt, settings.system_prompt)
         payload = {"model": self.model_name, "messages": messages, "max_tokens": output_limit(self.max_tokens),
                    "temperature": 0, "stream": True, "stream_options": {"include_usage": True}}
+        from generation_context import TOOLS
+        if TOOLS.get():
+            payload["tools"] = TOOLS.get()
         stream.start("fireworks", self.model_name)
         pieces, usage, tool_calls = [], {}, {}
+        finished = False
         try:
             with requests.post(self.base_url + "/chat/completions", json=payload,
                                headers={"Authorization": "Bearer " + self.api_key}, stream=True,
-                               timeout=(settings.connect_timeout_s, settings.request_timeout_s)) as response:
+                               timeout=(stream.remaining(settings.connect_timeout_s), stream.remaining(settings.request_timeout_s))) as response:
                 if response.status_code != 200:
                     raise RemoteError(f"Fireworks streaming returned HTTP {response.status_code}")
                 for line in response.iter_lines(chunk_size=1):
@@ -277,6 +285,7 @@ class FireworksClient:
                         continue
                     raw = line[6:]
                     if raw == b"[DONE]":
+                        finished = True
                         break
                     data = json.loads(raw)
                     if data.get("error"):
@@ -290,6 +299,8 @@ class FireworksClient:
                         for call in delta.get("tool_calls") or []:
                             index = call.get("index", 0)
                             target = tool_calls.setdefault(index, {"function": {"name": "", "arguments": ""}})
+                            if call.get("id"):
+                                target["id"] = call["id"]
                             function = call.get("function") or {}
                             for key in ("name", "arguments"):
                                 target["function"][key] += function.get(key) or ""
@@ -299,6 +310,8 @@ class FireworksClient:
                             stream.delta(text)
         except requests.RequestException:
             raise RemoteError("Fireworks streaming connection failed; not retried to avoid duplicate billing") from None
+        if not finished:
+            raise RemoteError("Fireworks stream ended before completion; usage may be incomplete")
         tool_text = _tool_call_text([tool_calls[index] for index in sorted(tool_calls)])
         if tool_text:
             suffix = ("\n\n" if pieces else "") + tool_text
@@ -306,7 +319,7 @@ class FireworksClient:
             stream.delta(suffix)
             stream.attempts[-1]["native_tool_calls_converted"] = len(tool_calls)
         text = "".join(pieces).strip()
-        return Completion(text=text, prompt_tokens=int(usage.get("prompt_tokens", max(1, len(prompt)//4))),
+        return Completion(text=text, tool_calls=[tool_calls[i] for i in sorted(tool_calls)], prompt_tokens=int(usage.get("prompt_tokens", max(1, len(prompt)//4))),
                           completion_tokens=int(usage.get("completion_tokens", max(1, len(text)//4))),
                           source=self.route, latency_s=time.monotonic()-started,
                           model_name=self.model_name, provider="fireworks")

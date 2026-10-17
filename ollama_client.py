@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 from config import ROUTE_LOCAL, settings
 from schemas import Completion
-from generation_context import completion_messages, output_limit
+from generation_context import completion_messages, output_limit, TOOLS, LOCAL_CONTEXT
 
 
 def local_system_prompt(model):
@@ -67,13 +67,21 @@ def request(path, payload=None, timeout=120):
 def generate(model, prompt):
     started = time.monotonic()
     messages = completion_messages(prompt, local_system_prompt(model))
+    if TOOLS.get():
+        # Ollama accepts object arguments; OpenAI-compatible remote APIs use
+        # JSON strings. Translate at the provider boundary, preserving roles.
+        for message in messages:
+            if message.get("tool_calls"):
+                message["tool_calls"] = [dict(call, function={**call["function"], "arguments": json.loads(call["function"]["arguments"]) if isinstance(call["function"].get("arguments"), str) else call["function"].get("arguments", {})}) for call in message["tool_calls"]]
     from generation_stream import CURRENT
     if CURRENT.get() is not None:
         return stream_generate(model, messages, CURRENT.get(), started)
     data = request("/api/chat", {"model": model, "messages": messages, "stream": False, "think": False,
-                                "options": {"temperature": 0,
+                                **({"tools": TOOLS.get()} if TOOLS.get() else {}),
+                                "options": {"temperature": 0, **({"num_ctx": LOCAL_CONTEXT.get()} if LOCAL_CONTEXT.get() else {}),
                                             "num_predict": output_limit(settings.local_max_new_tokens)}})
-    return Completion(text=data["message"]["content"].strip(),
+    return Completion(text=data["message"].get("content", "").strip(),
+                      tool_calls=data["message"].get("tool_calls", []),
                       prompt_tokens=int(data.get("prompt_eval_count", 0)),
                       completion_tokens=int(data.get("eval_count", 0)),
                       source=ROUTE_LOCAL, model_name=model, provider="local",
@@ -83,17 +91,19 @@ def generate(model, prompt):
 def stream_generate(model, messages, stream, started):
     stream.start("local", model)
     payload = {"model": model, "messages": messages, "stream": True, "think": False,
-               "options": {"temperature": 0, "num_predict": output_limit(settings.local_max_new_tokens)}}
+               **({"tools": TOOLS.get()} if TOOLS.get() else {}),
+                                "options": {"temperature": 0, **({"num_ctx": LOCAL_CONTEXT.get()} if LOCAL_CONTEXT.get() else {}), "num_predict": output_limit(settings.local_max_new_tokens)}}
     req = urllib.request.Request(settings.ollama_base_url.rstrip("/") + "/api/chat",
                                  data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
-    pieces, final = [], {}
+    pieces, final, calls = [], {}, []
     try:
-        with urllib.request.urlopen(req, timeout=settings.request_timeout_s) as response:
+        with urllib.request.urlopen(req, timeout=stream.remaining(settings.request_timeout_s)) as response:
             for line in response:
                 stream.check()
                 data = json.loads(line)
                 if data.get("error"):
                     raise RuntimeError(str(data["error"]))
+                calls.extend(data.get("message", {}).get("tool_calls", []))
                 text = data.get("message", {}).get("content", "")
                 if text:
                     pieces.append(text)
@@ -101,8 +111,16 @@ def stream_generate(model, messages, stream, started):
                 if data.get("done"):
                     final = data
                     stream.usage({"prompt_tokens": final.get("prompt_eval_count", 0), "completion_tokens": final.get("eval_count", 0)})
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise RuntimeError(
+                f"Ollama model {model!r} is not installed. Choose an installed local model in Chat."
+            ) from None
+        raise RuntimeError(f"Ollama returned HTTP {exc.code} while streaming {model!r}") from None
     except urllib.error.URLError:
-        raise RuntimeError("Ollama streaming connection failed") from None
-    return Completion(text="".join(pieces).strip(), prompt_tokens=int(final.get("prompt_eval_count", 0)),
+        raise RuntimeError("Ollama streaming connection failed; check that the configured runtime is running") from None
+    if not final.get("done"):
+        raise RuntimeError("Ollama stream ended before completion; usage may be incomplete")
+    return Completion(text="".join(pieces).strip(), tool_calls=calls, prompt_tokens=int(final.get("prompt_eval_count", 0)),
                       completion_tokens=int(final.get("eval_count", 0)), source=ROUTE_LOCAL,
                       model_name=model, provider="local", latency_s=time.monotonic()-started)

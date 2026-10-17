@@ -165,6 +165,29 @@ class TestFastAPI(ChatCase):
 
 
 class TestDemoChatHTTP(ChatCase):
+    def test_chat_model_choices_discover_installed_models_and_survive_offline_runtime(self):
+        server = make_server(port=0, allow_real=False)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f"http://127.0.0.1:{server.server_address[1]}/api/chat/config"
+        prefs = {"local_backend": "ollama", "local_model": "qwen3.5:4b"}
+        with mock.patch("workspace.store.preferences", return_value=prefs), mock.patch(
+            "ollama_client.request", return_value={"models": [
+                {"name": "qwen3.8:27b"}, {"name": "qwen3.5:4b"},
+            ]}
+        ) as request:
+            config = json.load(urllib.request.urlopen(url))
+        request.assert_called_once_with("/api/tags", timeout=2)
+        self.assertIn("qwen3.8:27b", config["known_local_models"])
+        self.assertEqual(config["known_local_models"].count("qwen3.5:4b"), 1)
+        self.assertEqual(config["default_models"]["local"], "qwen3.5:4b")
+        with mock.patch("workspace.store.preferences", return_value=prefs), mock.patch(
+            "ollama_client.request", side_effect=RuntimeError("Ollama unavailable")
+        ):
+            config = json.load(urllib.request.urlopen(url))
+        self.assertIn("qwen3.5:4b", config["known_local_models"])
+
     def test_chat_page_and_mock_only_http_flow(self):
         server = make_server(port=0, allow_real=False)
         thread = threading.Thread(target=server.serve_forever, daemon=True)

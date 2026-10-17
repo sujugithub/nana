@@ -1,6 +1,50 @@
 # Nana 2.0 handoff
 
-Updated: 8 October 2026. This branch contains the native Nana application.
+Updated: 17 October 2026. This branch contains the native Nana application.
+
+## GitHub delivery
+
+The owner requested publication of the accumulated native harness and Chat
+increments to GitHub `main`. This includes their existing model-dropdown
+changes, delivery evidence, and the Arch-Router plan/local spike; the router
+plan remains proposed and is not integrated into the application.
+
+Before publication, all 261 tests passed on 17 October, the offline stdlib
+wiring harness passed, and `chat-response.js` passed its syntax check. No
+paid inference was needed. Credentials, private chats/uploads, model weights,
+local runtimes and the separately copied Odysseus application stay excluded.
+The historical `handoff-next-session.md` is retained unchanged for provenance;
+use this handoff and the delivery board for the newer increments and blockers.
+
+## Latest increment — generated files in Chat
+
+- Completed code fences display Copy code and Download controls. HTML browser
+  games are prompted as self-contained files; generated code is displayed as
+  text and never executed inside Chat. Copy response is also available.
+- An explicit DOCX/Word output request produces a real local OOXML download
+  from the completed reply, with titles, headings, paragraphs, bold text,
+  simple lists and code. Ordinary essays/questions have no document card.
+  Mentioning an uploaded `.docx` as an input does not by itself request an export.
+- Downloads are derived from saved, account-scoped messages. They survive
+  reopening the conversation, disappear with its deletion, and require no
+  extra model call, paid provider call, arbitrary filesystem path or database
+  migration. Existing chats and the water-canvas source were preserved.
+- The response UI is separated into `webui/static/chat-response.js` and
+  `chat-response.css`; export logic lives in `chat/artifacts.py`. Both the
+  native server and optional FastAPI interface serve these downloads.
+- Acceptance: local Qwen3.5 4B generated HTML (43.38s) and an essay (8.98s).
+  Browser Copy → paste preserved code; the HTML download matched saved source
+  byte for byte; DOCX downloaded and rendered cleanly as one page. Controls
+  returned on chat reopen. Generated game gameplay was not evaluated.
+  Fourteen export regressions, all 261 native tests and the stdlib wiring
+  harness pass. See `docs/agent-delivery/chat-generated-files.json`.
+- Limits: export does not validate generated code semantics or research facts;
+  DOCX supports ordinary text documents, not complex tables/media/templates.
+  No PDF, PPTX or XLSX output generator is implemented by this increment.
+
+The earlier harness/attachment/menu increments and unfinished H07/H09/H10/H17
+stories are tracked in `docs/agent-delivery/board.md`. Remaining integration
+and routing evaluation work must not be described as complete.
 
 ## Current state
 

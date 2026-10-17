@@ -1,0 +1,44 @@
+{
+  "qwen3.5:4b": {
+    "trials": 30,
+    "successes": 27,
+    "context": 4096,
+    "median_latency_s": 1.1145,
+    "warm_median_latency_s": 1.036,
+    "median_generation_tokens_per_second": 30.505595323213875,
+    "max_ollama_reported_allocation_bytes": 5419521552,
+    "failures": [
+      {
+        "task": "list-notes",
+        "repeat": 1,
+        "error": null
+      },
+      {
+        "task": "list-notes",
+        "repeat": 2,
+        "error": null
+      },
+      {
+        "task": "list-notes",
+        "repeat": 3,
+        "error": null
+      }
+    ]
+  },
+  "qwen3.8:27b": {
+    "trials": 30,
+    "successes": 29,
+    "context": 2048,
+    "median_latency_s": 4.849500000000001,
+    "warm_median_latency_s": 4.775,
+    "median_generation_tokens_per_second": 9.406011012343525,
+    "max_ollama_reported_allocation_bytes": 26962034392,
+    "failures": [
+      {
+        "task": "list-notes",
+        "repeat": 1,
+        "error": "timed out"
+      }
+    ]
+  }
+}

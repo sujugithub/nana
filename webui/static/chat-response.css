@@ -1,0 +1,18 @@
+.response-body { min-width:0; white-space:normal; }
+.response-prose p { margin:0 0 14px; white-space:pre-wrap; }
+.response-prose h2, .response-prose h3, .response-prose h4 { margin:20px 0 10px; line-height:1.35; }
+.response-prose h2 { font-size:23px; }.response-prose h3 { font-size:19px; }
+.inline-code { font-size:.9em; background:#ffffff85; border-radius:5px; padding:2px 5px; }
+.response-code { margin:16px 0; border:1px solid #d7dcef; border-radius:16px; background:#f8f9fd; overflow:hidden; min-width:0; }
+.response-code-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; background:#eef0f9; border-bottom:1px solid #dde1ef; }
+.response-filename { font:600 12px system-ui; color:#4c5571; overflow-wrap:anywhere; }
+.response-actions { display:flex; gap:6px; flex-shrink:0; }
+.response-action { font:500 12px system-ui; border:1px solid #cbd2e6; color:#303952; background:#fff; border-radius:8px; padding:7px 10px; cursor:pointer; white-space:nowrap; }
+.response-action:hover { background:#e4e9f7; }.response-action:focus-visible { outline:2px solid #5868b0; outline-offset:3px; }
+.response-action:disabled { opacity:.6; cursor:wait; }
+.response-code pre { margin:0; padding:18px; overflow:auto; max-height:440px; white-space:pre; font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; color:#202b43; tab-size:4; }
+.response-file { display:flex; align-items:center; justify-content:space-between; gap:14px; background:#ffffffb8; border:1px solid #d4dcef; border-radius:16px; padding:16px; margin:16px 0; }
+.response-file-details { display:flex; flex-direction:column; min-width:0; line-height:1.6; }.response-file-details strong { font-size:14px; overflow-wrap:anywhere; }.response-file-details span { color:#64708b; font-size:12px; }
+.response-footer { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:12px; }.response-notice { color:#59627b; font-size:12px; }.response-notice:empty { display:none; }
+.response-copy-buffer { position:fixed; top:0; left:-9999px; }
+@media(max-width:600px) { .response-action { min-height:40px; }.response-code pre { font-size:12px; padding:12px; }.response-file { padding:12px; } }

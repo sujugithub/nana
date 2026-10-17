@@ -1,0 +1,26 @@
+{
+  "/chat": 200,
+  "/workspace": 200,
+  "/welcome": 200,
+  "/api/workspace/chat/capabilities?mode=local&model=qwen3.5:4b": 200,
+  "local_capabilities": {
+    "vision": true,
+    "source": "Ollama model metadata",
+    "formats": [
+      "PDF",
+      "images",
+      "text/code",
+      "CSV",
+      "DOCX",
+      "XLSX",
+      "PPTX"
+    ],
+    "max_bytes": 10485760
+  },
+  "existing_chats_preserved": true,
+  "protected_files": {
+    "tests/test_chat.py": true,
+    "handoff-next-session.md": true,
+    "water_block": true
+  }
+}

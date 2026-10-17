@@ -1,0 +1,48 @@
+{
+  "updated": "2026-10-11 Australia/Sydney",
+  "acceptance_environment": "Disposable chat/workspace storage, local server 8643, real installed Qwen3.5 4B",
+  "tests": {
+    "export_regressions": 14,
+    "full_suite": 261,
+    "full_suite_seconds": 9.318,
+    "stdlib_harness": "passed",
+    "javascript_syntax": "passed"
+  },
+  "live": {
+    "html": {
+      "model": "qwen3.5:4b",
+      "latency_s": 43.375,
+      "copy_then_paste": "verified in composer",
+      "download_source_byte_match": true,
+      "reopen_controls": "verified",
+      "gameplay": "not evaluated"
+    },
+    "docx": {
+      "model": "qwen3.5:4b",
+      "latency_s": 8.976,
+      "browser_download": "verified",
+      "rendered_pages": 1,
+      "visual_review": "clean"
+    }
+  },
+  "ui": [
+    "chat-code-download-ui.png",
+    "chat-docx-download-ui.png"
+  ],
+  "preservation": {
+    "chat_tables_unchanged": true,
+    "water_canvas_byte_unchanged": true,
+    "protected_test_chat_unchanged": true,
+    "protected_handoff_next_session_unchanged": true
+  },
+  "paid_calls": 0,
+  "remote_inference": 0,
+  "model_downloads": 0,
+  "autostart_installed": false,
+  "limits": [
+    "Downloaded source is not semantically validated or executed.",
+    "DOCX has text, headings, bold, simple lists and code; complex tables/media/templates are not supported.",
+    "PDF/PPTX/XLSX output generation not implemented.",
+    "Existing H07/H09/H10/H17 remaining stories retain their documented blockers."
+  ]
+}

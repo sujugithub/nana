@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#d8e4ff" />
     <title>Nana chat</title>
+    <link rel="stylesheet" href="/chat-response.css" />
     <style>
       :root {
         color-scheme: light;
@@ -540,6 +541,18 @@
         font-size: 16px;
         line-height: 24px;
       }
+      .web-button {
+        height: 40px;
+        padding: 0 12px;
+        border-radius: 20px;
+        background: rgba(70, 78, 100, 0.055);
+        flex-shrink: 0;
+      }
+      .web-button[aria-pressed="true"] {
+        color: #263c77;
+        background: #dce5ff;
+      }
+      .message a { color: #344f99; overflow-wrap: anywhere; }
       .send-button {
         display: grid;
         place-items: center;
@@ -991,8 +1004,11 @@
             <button
               class="icon-button"
               id="composerSettings"
-              aria-label="Chat settings"
-              title="Chat settings"
+              aria-label="Add files and workspace tools"
+              title="Add files and workspace tools"
+              aria-haspopup="menu"
+              aria-controls="addMenu"
+              aria-expanded="false"
             >
               <svg><use href="#i-plus" /></svg></button
             ><textarea
@@ -1003,6 +1019,8 @@
               aria-label="Message Nana"
               disabled
             ></textarea
+            ><button id="web" class="web-button" aria-pressed="false" disabled>Web</button
+            ><button id="composerModel" class="composer-model" aria-label="Choose model" aria-haspopup="menu" aria-controls="modelMenu" aria-expanded="false" disabled><span id="composerModelLabel">Choose model</span><span class="picker-chevron" aria-hidden="true"></span></button
             ><button
               class="send-button"
               id="send"
@@ -1013,6 +1031,9 @@
               <svg><use href="#i-arrow" /></svg>
             </button>
           </div>
+          <div id="attachmentChips" class="attachment-chips" aria-live="polite"></div>
+          <p class="hint" id="toolHint" hidden></p>
+          <p class="hint" id="webHint" hidden></p>
           <div class="suggestions" id="suggestions">
             <button
               class="suggestion"
@@ -1067,6 +1088,37 @@
         </button>
       </div>
     </dialog>
+    <input id="attachmentInput" type="file" multiple hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.yaml,.yml,.xml,.log,.sql,.sh,.rst,.toml,.docx,.xlsx,.pptx">
+    <div id="addMenu" class="chat-menu" popover="auto" role="menu" aria-label="Add to chat">
+      <div id="addMenuContent"></div>
+      <p id="menuNotice" class="menu-notice" role="status" hidden></p>
+    </div>
+    <div id="modelMenu" class="chat-menu model-menu" popover="auto" role="menu" aria-label="Choose a model"><div id="modelMenuContent"></div></div>
+    <style>
+      .mode-pill { background:transparent; border:0; padding:0; }.mode-pill > span,.mode-pill select { display:none; }
+      .composer { flex-wrap:wrap; gap:8px; padding:12px 14px; border-radius:26px; }
+      .composer textarea { order:0; flex:1 0 100%; padding:5px 9px; min-height:42px; }
+      #composerSettings { order:1; }#web { order:2; height:36px; font-size:13px; }
+      .composer-model { order:3; margin-left:auto; display:flex; align-items:center; gap:9px; padding:8px 10px; height:38px; border-radius:12px; background:transparent; color:#434b60; font-size:13px; min-width:0; }
+      .composer-model:hover { background:rgba(94,105,143,.08); }.composer-model span:first-child { max-width:240px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+      .picker-chevron { width:6px; height:6px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); margin-top:-3px; }
+      #send { order:4; }.composer > button[aria-label="Stop generation"] { order:5; }
+      .chat-menu { position:fixed; inset:auto; margin:0; width:310px; max-width:calc(100vw - 24px); max-height:min(480px,70vh); overflow-y:auto; padding:7px; border:1px solid rgba(193,199,220,.65); border-radius:19px; background:rgba(250,251,255,.98); color:#22293a; box-shadow:0 12px 50px rgba(38,46,75,.17),0 2px 8px rgba(38,46,75,.06); backdrop-filter:blur(25px); }
+      .chat-menu::backdrop { background:transparent; backdrop-filter:none; }.model-menu { width:340px; }
+      .menu-section { padding:8px 12px 5px; color:#7b8498; font-size:11px; letter-spacing:.035em; font-weight:600; }
+      .menu-row { width:100%; display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:11px; background:transparent; text-align:left; color:inherit; text-decoration:none; cursor:pointer; min-height:38px; }
+      .menu-row:hover,.menu-row:focus-visible { background:#e9edf8; outline:none; }.menu-row[aria-checked="true"] { background:#edf0fa; }
+      .menu-glyph { display:grid; place-items:center; width:22px; height:24px; flex-shrink:0; color:#697792; }.menu-glyph svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+      .menu-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:3px; font-size:14px; }.menu-copy small { font-size:11px; color:#8590a4; line-height:1.35; }
+      .menu-mark { min-width:14px; font-size:14px; color:#586fbb; }.menu-divider { height:1px; background:#e8ebf3; margin:5px 9px; }.menu-back { color:#72809a; font-size:12px; }
+      .menu-notice { font-size:12px; line-height:1.5; margin:6px 12px 10px; color:#746180; }
+      .attachment-chips { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }.attachment-chips:empty { display:none; }
+      .attachment-chip { display:flex; gap:8px; align-items:center; border:1px solid #fff; border-radius:14px; background:#ffffffaa; padding:6px 12px; font-size:13px; }
+      .attachment-chip button { border:0; background:transparent; color:inherit; cursor:pointer; }.review-action { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; }
+      #toolHint { margin:8px 0; font-size:12px; }.run-review button { margin:6px; }
+      @media(max-width:480px) { .menu-row { min-height:44px; }.composer-model { font-size:12px; padding:6px; gap:7px; }.composer-model span:first-child { max-width:155px; } }
+    </style>
+    <script src="/chat-response.js"></script>
     <script>
       "use strict";
       const $ = (id) => document.getElementById(id);
@@ -1111,6 +1163,170 @@
         $("status").textContent = message;
         $("status").classList.toggle("error", error);
       }
+      let chatAttachments = [], selectedChatTools = [], activeToolRun = null, uploading = false;
+      const workspacePages = [["agent","Agents"],["research","Research"],["compare","Compare models"],["note","Notes"],["task","Tasks & reminders"],["document","Documents"],["memory","Memory"],["skill","Skills"],["mail","Gmail"],["event","Calendar"],["asset","Gallery & files"],["models","Local models"],["preset","Presets"],["connections","Connections"],["settings","Settings"]];
+      const chatToolGroups = [
+        {label:"Search the web",glyph:"globe",names:["search","read_url"]},
+        {label:"Notes & workspace",glyph:"note",names:["list_items","read_item","save_item"]},
+        {label:"Search past chats",glyph:"chat",names:["search_chats"]},
+        {label:"Use skills",glyph:"spark",names:["read_skill"]},
+        {label:"Gmail",glyph:"mail",names:["gmail_search","gmail_read"]},
+        {label:"Calendar",glyph:"calendar",names:["calendar_list"]},
+        {label:"Read files",glyph:"file",names:["read_attachment","read_file","list_files"]},
+      ];
+      const advancedTools=[{label:"Run a command",glyph:"terminal",names:["shell"],note:"You review each command"},{label:"Connected tools",glyph:"link",names:["mcp"],note:"Configured MCP connections · ask first"},{label:"Browser actions",glyph:"globe",names:["browser"],note:"You review each action"}];
+      const menuPaths={back:'M15 5l-7 7 7 7',file:'M14 2H5v20h14V7z M14 2v5h5 M8 12h8 M8 16h8',paperclip:'M8 12l7-7a4 4 0 0 1 6 6L10 22a6 6 0 0 1-8-8L13 3 M6 16L17 5',globe:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3c-5 5-5 13 0 18 M12 3c5 5 5 13 0 18',note:'M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5',chat:'M4 4h16v12H8l-4 4z',spark:'M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',mail:'M3 5h18v14H3z M3 6l9 7 9-7',calendar:'M4 5h16v16H4z M8 2v6 M16 2v6 M4 10h16',terminal:'M3 5h18v14H3z M6 9l3 3-3 3 M12 15h5',link:'M10 7l2-2a5 5 0 0 1 7 7l-3 3 M14 17l-2 2a5 5 0 0 1-7-7l3-3 M8 16l8-8',grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'};
+      function menuGlyph(name) {
+        const span=document.createElement("span");span.className="menu-glyph";span.setAttribute("aria-hidden","true");
+        const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox","0 0 24 24");
+        const path=document.createElementNS(svg.namespaceURI,"path");path.setAttribute("d",menuPaths[name]||menuPaths.grid);svg.append(path);span.append(svg);return span;
+      }
+      function menuRow(label,glyph,action,{note="",checked=null,arrow=false}={}) {
+        const row=document.createElement("button");row.className="menu-row";row.type="button";row.setAttribute("role",checked===null?"menuitem":"menuitemcheckbox");
+        if(checked!==null)row.setAttribute("aria-checked",String(checked));
+        const copy=document.createElement("span");copy.className="menu-copy";copy.append(document.createTextNode(label));
+        if(note){const subtitle=document.createElement("small");subtitle.textContent=note;copy.append(subtitle);}
+        const mark=document.createElement("span");mark.className="menu-mark";mark.setAttribute("aria-hidden","true");mark.textContent=checked?"✓":arrow?"›":"";
+        row.append(menuGlyph(glyph),copy,mark);row.onclick=action;return row;
+      }
+      function menuSection(node,text){const section=document.createElement("div");section.className="menu-section";section.textContent=text;node.append(section);}
+      function divider(node){const line=document.createElement("div");line.className="menu-divider";node.append(line);}
+      function closeMenu(id){if($(id).matches(":popover-open"))$(id).hidePopover();}
+      function placeMenu(menu,anchor){
+        const rect=anchor.getBoundingClientRect();const width=Math.min(menu.offsetWidth,innerWidth-24);
+        const availableAbove=rect.top-16,availableBelow=innerHeight-rect.bottom-16;
+        menu.style.maxHeight=Math.max(130,Math.min(480,Math.max(availableAbove,availableBelow)))+"px";
+        const height=menu.offsetHeight;
+        menu.style.left=Math.max(12,Math.min(menu.id==="modelMenu"?rect.right-width:rect.left,innerWidth-width-12))+"px";
+        menu.style.top=(availableAbove>=height||availableAbove>availableBelow?Math.max(12,rect.top-height-9):rect.bottom+9)+"px";
+      }
+      function openMenu(id,anchor){
+        if($(id).matches(":popover-open")){closeMenu(id);return;}
+        closeMenu(id==="addMenu"?"modelMenu":"addMenu");$(id).showPopover();placeMenu($(id),anchor);
+        $(id).querySelector('[role^="menuitem"]')?.focus();
+      }
+      for(const [id,button] of [["addMenu","composerSettings"],["modelMenu","composerModel"]]) {
+        $(id).addEventListener("toggle",()=>$(button).setAttribute("aria-expanded",String($(id).matches(":popover-open"))));
+        $(id).onkeydown=event=>{const rows=[...$(id).querySelectorAll('[role^="menuitem"]')];const index=rows.indexOf(document.activeElement);
+          if(event.key==="ArrowDown"||event.key==="ArrowUp"){event.preventDefault();rows[(index+(event.key==="ArrowDown"?1:-1)+rows.length)%rows.length]?.focus();}
+          if(event.key==="Home"||event.key==="End"){event.preventDefault();rows[event.key==="Home"?0:rows.length-1]?.focus();}
+          if(event.key==="Escape"){event.preventDefault();closeMenu(id);$(button).focus();}
+        };
+      }
+      window.addEventListener("resize",()=>{closeMenu("addMenu");closeMenu("modelMenu");});
+      function groupEnabled(group){return group.names.every(name=>selectedChatTools.includes(name));}
+      function toggleGroup(group,view){
+        const enabled=groupEnabled(group);
+        if(!enabled&&$("mode").value==="hybrid") {$("menuNotice").textContent="Choose a Local or Cloud model below before enabling tools.";$("menuNotice").hidden=false;placeMenu($("addMenu"),$("composerSettings"));return;}
+        selectedChatTools=enabled?selectedChatTools.filter(name=>!group.names.includes(name)):[...new Set([...selectedChatTools,...group.names])];
+        syncAttachments();syncWeb();closeMenu("addMenu");$("prompt").focus();
+      }
+      function renderAddMenu(view="main") {
+        const node=$("addMenuContent");node.replaceChildren();$("menuNotice").hidden=true;
+        if(view!=="main")node.append(menuRow("Back","back",()=>renderAddMenu(),{note:""}));
+        if(view==="workspace") {
+          menuSection(node,"Your workspace");
+          for(const [page,label] of workspacePages){const row=document.createElement("a");row.href=`/workspace#${page}`;row.target="_blank";row.rel="noopener";row.className="menu-row";row.setAttribute("role","menuitem");row.append(menuGlyph("grid"),document.createTextNode(label));row.onclick=()=>closeMenu("addMenu");node.append(row);}
+        } else if(view==="advanced") {
+          menuSection(node,"More tools");
+          for(const group of chatToolGroups.filter(g=>!["Search the web","Notes & workspace","Use skills"].includes(g.label)))node.append(menuRow(group.label,group.glyph,()=>toggleGroup(group,view),{checked:groupEnabled(group)}));
+          divider(node);menuSection(node,"Ask before running");
+          for(const group of advancedTools)node.append(menuRow(group.label,group.glyph,()=>toggleGroup(group,view),{note:group.note,checked:groupEnabled(group)}));
+          node.append(menuRow("Clear enabled tools","file",()=>{selectedChatTools=[];syncAttachments();syncWeb();renderAddMenu(view);}));
+        } else {
+          menuSection(node,"Add");node.append(menuRow("Files & photos","paperclip",()=>{closeMenu("addMenu");$("attachmentInput").click();},{note:"PDFs, images, documents and more"}));
+          divider(node);menuSection(node,"Tools for this chat");
+          for(const group of chatToolGroups.filter(g=>["Search the web","Notes & workspace","Use skills"].includes(g.label)))node.append(menuRow(group.label,group.glyph,()=>toggleGroup(group,view),{checked:groupEnabled(group)}));
+          node.append(menuRow("More tools","terminal",()=>renderAddMenu("advanced"),{arrow:true}));
+          divider(node);node.append(menuRow("Open workspace","grid",()=>renderAddMenu("workspace"),{arrow:true}));
+        }
+        if($("addMenu").matches(":popover-open")){placeMenu($("addMenu"),$("composerSettings"));node.querySelector('[role^="menuitem"]')?.focus();}
+      }
+      function modelName(model){
+        const name=model.split("/").pop();
+        const names={"qwen3.5:4b":"Qwen 3.5 · 4B","qwen3.8:27b":"Qwen 3.8 · 27B","gpt-oss-120b":"GPT OSS · 120B","nemotron-lightning-3p5-30b-a3b":"Nemotron Lightning","deepseek-v4p1-flash":"DeepSeek Flash","glm-5p2":"GLM 5.2"};return names[name]||name;
+      }
+      function syncModelPicker(){
+        if(!serverConfig)return;
+        const mode=$("mode").value,model=$("model").value;
+        $("composerModelLabel").textContent=mode==="hybrid"?"Auto · Local & cloud":modelName(model);
+        $("composerModel").title=mode==="local"?"Runs on this Mac":mode==="remote"?"Cloud model · usage charges apply":"Automatic routing · may use cloud models";
+      }
+      async function chooseComposerModel(mode,model){
+        if(busy||uploading)return;
+        closeMenu("modelMenu");$("mode").value=mode;modelChoices(mode,model);saveChatPreference("mode",mode);
+        await saveSettings();syncModelPicker();
+      }
+      function renderModelMenu(){
+        const node=$("modelMenuContent");node.replaceChildren();
+        const mode=$("mode").value,selected=$("model").value;
+        menuSection(node,"On this Mac");
+        for(const model of [...serverConfig.known_local_models].sort((a,b)=>Number(b===serverConfig.default_models.local)-Number(a===serverConfig.default_models.local)))node.append(menuRow(modelName(model),"spark",()=>chooseComposerModel("local",model),{checked:mode==="local"&&selected===model,note:model.includes("27b")?"Larger model · uses more memory":"Fast everyday model · stays local"}));
+        divider(node);menuSection(node,"Cloud");
+        for(const model of serverConfig.known_fireworks_models)node.append(menuRow(modelName(model),"globe",()=>chooseComposerModel("remote",model),{checked:mode==="remote"&&selected===model,note:"Usage charges apply"}));
+        divider(node);node.append(menuRow("Auto","spark",()=>chooseComposerModel("hybrid",serverConfig.default_models.hybrid),{checked:mode==="hybrid",note:"Nana chooses · may use cloud models"}));
+        node.querySelectorAll('[role="menuitemcheckbox"]').forEach(row=>row.setAttribute("role","menuitemradio"));
+      }
+      $("composerModel").onclick=()=>{if(busy||uploading||!serverConfig)return;renderModelMenu();openMenu("modelMenu",$("composerModel"));};
+      $("composerSettings").onclick=()=>{if(busy||uploading||!serverConfig)return;renderAddMenu();openMenu("addMenu",$("composerSettings"));};
+      function syncAttachments() {
+        $("attachmentChips").replaceChildren();
+        for (const file of chatAttachments) {
+          const chip=document.createElement("span"); chip.className="attachment-chip";
+          const label=document.createElement("span"); label.textContent=file.name + (file.images ? ` · ${file.images} image${file.images>1?"s":""}` : "");
+          const remove=document.createElement("button"); remove.textContent="×"; remove.setAttribute("aria-label",`Remove ${file.name}`); remove.disabled=busy;
+          remove.onclick=()=>{chatAttachments=chatAttachments.filter(f=>f.id!==file.id); syncAttachments();syncControls();}; chip.append(label,remove); $("attachmentChips").append(chip);
+        }
+        $("toolHint").hidden=!selectedChatTools.length;
+        const activeGroups=[...chatToolGroups,...advancedTools].filter(g=>g.names.some(n=>selectedChatTools.includes(n))).map(g=>g.label);
+        $("toolHint").textContent=activeGroups.join(" · ");
+      }
+      $("attachmentInput").onchange=async()=>{
+        const files=[...$("attachmentInput").files]; $("attachmentInput").value="";
+        if(busy||uploading)return;
+        uploading=true; syncControls();
+        try {
+          if(files.length+chatAttachments.length>4)throw Error("Attach up to 4 files per turn.");
+          for(const file of files) {
+            if(file.size>10*1024*1024)throw Error(`${file.name} exceeds 10 MB.`);
+            status(`Adding ${file.name}…`);
+            const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(",")[1]);reader.onerror=()=>reject(Error("File could not be read"));reader.readAsDataURL(file);});
+            const item=await request("/api/workspace/chat/attachments",{method:"POST",body:JSON.stringify({name:file.name,data,mode:$("mode").value,model:$("model").value})});
+            chatAttachments.push(item);
+            if(chatAttachments.reduce((n,f)=>n+f.text_chars,0)>6000&&!selectedChatTools.includes("read_attachment"))selectedChatTools.push("read_attachment");
+            syncAttachments();
+          }
+          status("Files attached.");
+        } catch(error) { status(error.message,true); }
+        finally {uploading=false;syncControls();syncWeb();}
+      };
+      async function workspaceTurn(conversationId,content,indicator,resume=null) {
+        let state=resume||await request(`/conversations/${conversationId}/tool-run`,{method:"POST",body:JSON.stringify({content,mock:$("mock").checked,tools:selectedChatTools,attachments:chatAttachments.map(f=>f.id)})});
+        activeToolRun=state.run.id;stopButton.hidden=false;stopButton.disabled=false;
+        let displayedReview=null;
+        while(true) {
+          const run=state.run;
+          if(state.completed)return {mock:state.mock,billable:Number(run.result.usage?.cost_usd||0)>0,routing:{estimated_cost_usd:run.result.usage?.cost_usd||0}};
+          if(["failed","cancelled","interrupted"].includes(run.status))throw Error(run.result.error||`Workspace run ${run.status}. Completed steps remain in Workspace → Agents.`);
+          if(run.status==="awaiting_review") {
+            const action=run.result.pending_tool;
+            status("Review this action to continue.");
+            if(displayedReview!==action.action_id) {
+              displayedReview=action.action_id;indicator.replaceChildren();const box=document.createElement("div");box.className="run-review";
+              const title=document.createElement("strong");title.textContent="Review workspace action";const detail=document.createElement("pre");detail.className="review-action";detail.textContent=JSON.stringify({tool:action.tool,arguments:action.arguments},null,2);
+              box.append(title,detail);
+              for(const [label,approve] of [["Approve this action",true],["Decline",false]]) {
+                const button=document.createElement("button");button.className="secondary";button.textContent=label;
+                button.onclick=async()=>{box.querySelectorAll("button").forEach(b=>b.disabled=true);try {await request(`/api/workspace/runs/${run.id}/review`,{method:"POST",body:JSON.stringify({approve,action_id:action.action_id})});displayedReview=null;indicator.textContent="Continuing…";}catch(error){status(error.message,true);box.querySelectorAll("button").forEach(b=>b.disabled=false);}};box.append(button);
+              }
+              const activity=document.createElement("a");activity.href="/workspace#agent";activity.target="_blank";activity.textContent="View all run steps";box.append(activity);indicator.append(box);
+            }
+          } else { indicator.textContent=`Workspace · ${run.result.tool||run.result.phase||run.status} · ${run.steps.filter(s=>s.type==="tool").length} tool steps`; }
+          await new Promise(resolve=>setTimeout(resolve,1000));
+          state=await request(`/conversations/${conversationId}/tool-run`);
+          if(!state.run)throw Error("Run was finalized in another tab. Reopen this chat to see its answer.");
+        }
+      }
       let activeChatStream = null;
       const stopButton = document.createElement("button");
       stopButton.className = "icon-button";
@@ -1120,6 +1336,7 @@
       stopButton.hidden = true;
       $("send").after(stopButton);
       stopButton.onclick = async () => {
+        if (activeToolRun) {stopButton.disabled=true;try {await request(`/api/workspace/runs/${activeToolRun}/cancel`,{method:"POST",body:"{}"});}catch(error){status(error.message,true);stopButton.disabled=false;}return;}
         if (!activeChatStream) return;
         stopButton.disabled = true;
         status("Stopping generation…");
@@ -1144,7 +1361,9 @@
             body: JSON.stringify({
               content,
               mock: $("mock").checked,
+              web: $("web").getAttribute("aria-pressed") === "true",
               stream_id: activeChatStream,
+              attachments: chatAttachments.map(f=>f.id),
             }),
           },
         );
@@ -1172,6 +1391,11 @@
             } else if (event.type === "delta") {
               indicator.textContent += event.text;
               $("chatScroll").scrollTop = $("chatScroll").scrollHeight;
+            } else if (event.type === "web") {
+              status(event.phase === "query" ? "Preparing web search…"
+                : event.phase === "search" ? `Searching ${event.provider === "exa" ? "Exa" : "SearXNG"}…`
+                : event.phase === "read" ? `Reading ${new URL(event.url).hostname}…`
+                : `${event.sources.length} web sources retrieved…`);
             } else if (event.type === "complete") result = event.result;
             else if (event.type === "error") throw Error(event.error);
           }
@@ -1188,11 +1412,16 @@
         );
       }
       function syncControls() {
-        $("send").disabled = busy || !serverConfig || !$("prompt").value.trim();
+        $("send").disabled = busy || uploading || !serverConfig || !$("prompt").value.trim();
         for (const id of ["new", "mode", "model", "search"])
           $(id).disabled = busy || !serverConfig;
         $("prompt").disabled = busy || !serverConfig;
         $("mock").disabled = busy || !serverConfig?.real_allowed;
+        $("composerSettings").disabled=$("composerModel").disabled=busy||uploading||!serverConfig;
+        if(busy||uploading){closeMenu("addMenu");closeMenu("modelMenu");}
+        syncModelPicker();
+        syncAttachments();
+        syncWeb();
         $("rename").disabled = $("delete").disabled = busy || !current;
         document
           .querySelectorAll(".conversation,.suggestion")
@@ -1234,9 +1463,33 @@
           : preview
             ? "Sample replies only. Turn off preview to use a real model."
             : $("mode").value === "local"
-              ? "Runs on your machine. The first reply may download model weights."
+              ? serverConfig?.web?.local_backend === "ollama"
+                ? "Runs on your machine using the selected installed model."
+                : "Runs on your machine. The first reply may download model weights."
               : "Real replies may use Fireworks and incur an API charge.";
+        syncWeb();
       }
+      function syncWeb() {
+        const available = !chatAttachments.length && !selectedChatTools.length && serverConfig?.real_allowed && !$("mock").checked
+          && $("mode").value === "local" && serverConfig?.web?.local_backend === "ollama"
+          && $("model").value === serverConfig?.web?.model;
+        $("web").disabled = busy || !available;
+        $("web").hidden = !available;
+        if (!available) $("web").setAttribute("aria-pressed", "false");
+        $("web").title = available ? "Use web sources for this reply"
+          : chatAttachments.length || selectedChatTools.length ? "Use Web search and Read webpages in + → Workspace tools with attachments" : "Web is verified with Local · qwen3.5:4b in live mode";
+        const enabled = $("web").getAttribute("aria-pressed") === "true";
+        $("webHint").hidden = !enabled;
+        $("webHint").textContent = serverConfig?.web?.search_provider === "exa"
+          ? "Search queries go to Exa. Your chat history stays local. You can also provide a public URL."
+          : serverConfig?.web?.search_provider === "searxng"
+            ? "Search uses your configured SearXNG server. You can also provide a public URL."
+            : "Provide a public URL, or choose a search provider in Workspace → Connections.";
+      }
+      $("web").onclick = () => {
+        $("web").setAttribute("aria-pressed", String($("web").getAttribute("aria-pressed") !== "true"));
+        syncWeb();
+      };
       function modelChoices(mode, selected) {
         const options =
           mode === "local"
@@ -1256,6 +1509,7 @@
               ? "Uses the selected Fireworks model for every reply."
               : "Nana chooses between the cheap tier and this stronger model for each request.";
         updateReplyHint();
+        syncModelPicker();
       }
       function friendlyDate(value) {
         value = value.replace(" ", "T");
@@ -1334,9 +1588,10 @@
             label.append(mark, "Nana");
             node.append(label);
           }
-          const text = document.createElement("div");
-          text.textContent = message.content;
+          const text = message.role === "assistant" ? NanaResponses.render(message) : document.createElement("div");
+          if (message.role !== "assistant") text.textContent = message.content;
           node.append(text);
+          if(message.attachments?.length) {const files=document.createElement("small");files.textContent="Attached: "+message.attachments.map(f=>f.name).join(", ");node.append(files);}
           if (message.role === "assistant" && message.model_name) {
             const meta = document.createElement("small");
             meta.textContent = `${message.content.startsWith("[mock-") ? "Preview reply · " : ""}${message.model_name.split("/").pop()} · ${message.route === "cheap" ? "Cheap tier" : message.route === "strong" ? "Strong tier" : message.route || ""} · ${Number(message.latency_s || 0).toFixed(2)}s`;
@@ -1368,6 +1623,7 @@
           const detail = await request(`/conversations/${id}`);
           if (version !== viewVersion) return;
           current = detail.conversation;
+          chatAttachments=[];selectedChatTools=[];syncAttachments();
           $("mode").value = current.mode;
           modelChoices(current.mode, current.model);
           renderMessages(detail.messages);
@@ -1376,9 +1632,18 @@
           closeSidebar();
           status();
           await loadList();
+          const toolState=await request(`/conversations/${id}/tool-run`);
+          if(toolState.run && !toolState.completed && !["failed","cancelled","interrupted"].includes(toolState.run.status)) {
+            $("main").classList.remove("is-empty");$("welcome").hidden=$("suggestions").hidden=true;
+            const indicator=document.createElement("div");indicator.className="pending";$("messages").append(indicator);
+            await workspaceTurn(id,"",indicator,toolState);
+            const saved=await request(`/conversations/${id}`);renderMessages(saved.messages);status("Workspace reply saved.");
+          } else if(toolState.completed) {const saved=await request(`/conversations/${id}`);renderMessages(saved.messages);}
+          else if(toolState.run)status(toolState.run.result.error||`Workspace run ${toolState.run.status}. Completed steps remain in Workspace → Agents.`,true);
         } catch (error) {
           status(error.message, true);
         } finally {
+          activeToolRun=null;stopButton.hidden=true;
           if (version === viewVersion) setBusy(false);
         }
       }
@@ -1386,6 +1651,7 @@
         if (busy || !serverConfig) return;
         ++viewVersion;
         current = null;
+        chatAttachments=[];selectedChatTools=[];syncAttachments();
         renderMessages([]);
         $("prompt").value = "";
         resizePrompt();
@@ -1421,11 +1687,12 @@
           pending.append(indicator);
           $("messages").append(pending);
           $("chatScroll").scrollTop = $("chatScroll").scrollHeight;
-          const result = await streamedTurn(current.id, content, indicator);
+          const result = selectedChatTools.length ? await workspaceTurn(current.id, content, indicator) : await streamedTurn(current.id, content, indicator);
           const detail = await request(`/conversations/${current.id}`);
           current = detail.conversation;
           renderMessages(detail.messages);
           $("prompt").value = "";
+          chatAttachments=[];syncAttachments();
           resizePrompt();
           status(
             result.mock
@@ -1441,7 +1708,7 @@
           if (wasNew && !$("messages").children.length) renderMessages([]);
           status(error.message, true);
         } finally {
-          activeChatStream = null;
+          activeChatStream = activeToolRun = null;
           stopButton.hidden = true;
           setBusy(false);
           $("prompt").focus();
@@ -1496,7 +1763,11 @@
         modelChoices($("mode").value);
         saveSettings();
       };
-      $("model").onchange = saveSettings;
+      $("model").onchange = () => {
+        syncModelPicker();
+        updateReplyHint();
+        saveSettings();
+      };
       $("rename").onclick = async () => {
         const title = window.prompt("Chat title", current?.title || "");
         if (!title?.trim() || !current || busy) return;
@@ -1537,8 +1808,16 @@
           setBusy(false);
         }
       };
-      for (const id of ["settings", "composerSettings"])
-        $(id).onclick = () => $("settingsDialog").showModal();
+      for (const id of ["settings"])
+        $(id).onclick = async () => {
+          $("settingsDialog").showModal();
+          try {
+            serverConfig = await request("/api/chat/config");
+            modelChoices($("mode").value, $("model").value);
+          } catch (error) {
+            status("Could not refresh model choices. " + error.message, true);
+          }
+        };
       $("closeSettings").onclick = () => $("settingsDialog").close();
       $("settingsDialog").onclick = (event) => {
         if (event.target === $("settingsDialog")) {

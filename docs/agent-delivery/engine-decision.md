@@ -1,0 +1,13 @@
+# H03: retain Nana's execution boundary
+
+Decision, 9 October 2026: improve the existing engine behind `workspace/runs.py`. Do not migrate persistence, routing, accounts or UI into another runtime in this increment.
+
+The reproducible `scripts/evals/engine_spike.py` uses the same deterministic question, lookup tool, fact, and final response. Both isolated candidates execute one tool and return the fact on Python 3.14.8. Deep Agents 0.7.23 installed 56 distributions, imported/built/executed in 0.589 seconds in the first observed run. Pydantic AI slim 2.54.0 plus harness 0.54.0 installed 23 distributions, completed in 0.201 seconds; its output limiter additionally requires a workspace or explicit overflow store, supplied in the corrected spike. These timings include imports, use no real model, and do not establish model speed or quality.
+
+Deep Agents offers graph checkpoints, compaction and filesystem middleware. Pydantic offers strong typed contracts and modular capabilities. Neither fixture demonstrates preserving Nana's hybrid confidence routing, SQLite run/job/account boundaries, existing approval UI or provider accounting. A migration would require adapters and persistence ownership decisions even though the demonstrated task already fits Nana's boundary. Retaining that boundary has the smallest regression surface on this 24 GB Mac; no new production framework dependency is needed.
+
+Adopt the patterns through original Nana code: explicit tool schemas and normalized results, bounded decisions, persisted cumulative usage, intact exchange compaction with file references, relevant editable memory, action identities and durable occurrences. Keep the fixture for reconsideration if future graph branching or durable distributed workflows justify migration. The candidates are feasible alternatives, not rejected as incapable.
+
+Sources inspected: [Deep Agents quickstart](https://docs.langchain.com/oss/python/deepagents/quickstart), installed public APIs of [deepagents 0.7.23](https://pypi.org/project/deepagents/0.7.23/), [pydantic-ai-slim 2.54.0](https://pypi.org/project/pydantic-ai-slim/2.54.0/), [pydantic-ai-harness 0.54.0](https://pypi.org/project/pydantic-ai-harness/0.54.0/). No upstream source is copied into production; examples are original fixtures using their public APIs. Isolated environments live in `/tmp/nana-engine-spikes` and can be deleted. Re-run pinned spikes before adopting upgrades; license/notice review remains mandatory before vendoring source.
+
+H02's extended behavioral evaluation and real local-model quality measurements remain distinct from this feasibility decision. No remote calls or calibrated savings claims were made.

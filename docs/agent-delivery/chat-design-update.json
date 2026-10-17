@@ -1,0 +1,14 @@
+{
+  "direct_local_and_cloud_selection_saved": true,
+  "draft_preserved_on_model_change": true,
+  "file_action_upload_passed": true,
+  "preview_turn_used_selected_model": "qwen3.8:27b",
+  "preview_attachment_preserved": true,
+  "keyboard_tools_and_escape_passed": true,
+  "all_workspace_destinations_visible": true,
+  "paid_calls": 0,
+  "water_unchanged": true,
+  "live_static_route": 200,
+  "attachment_regressions": 13,
+  "full_backend_suite_last_pass": 247
+}

@@ -1,0 +1,244 @@
+{
+  "status": "failed",
+  "result": {
+    "usage": {
+      "requests": 6,
+      "tokens": 7871,
+      "cost_usd": 0.0,
+      "active_seconds": 13.706716917993617,
+      "validation_errors": 3
+    },
+    "error": "Model decision validation failed three times; no successful final answer"
+  },
+  "steps": [
+    {
+      "type": "model",
+      "answer": "",
+      "tool_calls": [
+        {
+          "id": "call_pq7xrsk9",
+          "function": {
+            "index": 0,
+            "name": "save_item",
+            "arguments": {
+              "kind": "note",
+              "title": "Fixture",
+              "content": "Nana runs on macOS."
+            }
+          }
+        }
+      ],
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 891,
+        "completion": 54,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 7.7403204170113895
+    },
+    {
+      "type": "tool",
+      "tool": "save_item",
+      "arguments": {
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS."
+      },
+      "action_id": "151ac17f6ce4c768795a895406b73c3ac8377941a2c8f05ef17e10825e441b8f",
+      "output": {
+        "id": "35f1d9e507f344ef9f115df10847989f",
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS.",
+        "meta": {
+          "origin": "agent",
+          "scope": "user",
+          "provenance": "agent tool save_item"
+        },
+        "created": "2026-10-08T21:35:34.721996+00:00",
+        "updated": "2026-10-08T21:35:34.721996+00:00"
+      },
+      "ok": true,
+      "error": null,
+      "duration_s": 0.004694999995990656
+    },
+    {
+      "type": "model",
+      "answer": "Note saved successfully.",
+      "tool_calls": [],
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 1129,
+        "completion": 4,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 0.40143212499970105
+    },
+    {
+      "type": "validation_error",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "instruction": "Correct the decision format or arguments; no action was executed."
+    },
+    {
+      "type": "model",
+      "answer": "",
+      "tool_calls": [
+        {
+          "id": "call_ql7txczt",
+          "function": {
+            "index": 0,
+            "name": "save_item",
+            "arguments": {
+              "kind": "note",
+              "title": "Fixture",
+              "content": "Nana runs on macOS."
+            }
+          }
+        }
+      ],
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 1160,
+        "completion": 54,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 1.9113194170058705
+    },
+    {
+      "type": "tool",
+      "tool": "save_item",
+      "arguments": {
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS."
+      },
+      "action_id": "faaf3f4f6a1059c8c1a7cdf940f067ad114ebe22e66895c6e05a7ac5f99c856d",
+      "output": {
+        "id": "a0746f31ca604030ba3e144946ecc43c",
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS.",
+        "meta": {
+          "origin": "agent",
+          "scope": "user",
+          "provenance": "agent tool save_item"
+        },
+        "created": "2026-10-08T21:35:37.050716+00:00",
+        "updated": "2026-10-08T21:35:37.050716+00:00"
+      },
+      "ok": true,
+      "error": null,
+      "duration_s": 0.00461616700340528
+    },
+    {
+      "type": "model",
+      "answer": "The note titled \"Fixture\" has been successfully saved with the content \"Nana runs on macOS.\"",
+      "tool_calls": [],
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 1396,
+        "completion": 20,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 0.8587549999938346
+    },
+    {
+      "type": "validation_error",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "instruction": "Correct the decision format or arguments; no action was executed."
+    },
+    {
+      "type": "model",
+      "answer": "",
+      "tool_calls": [
+        {
+          "id": "call_ek49w5og",
+          "function": {
+            "index": 0,
+            "name": "save_item",
+            "arguments": {
+              "kind": "note",
+              "title": "Fixture",
+              "content": "Nana runs on macOS."
+            }
+          }
+        }
+      ],
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 1427,
+        "completion": 54,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 1.907827749993885
+    },
+    {
+      "type": "tool",
+      "tool": "save_item",
+      "arguments": {
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS."
+      },
+      "action_id": "8a01619e0bc61137cb8bb03cacda63188a2d08ba0e66970bcb9ec9f7fc5fed0d",
+      "output": {
+        "id": "341521de047540d1b7674ab9dbefe02b",
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS.",
+        "meta": {
+          "origin": "agent",
+          "scope": "user",
+          "provenance": "agent tool save_item"
+        },
+        "created": "2026-10-08T21:35:39.833366+00:00",
+        "updated": "2026-10-08T21:35:39.833366+00:00"
+      },
+      "ok": true,
+      "error": null,
+      "duration_s": 0.004789166996488348
+    },
+    {
+      "type": "model",
+      "answer": "The note titled \"Fixture\" has been successfully saved with the content \"Nana runs on macOS.\"",
+      "tool_calls": [],
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 1662,
+        "completion": 20,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 0.8729618749930523
+    },
+    {
+      "type": "validation_error",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "instruction": "Correct the decision format or arguments; no action was executed."
+    }
+  ],
+  "notes": 3
+}

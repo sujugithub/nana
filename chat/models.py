@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -23,3 +23,5 @@ class Message:
     model_name: Optional[str] = None
     latency_s: Optional[float] = None
     estimated_cost_usd: Optional[float] = None
+    attachments: list = field(default_factory=list)
+    artifacts: list = field(default_factory=list)

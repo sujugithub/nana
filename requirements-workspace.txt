@@ -1,0 +1,10 @@
+# Minimal native workspace + Ollama runtime. Verified on Python 3.14.8/macOS.
+# Full routing training/transformers dependencies remain in requirements.txt.
+requests==2.34.2
+certifi==2026.7.22
+# Optional browser adapter: playwright==1.63.0 (Chromium installed separately).
+
+# Local, bounded attachment extraction; no external file processing.
+pypdf==6.19.0
+Pillow==12.3.0
+pypdfium2==5.14.0

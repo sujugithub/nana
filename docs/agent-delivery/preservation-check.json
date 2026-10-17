@@ -1,0 +1,7 @@
+{
+  "webui/server.py": true,
+  "webui/static/chat.html": true,
+  "tests/test_chat.py": true,
+  "handoff-next-session.md": true,
+  "chat_database_unchanged_after_restart": true
+}

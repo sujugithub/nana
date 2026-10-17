@@ -68,7 +68,9 @@ def http_json(url, payload=None, headers=None, form=False, method=None):
         # python.org macOS installations may have no configured system CA
         # bundle. Use maintained roots while retaining hostname verification.
         context = ssl.create_default_context(cafile=certifi.where())
-        with urllib.request.urlopen(req, timeout=30, context=context) as response:
+        from generation_stream import CURRENT
+        timeout = CURRENT.get().remaining(30) if CURRENT.get() else 30
+        with urllib.request.urlopen(req, timeout=timeout, context=context) as response:
             raw = response.read(8_000_001)
             if len(raw) > 8_000_000:
                 raise ValueError("Provider response is too large")
@@ -199,8 +201,8 @@ def mail_read(item_id):
     return {"id": result["id"], "content": "\n".join(texts) or result.get("snippet", "")}
 
 
-def mail_send(draft_id):
-    draft = store.get(draft_id)
+def mail_send(draft_id, reviewed=None):
+    draft = reviewed or store.get(draft_id)
     if draft["kind"] != "draft" or draft["meta"].get("sent") or draft["meta"].get("sending"):
         raise ValueError("Choose an unsent email draft")
     recipient = draft["meta"].get("to", "")
@@ -211,11 +213,11 @@ def mail_send(draft_id):
     msg["Subject"] = draft["title"]
     msg.set_content(draft["content"])
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    store.save({"meta": {**draft["meta"], "sending": True}}, draft_id)
+    claimed = store.save({"expected_updated": draft["updated"], "meta": {**draft["meta"], "sending": True}}, draft_id)
     # If the connection fails after submission, keep this marker: a blind
     # retry could send a duplicate. Inspect Gmail Sent before editing it.
     result = google("gmail/v1/users/me/messages/send", {"raw": raw})
-    store.save({"meta": {**draft["meta"], "sending": False, "sent": True, "google_id": result["id"]}}, draft_id)
+    store.save({"expected_updated": claimed["updated"], "meta": {**draft["meta"], "sending": False, "sent": True, "google_id": result["id"]}}, draft_id)
     return {"sent": True, "id": result["id"]}
 
 
@@ -224,11 +226,13 @@ def calendar_list():
         "timeMin": store.now(), "maxResults": 100, "singleEvents": "true", "orderBy": "startTime"})).get("items", [])
 
 
-def calendar_publish(item_id):
-    item = store.get(item_id)
+def calendar_publish(item_id, reviewed=None):
+    item = reviewed or store.get(item_id)
     if item["kind"] != "event":
         raise ValueError("Choose a calendar event")
     meta = item["meta"]
+    if meta.get("publishing"):
+        raise ValueError("Previous event publication needs reconciliation")
     from datetime import datetime
     start = datetime.fromisoformat(str(meta.get("start", "")))
     end = datetime.fromisoformat(str(meta.get("end", "")))
@@ -240,6 +244,9 @@ def calendar_publish(item_id):
     google_id = meta.get("google_id")
     if google_id:
         path += "/" + quote(google_id, safe="")
+    if not google_id:
+        event["id"] = hashlib.sha256((item_id + item["created"]).encode()).hexdigest()
+    claimed = store.save({"expected_updated": item["updated"], "meta": {**meta, "publishing": True}}, item_id)
     result = google(path, event, method="PUT" if google_id else "POST")
-    store.save({"meta": {**meta, "google_id": result["id"]}}, item_id)
+    store.save({"expected_updated": claimed["updated"], "meta": {**meta, "publishing": False, "google_id": result["id"]}}, item_id)
     return result

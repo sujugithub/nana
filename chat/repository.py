@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 
 from .database import get_connection
@@ -266,10 +267,20 @@ def add_turn(
     model_name: Optional[str] = None,
     latency_s: Optional[float] = None,
     estimated_cost_usd: Optional[float] = None,
+    attachments=None,
+    turn_key=None,
 ) -> tuple[Message, Message]:
     """Save a completed turn in one transaction, or save neither message."""
     conn = get_connection()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if turn_key:
+            saved = conn.execute("SELECT user_message_id,assistant_message_id FROM chat_tool_turns WHERE run_id=? AND conversation_id=?", (turn_key, conversation_id)).fetchone()
+            if saved is None:
+                raise ValueError("Chat tool turn not found")
+            if saved["assistant_message_id"]:
+                pair = [conn.execute("SELECT * FROM messages WHERE id=?", (saved[k],)).fetchone() for k in ("user_message_id", "assistant_message_id")]
+                return tuple(_message(conn, row) for row in pair)
         if conn.execute(
             "SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)
         ).fetchone() is None:
@@ -285,6 +296,10 @@ def add_turn(
                VALUES (?, 'assistant', ?, ?, ?, ?, ?)""",
             (conversation_id, assistant_content, route, model_name, latency_s, estimated_cost_usd),
         ).lastrowid
+        if attachments:
+            conn.execute("INSERT INTO message_attachments VALUES (?, ?)", (user_id, json.dumps(attachments)))
+        if turn_key:
+            conn.execute("UPDATE chat_tool_turns SET user_message_id=?,assistant_message_id=? WHERE run_id=?", (user_id, assistant_id, turn_key))
         conn.execute(
             "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (conversation_id,),
@@ -292,7 +307,7 @@ def add_turn(
         user_row = conn.execute("SELECT * FROM messages WHERE id = ?", (user_id,)).fetchone()
         assistant_row = conn.execute("SELECT * FROM messages WHERE id = ?", (assistant_id,)).fetchone()
         conn.commit()
-        return Message(**dict(user_row)), Message(**dict(assistant_row))
+        return _message(conn, user_row), _message(conn, assistant_row)
     except Exception:
         conn.rollback()
         raise
@@ -314,7 +329,7 @@ def list_messages(conversation_id: int) -> List[Message]:
             (conversation_id,),
         ).fetchall()
 
-        return [Message(**dict(row)) for row in rows]
+        return [_message(conn, row) for row in rows]
 
     finally:
         conn.close()
@@ -349,3 +364,13 @@ def search_conversations(query: str) -> List[Conversation]:
 
     finally:
         conn.close()
+
+
+def _message(conn, row):
+    attachment = conn.execute("SELECT data FROM message_attachments WHERE message_id=?", (row["id"],)).fetchone()
+    artifacts = []
+    if row["role"] == "assistant":
+        from .artifacts import describe
+        user = conn.execute("SELECT content FROM messages WHERE conversation_id=? AND role='user' AND id<? ORDER BY id DESC LIMIT 1", (row["conversation_id"], row["id"])).fetchone()
+        artifacts = describe(user["content"] if user else "", row["content"])
+    return Message(**dict(row), attachments=json.loads(attachment["data"]) if attachment else [], artifacts=artifacts)

@@ -7,11 +7,15 @@ import json
 from pathlib import Path
 import re
 import socket
+import ssl
+import certifi
 import subprocess
 import urllib.request
 from urllib.parse import urlencode, urlsplit, urljoin
 
 from . import store, connections
+from .contracts import arguments, validate
+from .effects import REVIEW_REQUIRED
 
 
 class Text(HTMLParser):
@@ -51,11 +55,14 @@ def public_url(url):
 
 
 def read_url(url):
+    from generation_stream import CURRENT
     for _ in range(5):
         public_url(url)
         parsed = urlsplit(url)
         connection_cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-        connection = connection_cls(parsed.hostname, parsed.port, timeout=20)
+        kwargs = {"context": ssl.create_default_context(cafile=certifi.where())} if parsed.scheme == "https" else {}
+        timeout = CURRENT.get().remaining(20) if CURRENT.get() else 20
+        connection = connection_cls(parsed.hostname, parsed.port, timeout=timeout, **kwargs)
         try:
             connection.connect()
             # Validate the connected peer before transmitting the request,
@@ -85,14 +92,8 @@ def read_url(url):
 
 
 def search_web(query):
-    endpoint = store.preferences().get("searxng_url", "")
-    if not endpoint:
-        raise ValueError("Configure a SearXNG search endpoint in Connections")
-    if urlsplit(endpoint).scheme not in {"http", "https"}:
-        raise ValueError("Invalid search endpoint")
-    result = connections.http_json(endpoint.rstrip("/") + "/search?" + urlencode({"q": query, "format": "json"}))
-    return [{"title": row.get("title"), "url": row.get("url"), "snippet": row.get("content", "")}
-            for row in result.get("results", [])[:8]]
+    from .search import search_web as search
+    return search(query)
 
 
 def file_path(name):
@@ -105,11 +106,14 @@ def file_path(name):
 
 
 TOOLS = {
+    "search_chats": "Search this user's saved chat turns; returns attributed complete exchanges. arguments: {query: string}",
+    "read_skill": "Load a relevant user-approved skill by id. arguments: {id: string}",
     "search": "Search the web. arguments: {query: string}",
     "read_url": "Read a public web page. arguments: {url: string}",
-    "list_items": "Search notes, tasks, documents, memories or drafts. arguments: {kind?: string, query?: string}",
+    "list_items": "List workspace records filtered by kind. To list notes use kind=note and omit query. Optional query searches title/content, not record type. arguments: {kind?: string, query?: string}",
     "read_item": "Read a workspace item. arguments: {id: string}",
-    "save_item": "Create a note, task, document, memory or email draft. arguments: {kind, title, content, meta?: object}",
+    "save_item": "Create a note, task, document, memory, email draft or calendar event draft. Drafts are not published. Email meta uses to; calendar meta uses timezone-aware start and end. arguments: {kind, title, content, meta?: object}",
+    "read_attachment": "Read a Chat attachment in chunks by id, offset and length (up to 4000 characters). arguments: {id: string, offset?: integer, length?: integer}",
     "read_file": "Read a UTF-8 workspace file. arguments: {path: string}",
     "list_files": "List workspace files. arguments: {}",
     "gmail_search": "Read Gmail message summaries. arguments: {query: string}",
@@ -119,16 +123,28 @@ TOOLS = {
     "mcp": "Call an explicitly configured MCP tool after user review. arguments: {server: string, tool: string, arguments: object}",
     "browser": "Read or interact with a public website in an isolated browser after user review. arguments: {url: string, action: read|click|fill, selector?: string, value?: string}",
 }
-REVIEW_TOOLS = {"shell", "mcp", "browser"}
+REVIEW_TOOLS = REVIEW_REQUIRED
 
 
 def call(name, args, *, approved=False):
     if name not in TOOLS or not isinstance(args, dict):
         raise ValueError("Invalid tool call")
+    arguments(name, args)
     if name in REVIEW_TOOLS and not approved:
         raise PermissionError("This tool needs user review")
     if name in {"shell", "mcp"} and store.USER.get() != "local":
         raise PermissionError("Host command and MCP execution are restricted to the owner account")
+    if name == "read_attachment":
+        from chat.attachments import read_attachment
+        return read_attachment(**args)
+    if name == "read_skill":
+        item = store.get(args["id"])
+        if item["kind"] != "skill" or not item["meta"].get("approved"):
+            raise ValueError("Skill must be explicitly approved by the user")
+        return item
+    if name == "search_chats":
+        from .context import search_chats
+        return search_chats(args["query"])
     if name == "search":
         return search_web(str(args["query"]))
     if name == "read_url":
@@ -138,9 +154,9 @@ def call(name, args, *, approved=False):
     if name == "read_item":
         return store.get(str(args["id"]))
     if name == "save_item":
-        if args.get("kind") not in {"note", "task", "document", "memory", "draft"}:
+        if args.get("kind") not in {"note", "task", "document", "memory", "draft", "event"}:
             raise ValueError("Agent can create notes, tasks, documents, memories or drafts")
-        return store.save(args)
+        return store.save({**args, "meta": {**args.get("meta", {}), "origin": "agent", "scope": "user", "provenance": "agent tool save_item"}})
     if name == "read_file":
         target = file_path(str(args["path"]))
         if target.stat().st_size > 500_000:
@@ -165,9 +181,32 @@ def call(name, args, *, approved=False):
         import os
         env = {k: v for k, v in os.environ.items() if k in {"PATH", "HOME", "LANG", "TMPDIR"}}
         # cwd is a convenience, not a sandbox. UI makes this explicit at review.
-        result = subprocess.run(cmd, cwd=root, env=env, capture_output=True, timeout=20)
-        return {"exit_code": result.returncode, "stdout": result.stdout[:32000].decode("utf-8", "replace"),
-                "stderr": result.stderr[:32000].decode("utf-8", "replace")}
+        import time
+        from generation_stream import CURRENT
+        process = subprocess.Popen(cmd, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        started = time.monotonic()
+        try:
+            while True:
+                if CURRENT.get():
+                    CURRENT.get().check()
+                if time.monotonic()-started > 20:
+                    raise TimeoutError("Shell exceeded 20 seconds; inspect possible partial effects")
+                try:
+                    stdout, stderr = process.communicate(timeout=.1)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            if process.poll() is None:
+                import signal
+                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    process.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.communicate()
+        return {"exit_code": process.returncode, "stdout": stdout[:32000].decode("utf-8", "replace"),
+                "stderr": stderr[:32000].decode("utf-8", "replace")}
     if name == "mcp":
         from .mcp import Session
         servers = store.preferences().get("mcp_servers", {})
@@ -175,6 +214,11 @@ def call(name, args, *, approved=False):
         if not config:
             raise ValueError("Unknown MCP server")
         with Session(config, store.home()) as session:
+            discovered = session.call("tools/list").get("tools", [])
+            definition = next((tool for tool in discovered if tool.get("name") == args["tool"]), None)
+            if not definition or "inputSchema" not in definition:
+                raise ValueError("MCP tool has no discoverable input schema")
+            validate(args["arguments"], definition["inputSchema"])
             return session.call("tools/call", {"name": args["tool"], "arguments": args.get("arguments", {})})
     if name == "browser":
         from .browser import action

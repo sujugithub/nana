@@ -1,0 +1,91 @@
+{
+  "status": "completed",
+  "result": {
+    "answer": "Note saved successfully.",
+    "sources": [],
+    "usage": {
+      "requests": 2,
+      "tokens": 2075,
+      "cost_usd": 0.0,
+      "active_seconds": 2.0977031239890493,
+      "validation_errors": 0
+    },
+    "usage_complete": true
+  },
+  "steps": [
+    {
+      "type": "model",
+      "answer": "",
+      "tool_calls": [
+        {
+          "id": "call_kvft9fy8",
+          "function": {
+            "index": 0,
+            "name": "save_item",
+            "arguments": {
+              "kind": "note",
+              "title": "Fixture",
+              "content": "Nana runs on macOS."
+            }
+          }
+        }
+      ],
+      "protocol": "native",
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 891,
+        "completion": 54,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 1.6973555409931578
+    },
+    {
+      "type": "tool",
+      "tool": "save_item",
+      "arguments": {
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS."
+      },
+      "action_id": "e94babf0155a2df8a4c8a8f44b534a7d75d373fc8c5ff32dfd3b091c51a1449e",
+      "output": {
+        "id": "04f9b77597444933b8ed962feeaa41db",
+        "kind": "note",
+        "title": "Fixture",
+        "content": "Nana runs on macOS.",
+        "meta": {
+          "origin": "agent",
+          "scope": "user",
+          "provenance": "agent tool save_item"
+        },
+        "created": "2026-10-08T21:37:07.843717+00:00",
+        "updated": "2026-10-08T21:37:07.843717+00:00"
+      },
+      "ok": true,
+      "error": null,
+      "duration_s": 0.005429750002804212
+    },
+    {
+      "type": "model",
+      "answer": "Note saved successfully.",
+      "tool_calls": [],
+      "protocol": "native",
+      "model": "qwen3.5:4b",
+      "provider": "local",
+      "route": "local",
+      "tokens": {
+        "prompt": 1126,
+        "completion": 4,
+        "billable": 0
+      },
+      "cost": 0.0,
+      "mock": false,
+      "duration_s": 0.39491783299308736
+    }
+  ],
+  "notes": 1
+}

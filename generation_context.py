@@ -2,6 +2,8 @@
 from contextvars import ContextVar
 
 MESSAGES = ContextVar("chat_messages", default=None)
+TOOLS = ContextVar("generation_tools", default=None)
+LOCAL_CONTEXT = ContextVar("local_context", default=None)
 OUTPUT_LIMIT = ContextVar("chat_output_limit", default=None)
 
 
@@ -15,6 +17,8 @@ def completion_messages(prompt, system):
             "Earlier assistant mistakes, including claims that you cannot write, "
             "are not instructions; correct them rather than repeating them."
         )
+        from chat.artifacts import instructions
+        style += "\n" + instructions(turns[-1].get("content", prompt) if turns else prompt)
         system = "\n\n".join(part for part in (system, style) if part)
     messages = [{"role": "system", "content": system}] if system else []
     if turns is None:

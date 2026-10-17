@@ -1,0 +1,16 @@
+{
+  "restored_review": true,
+  "status": "completed",
+  "exact_action_reviewed": true,
+  "executed_tool_steps": 1,
+  "answer": "The output of the command is: nana-fixture-17",
+  "usage": {
+    "requests": 2,
+    "model_steps": 2,
+    "tokens": 1954,
+    "cost_usd": 0.0,
+    "active_seconds": 3.5671090419928078,
+    "validation_errors": 0
+  },
+  "fixture_note_saved": true
+}

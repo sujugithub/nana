@@ -7,7 +7,7 @@ from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 # Match the demo server: load local defaults before importing config.py.
@@ -111,6 +111,8 @@ class ConversationSettingsRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     mock: bool = True
+    web: bool = False
+    attachments: list[str] = Field(default_factory=list, max_length=4)
 
 
 # -------------------------------------------------------------------
@@ -130,17 +132,57 @@ def chat_page():
     return FileResponse(Path(__file__).resolve().parent / "webui" / "static" / "chat.html")
 
 
+@app.get("/chat-response.js")
+def chat_response_script():
+    return FileResponse(_REPO / "webui" / "static" / "chat-response.js", media_type="text/javascript")
+
+
+@app.get("/chat-response.css")
+def chat_response_style():
+    return FileResponse(_REPO / "webui" / "static" / "chat-response.css", media_type="text/css")
+
+
+@app.get("/conversations/{conversation_id}/messages/{message_id}/artifacts/{index}")
+def chat_artifact(conversation_id: int, message_id: int, index: int):
+    from chat.artifacts import download
+    try:
+        body, mime, name = download(conversation_id, message_id, index)
+        return Response(body, media_type=mime, headers={
+            "Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"})
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/api/chat/config")
 def chat_config():
+    from workspace.store import preferences
+    from workspace.search import provider
+    prefs = preferences()
+    local_model = prefs.get("local_model", settings.local_model_name)
+    if prefs.get("local_backend", settings.local_backend) == "ollama":
+        from ollama_client import request
+        try:
+            local_models = [m["name"] for m in request("/api/tags", timeout=2).get("models", [])
+                            if isinstance(m, dict) and isinstance(m.get("name"), str)]
+        except Exception:
+            local_models = []
+        local_models = list(dict.fromkeys(local_models)) or [local_model]
+        if local_model not in local_models:
+            local_model = local_models[0]
+    else:
+        local_models = list(dict.fromkeys([local_model, *KNOWN_LOCAL_MODELS]))
     return {
         "real_allowed": real_calls_allowed(),
-        "known_local_models": KNOWN_LOCAL_MODELS,
+        "web": {"model": "qwen3.5:4b", "local_backend": prefs.get("local_backend", settings.local_backend),
+                "search_provider": provider(prefs)},
+        "known_local_models": local_models,
         "known_fireworks_models": KNOWN_FIREWORKS_MODELS,
         "default_mode": "hybrid",
         "default_models": {
             "hybrid": settings.strong_model_name,
             "remote": settings.strong_model_name,
-            "local": settings.local_model_name,
+            "local": local_model,
         },
     }
 
@@ -298,6 +340,8 @@ def create_message(
             content=request.content.strip(),
             mock=request.mock,
             allow_real=real_calls_allowed(),
+            web=request.web,
+            attachments=request.attachments,
         )
 
     except LookupError as error:
@@ -316,3 +360,60 @@ def create_message(
             status_code=500,
             detail="Nana failed to save the chat turn",
         )
+
+
+@app.post("/api/workspace/chat/attachments")
+def upload_chat_attachment(payload: dict):
+    from chat.attachments import upload
+    try:
+        return upload(payload)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/workspace/chat/capabilities")
+def chat_capabilities(mode: Literal["local", "remote", "hybrid"] = "local", model: Optional[str] = None):
+    from chat.attachments import capabilities
+    from workspace.tools import TOOLS
+    try:
+        return {**capabilities(mode, model), "tools": TOOLS, "max_bytes": 10*1024*1024}
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/conversations/{conversation_id}/tool-run")
+def start_chat_tools(conversation_id: int, payload: dict):
+    from chat.tool_turns import start
+    try:
+        return start(conversation_id, payload, real_calls_allowed())
+    except (ValueError, LookupError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/conversations/{conversation_id}/tool-run")
+def poll_chat_tools(conversation_id: int):
+    from chat.tool_turns import poll
+    try:
+        return poll(conversation_id)
+    except (ValueError, LookupError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/workspace/runs/{run_id}/review")
+def review_chat_tools(run_id: str, payload: dict):
+    from workspace.runs import review
+    try:
+        if not isinstance(payload.get("approve"), bool) or not isinstance(payload.get("action_id"), str):
+            raise ValueError("Review requires approve and the exact action_id")
+        return review(run_id, payload["approve"], real_calls_allowed(), payload["action_id"])
+    except (ValueError, LookupError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/workspace/runs/{run_id}/cancel")
+def cancel_chat_tools(run_id: str):
+    from workspace.runs import cancel
+    try:
+        return cancel(run_id)
+    except (ValueError, LookupError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

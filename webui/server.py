@@ -78,7 +78,8 @@ class DemoHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        if length <= 0 or length > _MAX_BODY:
+        limit = 15 * (1 << 20) if self.path == "/api/workspace/chat/attachments" else _MAX_BODY
+        if length <= 0 or length > limit:
             return None
         try:
             data = json.loads(self.rfile.read(length))
@@ -218,6 +219,8 @@ class DemoHandler(BaseHTTPRequestHandler):
             self._send_static("index.html", "text/html; charset=utf-8")
         elif path == "/chat":
             self._send_static("chat.html", "text/html; charset=utf-8")
+        elif path in ("/chat-response.js", "/chat-response.css"):
+            self._send_static(path[1:], "text/javascript; charset=utf-8" if path.endswith(".js") else "text/css; charset=utf-8")
         elif path == "/workspace":
             self._send_static("workspace.html", "text/html; charset=utf-8")
         elif path == "/welcome":
@@ -230,15 +233,40 @@ class DemoHandler(BaseHTTPRequestHandler):
             from config import settings
             from workspace.store import preferences
             prefs = preferences()
+            installed_local_models = []
+            ollama_backend = prefs.get("local_backend", settings.local_backend) == "ollama"
+            if ollama_backend:
+                from ollama_client import request
+                try:
+                    installed_local_models = [
+                        model["name"] for model in request("/api/tags", timeout=2).get("models", [])
+                        if isinstance(model, dict) and isinstance(model.get("name"), str)
+                    ]
+                except Exception:
+                    # Settings remain usable while the local runtime is offline.
+                    pass
+            configured_local_model = prefs.get("local_model", settings.local_model_name)
+            from workspace.search import provider as search_provider
+            if ollama_backend and installed_local_models:
+                local_models = list(dict.fromkeys(installed_local_models))
+                default_local_model = (configured_local_model if configured_local_model in local_models
+                                       else local_models[0])
+            else:
+                # Keep settings accessible when the runtime is offline; the
+                # streaming error will explain an unavailable saved model.
+                local_models = list(dict.fromkeys([configured_local_model, *service.KNOWN_LOCAL_MODELS]))
+                default_local_model = configured_local_model
             self._send_json({
                 "real_allowed": self.server.allow_real,
-                "known_local_models": list(dict.fromkeys([prefs.get("local_model", settings.local_model_name), *service.KNOWN_LOCAL_MODELS])),
+                "web": {"model": "qwen3.5:4b", "local_backend": prefs.get("local_backend", settings.local_backend),
+                        "search_provider": search_provider(prefs)},
+                "known_local_models": local_models,
                 "known_fireworks_models": service.KNOWN_FIREWORKS_MODELS,
                 "default_mode": "hybrid",
                 "default_models": {
                     "hybrid": settings.strong_model_name,
                     "remote": settings.strong_model_name,
-                    "local": prefs.get("local_model", settings.local_model_name),
+                    "local": default_local_model,
                 },
             })
         elif path.startswith("/conversations"):
@@ -301,6 +329,25 @@ class DemoHandler(BaseHTTPRequestHandler):
         )
         from chat.service import MAX_MESSAGE_CHARS, conversation_config, send_message
 
+        artifact_match = re.fullmatch(r"/conversations/(\d+)/messages/(\d+)/artifacts/(\d+)", path)
+        if method == "GET" and artifact_match:
+            from chat.artifacts import download
+            initialise_database()
+            try:
+                body, mime, name = download(*(int(x) for x in artifact_match.groups()))
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Security-Policy", "sandbox")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+            except LookupError as exc:
+                self._send_json({"error": str(exc)}, 404)
+            return
+
         stream_cancel = re.fullmatch(r"/conversations/streams/([a-f0-9-]+)/cancel", path)
         if method == "POST" and stream_cancel:
             from chat.streaming import cancel
@@ -320,6 +367,19 @@ class DemoHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(exc)}, 400)
             return
 
+        tool_match = re.fullmatch(r"/conversations/(\d+)/tool-run", path)
+        if tool_match:
+            from chat.tool_turns import start, poll
+            initialise_database()
+            try:
+                payload = self._read_json() if method == "POST" else None
+                if method == "POST" and payload is None:
+                    raise ValueError("Invalid JSON body")
+                result = start(int(tool_match[1]), payload, self.server.allow_real) if method == "POST" else poll(int(tool_match[1]))
+                self._send_json(result)
+            except (ValueError, LookupError, RuntimeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
         if not path.startswith("/conversations"):
             self._send_json({"error": "not found"}, status=404)
             return
@@ -373,6 +433,8 @@ class DemoHandler(BaseHTTPRequestHandler):
                         conversation_id, content,
                         mock=payload.get("mock", True) is not False,
                         allow_real=self.server.allow_real,
+                        web=payload.get("web", False),
+                        attachments=payload.get("attachments", []),
                     )
                 elif method == "PATCH" and suffix == "title":
                     title = str(payload.get("title", "")).strip()

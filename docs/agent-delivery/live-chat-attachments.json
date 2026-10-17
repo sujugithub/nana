@@ -1,0 +1,70 @@
+{
+  "fixture.pdf": {
+    "answer": "17",
+    "model": "qwen3.5:4b",
+    "cost": 0.0,
+    "latency_s": 3.235,
+    "attachment": {
+      "id": "6065dcd1625f49ad9e49dc44caef63fe",
+      "name": "fixture.pdf",
+      "size": 687,
+      "text_chars": 35,
+      "images": 0
+    }
+  },
+  "blue-square.png": {
+    "answer": "Blue square",
+    "model": "qwen3.5:4b",
+    "cost": 0.0,
+    "latency_s": 1.254,
+    "attachment": {
+      "id": "b09eaa771e2f467484237ebc2b0ad73e",
+      "name": "blue-square.png",
+      "size": 779,
+      "text_chars": 0,
+      "images": 1
+    }
+  },
+  "tools": {
+    "status": "completed",
+    "result": {
+      "answer": "The note is saved.",
+      "failed_tools": 0,
+      "sources": [],
+      "usage": {
+        "requests": 2,
+        "model_steps": 2,
+        "tokens": 2698,
+        "cost_usd": 0.0,
+        "active_seconds": 4.537160040985327,
+        "validation_errors": 0
+      },
+      "usage_complete": true
+    },
+    "steps": [
+      {
+        "type": "model",
+        "tool": null,
+        "ok": null
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "ok": true
+      },
+      {
+        "type": "model",
+        "tool": null,
+        "ok": null
+      }
+    ],
+    "messages": 2
+  },
+  "scan-code.pdf": {
+    "answer": "17",
+    "images": 1,
+    "latency_s": 0.636,
+    "cost": 0.0,
+    "followup": "17"
+  }
+}

@@ -45,6 +45,8 @@ class Completion:
     min_token_prob: Optional[float] = None  # harshest single-token view
     low_token_frac: Optional[float] = None  # fraction of tokens with p < 0.5
 
+    tool_calls: list = field(default_factory=list)
+
     @property
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens

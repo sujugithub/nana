@@ -10,7 +10,7 @@ import uuid
 
 ROOT = Path(os.environ.get("NANA_WORKSPACE_DIR", Path(__file__).resolve().parents[1] / "data" / "workspace"))
 USER = ContextVar("workspace_user", default="local")
-KINDS = {"note", "task", "document", "memory", "event", "preset", "draft", "asset", "notification"}
+KINDS = {"note", "task", "document", "memory", "event", "preset", "draft", "asset", "notification", "skill"}
 
 
 def now():
@@ -42,6 +42,9 @@ def db():
           title TEXT NOT NULL, meta TEXT NOT NULL, created TEXT NOT NULL,
           FOREIGN KEY(record_id) REFERENCES records(id) ON DELETE CASCADE);
         CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS actions(
+          id TEXT PRIMARY KEY, run_id TEXT NOT NULL, request TEXT NOT NULL,
+          status TEXT NOT NULL, result TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS runs(
           id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL,
           payload TEXT NOT NULL, result TEXT NOT NULL, steps TEXT NOT NULL,
@@ -50,6 +53,10 @@ def db():
           id TEXT PRIMARY KEY, title TEXT NOT NULL, due TEXT NOT NULL,
           payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', run_id TEXT,
           updated TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS occurrences(
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, due TEXT NOT NULL,
+          status TEXT NOT NULL, run_id TEXT, error TEXT, updated TEXT NOT NULL,
+          UNIQUE(job_id,due));
     """)
     try:
         yield conn
@@ -100,6 +107,18 @@ def save(payload, item_id=None):
         raise ValueError("Metadata is too large")
     item_id = item_id or uuid.uuid4().hex
     timestamp = now()
+    if kind in {"memory", "skill"}:
+        meta = {"scope": "user", "origin": "user", "provenance": "workspace editor", **meta, "version": (old["meta"].get("version", 0) + 1 if old else 1)}
+        if not isinstance(meta["scope"], str) or not 1 <= len(meta["scope"]) <= 150:
+            raise ValueError("Memory scope must be a short user, chat or project scope")
+        if kind == "memory":
+            meta = {"category": "fact", "confidence": 1.0 if meta["origin"] == "user" else .5, **meta}
+            if meta["category"] not in {"preference", "fact", "task_state", "transcript"}:
+                raise ValueError("Choose a valid memory category")
+            if isinstance(meta["confidence"], bool) or not isinstance(meta["confidence"], (int, float)) or not 0 <= meta["confidence"] <= 1:
+                raise ValueError("Memory confidence must be between 0 and 1")
+        if kind == "skill" and old and (content != old["content"] or title != old["title"]):
+            meta["approved"] = False
     with db() as conn:
         if old:
             expected = payload.get("expected_updated")
@@ -136,8 +155,10 @@ def preferences(payload=None):
             if not isinstance(payload, dict) or len(json.dumps(payload)) > 50_000:
                 raise ValueError("Invalid preferences")
             for key, value in payload.items():
-                if key not in {"theme", "agent_mode", "agent_model", "system_prompt", "searxng_url", "mcp_servers", "local_model", "local_backend"}:
+                if key not in {"theme", "agent_mode", "agent_model", "system_prompt", "searxng_url", "search_provider", "mcp_servers", "local_model", "local_backend"}:
                     raise ValueError("Unknown preference")
+                if key == "search_provider" and (not isinstance(value, str) or value not in {"off", "exa", "searxng"}):
+                    raise ValueError("Choose off, exa, or searxng for web search")
                 conn.execute("INSERT OR REPLACE INTO preferences VALUES(?,?)", (key, json.dumps(value)))
         return {row["key"]: json.loads(row["value"]) for row in conn.execute("SELECT * FROM preferences")}
 
@@ -188,6 +209,13 @@ def job_save(payload):
         raise ValueError("Scheduled agent needs a prompt")
     if not isinstance(payload.get("repeat_minutes", 0), int) or not 0 <= payload.get("repeat_minutes", 0) <= 525600:
         raise ValueError("Repeat minutes must be an integer between 0 and 525600")
+    if payload.get("recurrence") not in {None, "daily"}:
+        raise ValueError("Recurrence must be daily or use repeat_minutes")
+    if payload.get("recurrence") == "daily":
+        from zoneinfo import ZoneInfo
+        ZoneInfo(payload.get("timezone", "UTC"))
+        if payload.get("repeat_minutes"):
+            raise ValueError("Choose daily recurrence or interval minutes")
     job_id = uuid.uuid4().hex
     with db() as conn:
         conn.execute("INSERT INTO jobs VALUES(?,?,?,?,?,?,?)", (job_id, title,
@@ -197,4 +225,7 @@ def job_save(payload):
 
 def jobs():
     with db() as conn:
-        return [dict(row) for row in conn.execute("SELECT * FROM jobs ORDER BY due")]
+        jobs = [dict(row) for row in conn.execute("SELECT * FROM jobs ORDER BY due")]
+        for job in jobs:
+            job["occurrences"] = [dict(row) for row in conn.execute("SELECT * FROM occurrences WHERE job_id=? ORDER BY due DESC LIMIT 20", (job["id"],))]
+        return jobs

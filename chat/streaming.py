@@ -47,7 +47,8 @@ def serve(handler, conversation_id, payload):
         emit({"type": "start", "stream_id": stream_id})
         result = send_message(conversation_id, payload.get("content", ""),
                               mock=payload.get("mock", True) is not False,
-                              allow_real=handler.server.allow_real)
+                              allow_real=handler.server.allow_real,
+                              web=payload.get("web", False), attachments=payload.get("attachments", []))
         emit({"type": "complete", "result": result})
     except Exception as exc:
         try:

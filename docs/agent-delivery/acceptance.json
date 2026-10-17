@@ -1,0 +1,38 @@
+{
+  "full_suite": {
+    "tests": 247,
+    "passed": true,
+    "duration_seconds": 8.862
+  },
+  "minimal_env_focused_tests": 30,
+  "stdlib_harness_passed": true,
+  "live_pages": {
+    "/chat": 200,
+    "/workspace": 200,
+    "/welcome": 200
+  },
+  "google_gmail_readonly": "HTTP 403",
+  "google_calendar_readonly": "HTTP 403",
+  "search_endpoint_configured": true,
+  "search_provider": "exa",
+  "live_web_search_chat_passed": true,
+  "live_public_url_chat_passed": true,
+  "web_ui_mock_fixture_passed": true,
+  "mcp_servers_configured": 0,
+  "public_reader_passed": true,
+  "isolated_browser_read_passed": true,
+  "paid_calls": 0,
+  "external_publications": 0,
+  "launchd_installed": false,
+  "model_downloads": 0,
+  "chat_attachments_live_passed": true,
+  "chat_scanned_pdf_live_passed": true,
+  "chat_image_followup_live_passed": true,
+  "chat_tools_review_reload_passed": true,
+  "chat_existing_rows_preserved": true,
+  "attachment_regressions": 13,
+  "remote_vision_connected": false,
+  "compact_chat_menu_ui_passed": true,
+  "composer_model_picker_ui_passed": true,
+  "model_change_draft_preservation_passed": true
+}

@@ -102,7 +102,9 @@ class HTTPSession:
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
         request = urllib.request.Request(self.url, data=json.dumps(payload).encode(), headers=headers)
-        with urllib.request.urlopen(request, timeout=20) as response:
+        import ssl
+        import certifi
+        with urllib.request.urlopen(request, timeout=20, context=ssl.create_default_context(cafile=certifi.where())) as response:
             self.session_id = response.headers.get("Mcp-Session-Id", self.session_id)
             if notification or response.status == 202:
                 return {}

@@ -1,0 +1,815 @@
+{
+  "mock": false,
+  "runtime": {
+    "version": "0.40.0"
+  },
+  "before": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                    89192.\nPages active:                                 458669.\nPages inactive:                               458315.\nPages speculative:                              3376.\nPages throttled:                                   0.\nPages wired down:                             434533.\nPages purgeable:                                5825.\n\"Translation faults\":                      390708041.\nPages copy-on-write:                         5710155.\nPages zero filled:                         510267387.\nPages reactivated:                          24435223.\nPages purged:                                8507050.\nFile-backed pages:                            349263.\nAnonymous pages:                              571097.\nPages stored in compressor:                   481809.\nPages occupied by compressor:                  87086.\nDecompressions:                             48993211.\nCompressions:                               63567665.\nPageins:                                    11663732.\nPageouts:                                     619526.\nSwapins:                                     4304539.\nSwapouts:                                    5386088.\nPages tagged:                                 139128.\nPages tagged resident:                        115023.\nPages tagged compressed:                       24105.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5708.\nPages tag-storage free:                          277.\nPages tag-storage non-tag pageable:            43087.\nPages tag-storage non-tag wired:                  80.\nBytes of compressed tags:                    3633664.\nTagged compressions:                         1978603.\nTagged decompressions:                       1759461.\n",
+    "swap": "vm.swapusage: total = 4096.00M  used = 2492.00M  free = 1604.00M  (encrypted)"
+  },
+  "results": [
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-notes",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "list_items",
+        "arguments": {
+          "kind": "note"
+        }
+      },
+      "prompt_eval_count": 416,
+      "eval_count": 25,
+      "load_duration": 13563166,
+      "eval_duration": 743129209,
+      "total_duration": 1105016541,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5024945680,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.125
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-note",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "read_item",
+        "arguments": {
+          "id": "fixture123"
+        }
+      },
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 15421959,
+      "eval_duration": 758907667,
+      "total_duration": 1059712125,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5192488464,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.08
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "save-note",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "note",
+          "title": "Mac",
+          "content": "Nana runs on macOS."
+        }
+      },
+      "prompt_eval_count": 453,
+      "eval_count": 54,
+      "load_duration": 14169875,
+      "eval_duration": 1489551333,
+      "total_duration": 1838451208,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5308782096,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.859
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "email-draft",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "draft",
+          "title": "Hello",
+          "content": "Review tomorrow."
+        }
+      },
+      "prompt_eval_count": 456,
+      "eval_count": 51,
+      "load_duration": 15504708,
+      "eval_duration": 1450452500,
+      "total_duration": 1803644375,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5479732752,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.824
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "calendar-draft",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "event",
+          "title": "Review",
+          "content": "Discuss the plan.",
+          "meta": {}
+        }
+      },
+      "prompt_eval_count": 459,
+      "eval_count": 64,
+      "load_duration": 15000375,
+      "eval_duration": 1760989709,
+      "total_duration": 1844697000,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5637330448,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.865
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "search",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "search",
+        "arguments": {
+          "query": "macOS official documentation Apple developer site"
+        }
+      },
+      "prompt_eval_count": 352,
+      "eval_count": 29,
+      "load_duration": 14243125,
+      "eval_duration": 842923459,
+      "total_duration": 1108807709,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5740746256,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.131
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-source",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "read_url",
+        "arguments": {
+          "url": "https://example.com/"
+        }
+      },
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 13885958,
+      "eval_duration": 785820625,
+      "total_duration": 1088395083,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 5907944976,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.109
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "load-skill",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "read_skill",
+        "arguments": {
+          "id": "research123"
+        }
+      },
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 14724709,
+      "eval_duration": 760580375,
+      "total_duration": 1062258292,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6021322256,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.082
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-files",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "list_files",
+        "arguments": {}
+      },
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 13821833,
+      "eval_duration": 379562334,
+      "total_duration": 641036500,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6187030032,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.661
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-file",
+      "repeat": 1,
+      "success": true,
+      "decision": {
+        "tool": "read_file",
+        "arguments": {
+          "path": "notes.txt"
+        }
+      },
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 15290333,
+      "eval_duration": 730234584,
+      "total_duration": 1031447375,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6302242320,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.053
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-notes",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "list_items",
+        "arguments": {
+          "kind": "note"
+        }
+      },
+      "prompt_eval_count": 416,
+      "eval_count": 25,
+      "load_duration": 14927792,
+      "eval_duration": 716224750,
+      "total_duration": 765062792,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6367745552,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.786
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-note",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "read_item",
+        "arguments": {
+          "id": "fixture123"
+        }
+      },
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 14833375,
+      "eval_duration": 758986125,
+      "total_duration": 804731000,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6367680016,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.825
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "save-note",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "note",
+          "title": "Mac",
+          "content": "Nana runs on macOS."
+        }
+      },
+      "prompt_eval_count": 453,
+      "eval_count": 54,
+      "load_duration": 14657167,
+      "eval_duration": 1500098334,
+      "total_duration": 1545749625,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6370440720,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.567
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "email-draft",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "draft",
+          "title": "Hello",
+          "content": "Review tomorrow."
+        }
+      },
+      "prompt_eval_count": 456,
+      "eval_count": 51,
+      "load_duration": 14832750,
+      "eval_duration": 1459735875,
+      "total_duration": 1505069750,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369617424,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.531
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "calendar-draft",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "event",
+          "title": "Review",
+          "content": "Discuss the plan.",
+          "meta": {}
+        }
+      },
+      "prompt_eval_count": 459,
+      "eval_count": 64,
+      "load_duration": 18448833,
+      "eval_duration": 1781888875,
+      "total_duration": 1835325708,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369814032,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.862
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "search",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "search",
+        "arguments": {
+          "query": "macOS official documentation Apple developer site"
+        }
+      },
+      "prompt_eval_count": 352,
+      "eval_count": 29,
+      "load_duration": 18167208,
+      "eval_duration": 824751708,
+      "total_duration": 877323875,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369101328,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.903
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-source",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "read_url",
+        "arguments": {
+          "url": "https://example.com/"
+        }
+      },
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 17918125,
+      "eval_duration": 831874166,
+      "total_duration": 884130250,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369293840,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.909
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "load-skill",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "read_skill",
+        "arguments": {
+          "id": "research123"
+        }
+      },
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 18060291,
+      "eval_duration": 767279834,
+      "total_duration": 819278208,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369035792,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.844
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-files",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "list_files",
+        "arguments": {}
+      },
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 17820584,
+      "eval_duration": 382304125,
+      "total_duration": 433870084,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6368970256,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.459
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-file",
+      "repeat": 2,
+      "success": true,
+      "decision": {
+        "tool": "read_file",
+        "arguments": {
+          "path": "notes.txt"
+        }
+      },
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 17988417,
+      "eval_duration": 710674208,
+      "total_duration": 763085584,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369179152,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.789
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-notes",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "list_items",
+        "arguments": {
+          "kind": "note"
+        }
+      },
+      "prompt_eval_count": 416,
+      "eval_count": 25,
+      "load_duration": 18657625,
+      "eval_duration": 711875542,
+      "total_duration": 764947334,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369179152,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.79
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-note",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "read_item",
+        "arguments": {
+          "id": "fixture123"
+        }
+      },
+      "prompt_eval_count": 359,
+      "eval_count": 27,
+      "load_duration": 16721083,
+      "eval_duration": 801216792,
+      "total_duration": 852943000,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369035792,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.878
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "save-note",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "note",
+          "title": "Mac",
+          "content": "Nana runs on macOS."
+        }
+      },
+      "prompt_eval_count": 453,
+      "eval_count": 54,
+      "load_duration": 19515542,
+      "eval_duration": 1508217542,
+      "total_duration": 1562209208,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369166864,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.589
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "email-draft",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "draft",
+          "title": "Hello",
+          "content": "Review tomorrow."
+        }
+      },
+      "prompt_eval_count": 456,
+      "eval_count": 51,
+      "load_duration": 18156208,
+      "eval_duration": 1426462333,
+      "total_duration": 1479055833,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369375760,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.505
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "calendar-draft",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "save_item",
+        "arguments": {
+          "kind": "event",
+          "title": "Review",
+          "content": "Discuss the plan.",
+          "meta": {}
+        }
+      },
+      "prompt_eval_count": 459,
+      "eval_count": 64,
+      "load_duration": 18402833,
+      "eval_duration": 1819509833,
+      "total_duration": 1872411750,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369506832,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 1.898
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "search",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "search",
+        "arguments": {
+          "query": "macOS official documentation Apple developer site"
+        }
+      },
+      "prompt_eval_count": 352,
+      "eval_count": 29,
+      "load_duration": 18024375,
+      "eval_duration": 820007750,
+      "total_duration": 873891834,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369326608,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.899
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-source",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "read_url",
+        "arguments": {
+          "url": "https://example.com/"
+        }
+      },
+      "prompt_eval_count": 356,
+      "eval_count": 28,
+      "load_duration": 17910625,
+      "eval_duration": 792929125,
+      "total_duration": 845186583,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369117712,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.87
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "load-skill",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "read_skill",
+        "arguments": {
+          "id": "research123"
+        }
+      },
+      "prompt_eval_count": 363,
+      "eval_count": 27,
+      "load_duration": 18428875,
+      "eval_duration": 774735584,
+      "total_duration": 827280667,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369179152,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.852
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "list-files",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "list_files",
+        "arguments": {}
+      },
+      "prompt_eval_count": 334,
+      "eval_count": 13,
+      "load_duration": 18115000,
+      "eval_duration": 403628916,
+      "total_duration": 457026167,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369080848,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.482
+    },
+    {
+      "model": "qwen3.5:4b",
+      "context": 4096,
+      "task": "read-file",
+      "repeat": 3,
+      "success": true,
+      "decision": {
+        "tool": "read_file",
+        "arguments": {
+          "path": "notes.txt"
+        }
+      },
+      "prompt_eval_count": 357,
+      "eval_count": 25,
+      "load_duration": 17994542,
+      "eval_duration": 715380583,
+      "total_duration": 767695000,
+      "loaded": [
+        {
+          "name": "qwen3.5:4b",
+          "size_vram": 6369035792,
+          "context_length": 4096
+        }
+      ],
+      "latency_s": 0.793
+    }
+  ],
+  "qwen3.5:4b_memory": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                    42750.\nPages active:                                 488284.\nPages inactive:                               477118.\nPages speculative:                               378.\nPages throttled:                                   0.\nPages wired down:                             434578.\nPages purgeable:                                5083.\n\"Translation faults\":                      390729632.\nPages copy-on-write:                         5711612.\nPages zero filled:                         510918201.\nPages reactivated:                          24447453.\nPages purged:                                8507058.\nFile-backed pages:                            304963.\nAnonymous pages:                              660817.\nPages stored in compressor:                   484563.\nPages occupied by compressor:                  88031.\nDecompressions:                             48993250.\nCompressions:                               63570443.\nPageins:                                    11663862.\nPageouts:                                     619565.\nSwapins:                                     4304547.\nSwapouts:                                    5386088.\nPages tagged:                                 138819.\nPages tagged resident:                        114353.\nPages tagged compressed:                       24466.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5708.\nPages tag-storage free:                          269.\nPages tag-storage non-tag pageable:            43098.\nPages tag-storage non-tag wired:                  77.\nBytes of compressed tags:                    3706304.\nTagged compressions:                         1978964.\nTagged decompressions:                       1759461.\n",
+    "swap": "vm.swapusage: total = 4096.00M  used = 2492.00M  free = 1604.00M  (encrypted)"
+  },
+  "after": {
+    "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                    43345.\nPages active:                                 530002.\nPages inactive:                               477454.\nPages speculative:                               381.\nPages throttled:                                   0.\nPages wired down:                             392376.\nPages purgeable:                                5083.\n\"Translation faults\":                      390730621.\nPages copy-on-write:                         5711881.\nPages zero filled:                         510918288.\nPages reactivated:                          24447453.\nPages purged:                                8507058.\nFile-backed pages:                            304966.\nAnonymous pages:                              702871.\nPages stored in compressor:                   484563.\nPages occupied by compressor:                  88031.\nDecompressions:                             48993250.\nCompressions:                               63570443.\nPageins:                                    11663865.\nPageouts:                                     619565.\nSwapins:                                     4304547.\nSwapouts:                                    5386088.\nPages tagged:                                 138819.\nPages tagged resident:                        114353.\nPages tagged compressed:                       24466.\nPages tag-storage:                             49152.\nPages tag-storage holding tags:                 5708.\nPages tag-storage free:                          275.\nPages tag-storage non-tag pageable:            43092.\nPages tag-storage non-tag wired:                  77.\nBytes of compressed tags:                    3706304.\nTagged compressions:                         1978964.\nTagged decompressions:                       1759461.\n",
+    "swap": "vm.swapusage: total = 4096.00M  used = 2492.00M  free = 1604.00M  (encrypted)"
+  }
+}

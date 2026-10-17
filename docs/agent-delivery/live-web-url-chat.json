@@ -1,0 +1,38 @@
+{
+  "fixture": "Public example.com source; disposable chat database and workspace",
+  "passed": true,
+  "duration_s": 1.378,
+  "dispatched": [
+    {
+      "model": "qwen3.5:4b",
+      "options": {
+        "temperature": 0,
+        "num_ctx": 8192,
+        "num_predict": 4096
+      }
+    }
+  ],
+  "answer": "The purpose of https://example.com is to serve as a placeholder domain for documentation examples without requiring permission.\n\nSources:\n1. https://example.com (Page excerpt)",
+  "web": {
+    "enabled": true,
+    "provider": "direct",
+    "sources": [
+      {
+        "url": "https://example.com",
+        "title": "https://example.com",
+        "kind": "Page excerpt"
+      }
+    ],
+    "context_estimate": "3 characters per token",
+    "requested_context_tokens": 8192
+  },
+  "runtime_models": [
+    {
+      "name": "qwen3.5:4b",
+      "context_length": 4096,
+      "size_vram": 4536112656
+    }
+  ],
+  "messages": 2,
+  "context_note": "8192 requested; Ollama api/ps reports 4096. Short public fixtures passed; full-window retention is not established."
+}
