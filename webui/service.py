@@ -25,6 +25,13 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from config import ROUTE_CHEAP, ROUTE_STRONG, settings
+from routing.identity import (
+    REVALIDATION_REQUIRED,
+    RETRAIN_REQUIRED,
+    SYNTHETIC,
+    compare,
+    runtime_identity,
+)
 from remote_client import (
     FireworksClient,
     RemoteError,
@@ -171,17 +178,24 @@ def artifact_status(cfg: DemoConfig) -> Dict[str, Any]:
 
     States:
       available=False                artifact missing/corrupt/incompatible
-      pair_match=True                trained for exactly this pair — valid
-      pair_match=False               trained for another pair — "router
-                                     retraining required", learned is blocked
-      pair_match=None (no metadata)  pre-pair-metadata artifact (the toy one):
-                                     usable for MOCK demos only, always
-                                     labelled; never real ML evidence
+      pair_match=True, verified=True  identity compatible (routing/identity.py)
+      pair_match=True, verified=False no known mismatch but unverifiable
+                                     (e.g. names-only legacy artifact):
+                                     MOCK demos only
+      pair_match=False               retraining or revalidation required —
+                                     learned is blocked
+      pair_match=None (no metadata)  synthetic/toy artifact: usable for MOCK
+                                     demos only, always labelled; never real
+                                     ML evidence
+    ``compatibility`` carries the full status, mismatches and unknown fields.
     """
     out: Dict[str, Any] = {
         "path": settings.router_artifact_path,
         "available": False,
         "pair_match": None,
+        "verified": False,
+        "notices": [],
+        "compatibility": None,
         "version": None,
         "trained_pair": None,
         "detail": "",
@@ -197,36 +211,52 @@ def artifact_status(cfg: DemoConfig) -> Dict[str, Any]:
     out["available"] = True
     out["version"] = artifact.version
     meta = artifact.dataset_meta or {}
-    trained_mode = meta.get("tier_mode")
-    if not trained_mode:
+    result = compare(meta, _selected_identity(cfg))
+    out["compatibility"] = result.to_dict()
+    out["verified"] = result.ok
+    out["notices"] = list(result.notices)
+    if result.status == SYNTHETIC:
         out["pair_match"] = None
         out["detail"] = (
-            "artifact has no model-pair metadata (trained on synthetic toy "
+            "artifact has no verified model pair (synthetic/toy training "
             "data) — usable for mock demos only; router retraining required "
             "before any real claim"
         )
         return out
 
-    trained = (
-        str(trained_mode).strip().lower(),
-        str(meta.get("local_model", "")),
-        str(meta.get("remote_model", "")),
-    )
-    out["trained_pair"] = {
-        "tier_mode": trained[0], "cheap": trained[1], "strong": trained[2],
-    }
-    selected = _selected_pair(cfg)
-    if trained == selected:
-        out["pair_match"] = True
-        out["detail"] = "artifact was trained for exactly this model pair"
-    else:
+    if meta.get("tier_mode"):
+        out["trained_pair"] = {
+            "tier_mode": str(meta["tier_mode"]).strip().lower(),
+            "cheap": str(meta.get("local_model", "")),
+            "strong": str(meta.get("remote_model", "")),
+        }
+    if result.status in (RETRAIN_REQUIRED, REVALIDATION_REQUIRED):
         out["pair_match"] = False
         out["detail"] = (
-            f"router retraining required: artifact was trained for "
-            f"{trained}, but the selected pair is {selected}. The heuristic "
-            f"router remains available for this (untrained) pair."
+            f"{result.detail}; the selected pair is {_selected_pair(cfg)}. "
+            "The heuristic router remains available for this (untrained) pair."
         )
+    else:
+        # compatible, or unverifiable: no known mismatch, but only
+        # ``verified`` means every identity field was confirmed.
+        out["pair_match"] = True
+        out["detail"] = result.detail
     return out
+
+
+def _selected_identity(cfg: DemoConfig) -> Dict[str, Any]:
+    """Identity of the pair this config selects. Runtime facts (digest,
+    quantisation) are probed only for a real local Ollama tier."""
+    probe = None
+    if (not cfg.mock and cfg.hybrid_pair == "local_remote"
+            and cfg.local_backend.strip().lower() == "ollama"):
+        from ollama_client import model_identity
+        probe = model_identity
+    return runtime_identity(
+        tier_mode=cfg.hybrid_pair, local_model=cfg.local_model,
+        local_backend=cfg.local_backend, cheap_model=cfg.cheap_model,
+        strong_model=cfg.strong_model, probe=probe,
+    )
 
 
 def _learned_router_usable(
@@ -242,6 +272,12 @@ def _learned_router_usable(
             "the loaded artifact has no verified model pair (toy/synthetic "
             "training); learned routing is limited to mock demos until a "
             "router is trained for the selected pair"
+        )
+    if not status.get("verified") and not cfg.mock:
+        return False, (
+            "learned router unverifiable for the selected deployment: "
+            f"{status['detail']}; learned routing is limited to mock demos "
+            "until a router is trained and verified for this deployment"
         )
     return True, ""
 

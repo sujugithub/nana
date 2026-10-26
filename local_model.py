@@ -94,6 +94,7 @@ class LocalModel:
                 latency_s=time.time() - started,
                 model_name=settings.local_model_name,
                 provider="local",
+                usage_source="mock",
             )
 
         with self._lock:
@@ -155,7 +156,12 @@ class LocalModel:
 
         prompt_len = int(encoded["input_ids"].shape[-1])
         new_tokens = outputs.sequences[0][prompt_len:]
-        text = self._tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        raw = self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+        text = raw.strip()
+        # generate() stops either at EOS or at the token cap; it does not
+        # report which, so infer it: hitting the cap exactly means "length".
+        max_new = output_limit(settings.local_max_new_tokens)
+        finish_reason = "length" if int(new_tokens.shape[-1]) >= max_new else "stop"
 
         # Mean per-token probability of the generated answer (0..1).
         # compute_transition_scores aligns scores to the GENERATED tokens
@@ -196,4 +202,7 @@ class LocalModel:
             low_token_frac=(
                 round(low_token_frac, 4) if low_token_frac is not None else None
             ),
+            finish_reason=finish_reason,
+            usage_source="tokenizer",
+            raw_text=raw,
         )

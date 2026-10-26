@@ -191,7 +191,8 @@ class TestLoggingFields(SettingsCase):
 
     def test_learned_decision_logged_with_artifact_version(self):
         _, (artifact, _, _, _) = trained_once()
-        router = LearnedRouter(artifact=artifact)
+        # Synthetic test artifact: explicit test-only allowance.
+        router = LearnedRouter(artifact=artifact, allow_unverified=True)
         tracker = TokenTracker(log_path="")
         run_task(Task("t", "What is the capital of France?"), router,
                  StubLocal(), StubRemote(), tracker)

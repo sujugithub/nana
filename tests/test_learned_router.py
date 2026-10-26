@@ -21,7 +21,8 @@ class TestLearnedRouterDecisions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         _, (cls.artifact, _, _, _) = trained_once()
-        cls.router = LearnedRouter(artifact=cls.artifact)
+        # Synthetic test artifact: explicit test-only allowance.
+        cls.router = LearnedRouter(artifact=cls.artifact, allow_unverified=True)
 
     def test_score_direction_higher_means_local(self):
         # An easy-family prompt must score HIGHER than a hard-family one —
@@ -66,7 +67,7 @@ class TestLearnedRouterDecisions(unittest.TestCase):
                 "routing.learned_router.load_artifact",
                 side_effect=lambda p: artifact,
             ) as loader:
-                router = LearnedRouter(artifact_path=path)
+                router = LearnedRouter(artifact_path=path, allow_unverified=True)
                 for _ in range(3):
                     router.decide(Task("x", "hello"))
                 self.assertEqual(loader.call_count, 1)
@@ -115,17 +116,28 @@ class TestBuildRouter(unittest.TestCase):
 
     def test_learned_mode_loads_artifact(self):
         import main
+        from routing.identity import runtime_identity
 
         _, (artifact, _, _, _) = trained_once()
-        with tempfile.TemporaryDirectory() as tmp:
-            path = os.path.join(tmp, "r.joblib")
-            save_artifact(artifact, path)
-            settings.router_mode = "learned"
-            settings.router_artifact_path = path
-            with redirect_stderr(io.StringIO()):
-                router = main.build_router()
+        saved_tier = settings.tier_mode
+        try:
+            # remote_pair: every identity field is knowable without a local
+            # runtime, so this exercises the production "compatible" path.
+            settings.tier_mode = "remote_pair"
+            artifact = replace(artifact, dataset_meta={
+                **artifact.dataset_meta, "pair_identity": runtime_identity()})
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, "r.joblib")
+                save_artifact(artifact, path)
+                settings.router_mode = "learned"
+                settings.router_artifact_path = path
+                with redirect_stderr(io.StringIO()):
+                    router = main.build_router()
+        finally:
+            settings.tier_mode = saved_tier
         self.assertIsInstance(router, LearnedRouter)
         self.assertEqual(router.threshold, artifact.threshold)
+        self.assertTrue(router.compatibility.ok)
 
     def test_learned_mode_missing_artifact_is_fatal(self):
         import main

@@ -24,8 +24,10 @@ Rules (EVALUATION.md: graders must be unarguable):
   (not B)") is ``ambiguous`` -> review. No regex here tries to interpret
   negation.
 - No recognisable answer -> review, unless the response is empty, a refusal,
-  or truncated, which are graded 0.0 with that flag: the model produced no
-  answer, which is a model outcome, not a grading uncertainty.
+  or truncated, which are graded 0.0 with that flag: no usable answer was
+  produced, so the attempt is unsuccessful under the fixed generation
+  budget. That is not evidence the model lacks the knowledge (a larger cap
+  might have finished); the flag and the finish reason keep it separable.
 - Infrastructure failures (timeouts, HTTP errors) are not graded here; the
   collector records them separately.
 """
@@ -35,6 +37,11 @@ import re
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+# Bump whenever a change can alter any verdict: outcomes graded by different
+# grader versions must not be mixed in one dataset (label identity).
+# "1" = the pre-S1 substring/last-number grader in scripts/collect_outcomes.py.
+GRADER_VERSION = "2"
 
 GRADED = "graded"
 NEEDS_REVIEW = "needs_review"
@@ -111,7 +118,8 @@ _REFUSAL = re.compile(
 
 
 def _no_answer(flags: List[str], copy: str, truncated: bool) -> GradeResult:
-    """No answer was extracted: a model outcome (0.0) or a review case."""
+    """No answer was extracted: unsuccessful under the fixed budget (0.0,
+    flagged) when empty/refused/truncated, otherwise a review case."""
     if not copy:
         return GradeResult(GRADED, 0.0, tuple(flags + [EMPTY]), None, "empty")
     if _REFUSAL.search(copy):

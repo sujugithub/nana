@@ -48,6 +48,22 @@ def local_system_prompt(model):
     return "\n\n".join(part for part in (settings.system_prompt, context) if part)
 
 
+def _num_ctx():
+    """Per-request context (chat profiles) first, then LOCAL_CONTEXT_TOKENS."""
+    return LOCAL_CONTEXT.get() or settings.local_context_tokens or None
+
+
+def build_chat_payload(model, messages, stream):
+    """The /api/chat request body. generate(), stream_generate() and the
+    router identity (routing/identity.py) all use this one builder, so the
+    identity describes what is actually sent, request overrides included."""
+    ctx = _num_ctx()
+    return {"model": model, "messages": messages, "stream": stream, "think": False,
+            **({"tools": TOOLS.get()} if TOOLS.get() else {}),
+            "options": {"temperature": 0, **({"num_ctx": ctx} if ctx else {}),
+                        "num_predict": output_limit(settings.local_max_new_tokens)}}
+
+
 def request(path, payload=None, timeout=120):
     body = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(settings.ollama_base_url.rstrip("/") + path,
@@ -76,23 +92,81 @@ def generate(model, prompt):
     from generation_stream import CURRENT
     if CURRENT.get() is not None:
         return stream_generate(model, messages, CURRENT.get(), started)
-    data = request("/api/chat", {"model": model, "messages": messages, "stream": False, "think": False,
-                                **({"tools": TOOLS.get()} if TOOLS.get() else {}),
-                                "options": {"temperature": 0, **({"num_ctx": LOCAL_CONTEXT.get()} if LOCAL_CONTEXT.get() else {}),
-                                            "num_predict": output_limit(settings.local_max_new_tokens)}})
-    return Completion(text=data["message"].get("content", "").strip(),
+    data = request("/api/chat", build_chat_payload(model, messages, stream=False))
+    raw = data["message"].get("content", "")
+    return Completion(text=raw.strip(),
                       tool_calls=data["message"].get("tool_calls", []),
                       prompt_tokens=int(data.get("prompt_eval_count", 0)),
                       completion_tokens=int(data.get("eval_count", 0)),
                       source=ROUTE_LOCAL, model_name=model, provider="local",
-                      latency_s=time.monotonic() - started)
+                      latency_s=time.monotonic() - started, **_provenance(data, raw))
+
+
+# Ollama reports durations in nanoseconds on the final response object.
+_TIMING_FIELDS = ("total_duration", "load_duration", "prompt_eval_duration", "eval_duration")
+
+
+def _provenance(final, raw):
+    """finish_reason / usage_source / timings / raw_text from a final Ollama response."""
+    counted = "prompt_eval_count" in final and "eval_count" in final
+    return {
+        "finish_reason": final.get("done_reason"),
+        "usage_source": "provider" if counted else "",
+        "timings": {k[:-len("_duration")] + "_s": final[k] / 1e9
+                    for k in _TIMING_FIELDS if isinstance(final.get(k), (int, float))},
+        "raw_text": raw,
+    }
+
+
+def model_identity(model):
+    """Deployment facts the runtime reports for ``model``: digest, quantisation,
+    format, family, parameter size, and the runtime version. Raises
+    RuntimeError when Ollama is unreachable; missing facts are None, never guessed."""
+    show = request("/api/show", {"model": model}, timeout=10)
+    tags = request("/api/tags", timeout=10).get("models", [])
+    digest = next((m.get("digest") for m in tags if m.get("name") == model or m.get("model") == model), None)
+    try:
+        version = request("/api/version", timeout=10).get("version")
+    except RuntimeError:
+        version = None
+    details = show.get("details") or {}
+    return {
+        "digest": digest,
+        "quantization": details.get("quantization_level"),
+        "format": details.get("format"),
+        "family": details.get("family"),
+        "parameter_size": details.get("parameter_size"),
+        "template_sha256": _metadata_sha256(show, "template"),
+        "parameters_sha256": _metadata_sha256(show, "parameters"),
+        "runtime_version": version,
+    }
+
+
+# The /api/show response answered but did not include the field: a reported
+# fact, distinct from None (unknown because nothing was reported).
+ABSENT_IN_RESPONSE = "absent_in_runtime_response"
+
+
+def _metadata_sha256(show, key):
+    """Hash of a /api/show field. Text is hashed exactly as returned;
+    structured values are canonicalised (sorted keys) without altering any
+    string inside them. Unknown shapes stay None, never guessed."""
+    import hashlib
+    if key not in show:
+        return ABSENT_IN_RESPONSE
+    value = show[key]
+    if isinstance(value, str):
+        blob = value
+    elif isinstance(value, (dict, list)):
+        blob = json.dumps(value, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    else:
+        return None
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def stream_generate(model, messages, stream, started):
     stream.start("local", model)
-    payload = {"model": model, "messages": messages, "stream": True, "think": False,
-               **({"tools": TOOLS.get()} if TOOLS.get() else {}),
-                                "options": {"temperature": 0, **({"num_ctx": LOCAL_CONTEXT.get()} if LOCAL_CONTEXT.get() else {}), "num_predict": output_limit(settings.local_max_new_tokens)}}
+    payload = build_chat_payload(model, messages, stream=True)
     req = urllib.request.Request(settings.ollama_base_url.rstrip("/") + "/api/chat",
                                  data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
     pieces, final, calls = [], {}, []
@@ -121,6 +195,8 @@ def stream_generate(model, messages, stream, started):
         raise RuntimeError("Ollama streaming connection failed; check that the configured runtime is running") from None
     if not final.get("done"):
         raise RuntimeError("Ollama stream ended before completion; usage may be incomplete")
-    return Completion(text="".join(pieces).strip(), tool_calls=calls, prompt_tokens=int(final.get("prompt_eval_count", 0)),
+    raw = "".join(pieces)
+    return Completion(text=raw.strip(), tool_calls=calls, prompt_tokens=int(final.get("prompt_eval_count", 0)),
                       completion_tokens=int(final.get("eval_count", 0)), source=ROUTE_LOCAL,
-                      model_name=model, provider="local", latency_s=time.monotonic()-started)
+                      model_name=model, provider="local", latency_s=time.monotonic()-started,
+                      **_provenance(final, raw))

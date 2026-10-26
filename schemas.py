@@ -47,6 +47,20 @@ class Completion:
 
     tool_calls: list = field(default_factory=list)
 
+    # Optional provenance; every field defaults to "not reported" so older
+    # callers and stubs keep working unchanged.
+    # Provider stop reason as reported ("stop", "length", ...); None = unknown.
+    finish_reason: Optional[str] = None
+    # Where the token counts came from: "provider" (API/runtime reported),
+    # "estimated" (fallback guess), "tokenizer" (counted locally), "mock",
+    # or "" when the backend did not say.
+    usage_source: str = ""
+    # Backend-reported timings in seconds, e.g. Ollama load/prompt/eval.
+    timings: Dict[str, float] = field(default_factory=dict)
+    # Model text exactly as received, before .strip() or tool-call text was
+    # appended; None when the backend did not provide it separately.
+    raw_text: Optional[str] = None
+
     @property
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens

@@ -114,6 +114,24 @@ def resolve_remote_model() -> Optional[str]:
     return allowed[0]
 
 
+def build_chat_payload(model_name, max_tokens, prompt, stream=False):
+    """The chat/completions request body. FireworksClient.generate/_stream and
+    the router identity (routing/identity.py) all use this one builder, so
+    the identity describes what is actually sent, request overrides included."""
+    from generation_context import TOOLS
+    payload = {
+        "model": model_name,
+        "messages": completion_messages(prompt, settings.system_prompt),
+        "max_tokens": output_limit(max_tokens),
+        "temperature": 0,
+    }
+    if stream:
+        payload.update(stream=True, stream_options={"include_usage": True})
+    if TOOLS.get():
+        payload["tools"] = TOOLS.get()
+    return payload
+
+
 class _Transient(Exception):
     def __init__(self, message: str, retry_after: Optional[str] = None):
         super().__init__(message)
@@ -156,6 +174,7 @@ class FireworksClient:
                 latency_s=time.time() - started,
                 model_name=self.model_name or "mock",
                 provider="fireworks",
+                usage_source="mock",
             )
 
         if not self.model_name:
@@ -176,17 +195,7 @@ class FireworksClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        messages = completion_messages(prompt, settings.system_prompt)
-        payload = {
-            "model": self.model_name,
-            "messages": messages,
-            "max_tokens": output_limit(self.max_tokens),
-            "temperature": 0,
-        }
-
-        from generation_context import TOOLS
-        if TOOLS.get():
-            payload["tools"] = TOOLS.get()
+        payload = build_chat_payload(self.model_name, self.max_tokens, prompt)
         data = None
         for attempt in range(settings.max_retries + 1):
             try:
@@ -232,7 +241,8 @@ class FireworksClient:
                 time.sleep(backoff)
 
         choice = data["choices"][0]
-        text = ((choice.get("message") or {}).get("content") or "").strip()
+        raw = (choice.get("message") or {}).get("content") or ""
+        text = raw.strip()
         tool_text = _tool_call_text((choice.get("message") or {}).get("tool_calls"))
         if tool_text:
             text = "\n\n".join(part for part in (text, tool_text) if part)
@@ -256,6 +266,13 @@ class FireworksClient:
             latency_s=time.time() - started,
             model_name=self.model_name,
             provider="fireworks",
+            finish_reason=choice.get("finish_reason"),
+            usage_source=(
+                "provider"
+                if "prompt_tokens" in usage and "completion_tokens" in usage
+                else "estimated"
+            ),
+            raw_text=raw,
         )
 
     def _stream(self, prompt, stream):
@@ -264,15 +281,11 @@ class FireworksClient:
         if not self.model_name or not self.api_key:
             raise RemoteError("Configure a permitted Fireworks model and API key")
         started = time.monotonic()
-        messages = completion_messages(prompt, settings.system_prompt)
-        payload = {"model": self.model_name, "messages": messages, "max_tokens": output_limit(self.max_tokens),
-                   "temperature": 0, "stream": True, "stream_options": {"include_usage": True}}
-        from generation_context import TOOLS
-        if TOOLS.get():
-            payload["tools"] = TOOLS.get()
+        payload = build_chat_payload(self.model_name, self.max_tokens, prompt, stream=True)
         stream.start("fireworks", self.model_name)
         pieces, usage, tool_calls = [], {}, {}
         finished = False
+        finish_reason = None
         try:
             with requests.post(self.base_url + "/chat/completions", json=payload,
                                headers={"Authorization": "Bearer " + self.api_key}, stream=True,
@@ -295,6 +308,7 @@ class FireworksClient:
                         stream.usage(usage)
                     choices = data.get("choices", [])
                     if choices:
+                        finish_reason = choices[0].get("finish_reason") or finish_reason
                         delta = choices[0].get("delta", {})
                         for call in delta.get("tool_calls") or []:
                             index = call.get("index", 0)
@@ -312,6 +326,7 @@ class FireworksClient:
             raise RemoteError("Fireworks streaming connection failed; not retried to avoid duplicate billing") from None
         if not finished:
             raise RemoteError("Fireworks stream ended before completion; usage may be incomplete")
+        raw = "".join(pieces)
         tool_text = _tool_call_text([tool_calls[index] for index in sorted(tool_calls)])
         if tool_text:
             suffix = ("\n\n" if pieces else "") + tool_text
@@ -322,7 +337,10 @@ class FireworksClient:
         return Completion(text=text, tool_calls=[tool_calls[i] for i in sorted(tool_calls)], prompt_tokens=int(usage.get("prompt_tokens", max(1, len(prompt)//4))),
                           completion_tokens=int(usage.get("completion_tokens", max(1, len(text)//4))),
                           source=self.route, latency_s=time.monotonic()-started,
-                          model_name=self.model_name, provider="fireworks")
+                          model_name=self.model_name, provider="fireworks",
+                          finish_reason=finish_reason,
+                          usage_source="provider" if "prompt_tokens" in usage and "completion_tokens" in usage else "estimated",
+                          raw_text=raw)
 
 
 class CheapRemoteClient(FireworksClient):

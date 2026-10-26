@@ -24,9 +24,9 @@ COMBINED_DATASET = os.path.join(REPO, "data", "real_qwen_pro_600.json")
 class TestRealPilotIntegrity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with open(TASKS) as fh:
+        with open(TASKS, encoding="utf-8") as fh:
             cls.tasks = json.load(fh)
-        with open(MANIFEST) as fh:
+        with open(MANIFEST, encoding="utf-8") as fh:
             cls.manifest = json.load(fh)
 
     def test_balanced_120_task_pilot(self):
@@ -74,11 +74,11 @@ class TestRealPilotIntegrity(unittest.TestCase):
 class TestRealPilotExtensionIntegrity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with open(TASKS) as fh:
+        with open(TASKS, encoding="utf-8") as fh:
             cls.pilot = json.load(fh)
-        with open(EXTENSION_TASKS) as fh:
+        with open(EXTENSION_TASKS, encoding="utf-8") as fh:
             cls.tasks = json.load(fh)
-        with open(EXTENSION_MANIFEST) as fh:
+        with open(EXTENSION_MANIFEST, encoding="utf-8") as fh:
             cls.manifest = json.load(fh)
 
     def test_balanced_disjoint_480_task_extension(self):

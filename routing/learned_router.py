@@ -13,11 +13,19 @@ visible fallback to heuristics (ROUTER_MODE=auto).
 """
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 from config import ROUTE_LOCAL, ROUTE_REMOTE, settings
 from router import Router, RoutingDecision
 from routing.artifact import ArtifactError, RouterArtifact, load_artifact
+from routing.identity import (
+    SYNTHETIC,
+    UNVERIFIABLE,
+    Compatibility,
+    compare,
+    runtime_identity,
+)
 from schemas import Task
 
 
@@ -26,51 +34,49 @@ class LearnedRouter(Router):
         self,
         artifact_path: Optional[str] = None,
         artifact: Optional[RouterArtifact] = None,
+        allow_unverified: bool = False,
     ):
+        """``allow_unverified`` is for tests only: it admits synthetic or
+        unverifiable artifacts outside mock mode (with a warning). Retrain-
+        or revalidation-required artifacts are always rejected."""
         if artifact is None:
             if not artifact_path:
                 raise ValueError("LearnedRouter needs artifact_path or artifact")
             artifact = load_artifact(artifact_path)
-        self._validate_model_pair(artifact)
+        self.compatibility = self._validate_model_pair(artifact, allow_unverified)
         self.artifact = artifact
         # Router.__init__ sets up post_check state; the heuristic estimator
         # stays available for the per-signal debug breakdown in logs.
         super().__init__(threshold=artifact.threshold)
 
     @staticmethod
-    def _validate_model_pair(artifact: RouterArtifact) -> None:
-        """Reject new real-data artifacts deployed against another pair.
-
-        Older/toy artifacts lack ``tier_mode`` and remain loadable for offline
-        pipeline tests. Real datasets produced by the current collector carry
-        all three fields and are checked strictly.
-        """
-        meta = artifact.dataset_meta or {}
-        trained_mode = meta.get("tier_mode")
-        if not trained_mode:
-            return
-        expected_cheap = (
-            settings.cheap_model_name
-            if settings.tier_mode.strip().lower() == "remote_pair"
-            else settings.local_model_name
+    def _validate_model_pair(artifact: RouterArtifact,
+                             allow_unverified: bool = False) -> Compatibility:
+        """Accept only an artifact trained for exactly this deployment
+        (routing/identity.py). Synthetic and unverifiable artifacts are
+        admitted only in mock mode or explicit test use."""
+        probe = None
+        if (settings.tier_mode.strip().lower() == "local_remote"
+                and settings.local_backend.strip().lower() == "ollama"
+                and not settings.mock_mode):
+            from ollama_client import model_identity
+            probe = model_identity
+        result = compare(artifact.dataset_meta, runtime_identity(probe=probe))
+        for notice in result.notices:
+            print(f"WARNING: learned router: {notice}", file=sys.stderr)
+        if result.ok:
+            return result
+        if result.status in (SYNTHETIC, UNVERIFIABLE) and (
+            settings.mock_mode or allow_unverified
+        ):
+            print(f"WARNING: learned router accepted for mock/test use only "
+                  f"({result.status}): {result.detail}", file=sys.stderr)
+            return result
+        raise ArtifactError(
+            f"router artifact rejected ({result.status}): {result.detail}. "
+            "Collect outcomes and retrain for the configured deployment; do "
+            "not reuse thresholds across model pairs."
         )
-        trained = (
-            str(trained_mode).strip().lower(),
-            meta.get("local_model"),
-            meta.get("remote_model"),
-        )
-        configured = (
-            settings.tier_mode.strip().lower(),
-            expected_cheap,
-            settings.strong_model_name,
-        )
-        if trained != configured:
-            raise ArtifactError(
-                "router artifact model-pair mismatch: trained for "
-                f"{trained}, configured for {configured}. Collect outcomes "
-                "and retrain for the configured pair; do not reuse thresholds "
-                "across model pairs."
-            )
 
     def decide(self, task: Task) -> RoutingDecision:
         # ``predict_p_local`` is the artifact-schema name retained for

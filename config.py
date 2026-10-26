@@ -59,6 +59,11 @@ class Settings:
     local_backend: str = "transformers"
     ollama_base_url: str = "http://127.0.0.1:11434"
     local_max_new_tokens: int = 512
+    # Explicit Ollama num_ctx for requests that set no per-request context
+    # (batch runs, outcome collection). 0 = send none: Ollama's own default
+    # applies, which is not recorded, so outcomes are unverifiable. Chat's
+    # per-request context limits still take priority over this value.
+    local_context_tokens: int = 0
 
     # ── Two Fireworks-hosted routing tiers ───────────────────────────────
     # In remote_pair these are both remote; the strong model is also used by
@@ -175,6 +180,7 @@ class Settings:
         s.local_backend = _env_str("LOCAL_BACKEND", s.local_backend)
         s.ollama_base_url = _env_str("OLLAMA_BASE_URL", s.ollama_base_url)
         s.local_max_new_tokens = _env_int("LOCAL_MAX_NEW_TOKENS", s.local_max_new_tokens)
+        s.local_context_tokens = _env_int("LOCAL_CONTEXT_TOKENS", s.local_context_tokens)
         s.cheap_model_name = _env_str("CHEAP_MODEL_NAME", s.cheap_model_name)
         # REMOTE_MODEL_NAME remains a supported fallback for existing .env
         # files, while STRONG_MODEL_NAME is the clear two-tier spelling.

@@ -19,6 +19,21 @@ MAX_CONTEXT_CHARS = 32_000
 _TURN_LOCK = threading.RLock()
 
 
+def _auto_fallback_note(mode: str) -> dict:
+    """Chat maps ROUTER_MODE=auto to the heuristic router (below). Say so in
+    every hybrid response, so the fallback is never mistaken for learned."""
+    if mode != "hybrid" or settings.router_mode.strip().lower() != "auto":
+        return {}
+    return {
+        "router_requested": "auto",
+        "router_note": (
+            "ROUTER_MODE=auto: learned routing for Chat is pending validation "
+            "(Chat's request-scoped generation settings are not covered by the "
+            "batch-validated identity); the heuristic router was used."
+        ),
+    }
+
+
 def conversation_config(mode: str, model: Optional[str], mock: bool) -> DemoConfig:
     """Map saved chat choices to an executable and validated demo configuration."""
     mode_map = {"hybrid": "hybrid", "remote": "remote_only", "local": "local_only"}
@@ -230,5 +245,6 @@ def send_message(
                 "signals": routing.get("signals"),
                 "reason": routing.get("reason"),
                 "post_check_problems": result["problems"],
+                **_auto_fallback_note(conversation.mode),
             },
         }

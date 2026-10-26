@@ -378,9 +378,9 @@ def _write_report(
     report: Dict[str, Any], splits: SplitResult, artifact: RouterArtifact, out_dir: str
 ) -> None:
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "report.json"), "w") as fh:
+    with open(os.path.join(out_dir, "report.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(report, fh, indent=1, default=float)
-    with open(os.path.join(out_dir, "splits.json"), "w") as fh:
+    with open(os.path.join(out_dir, "splits.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(
             {
                 "seed": splits.seed,
@@ -421,7 +421,7 @@ def _write_report(
         "`python3 -m evaluation.run` for the one-shot TEST evaluation.",
     ]
     summary = "\n".join(lines)
-    with open(os.path.join(out_dir, "summary.txt"), "w") as fh:
+    with open(os.path.join(out_dir, "summary.txt"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(summary + "\n")
     print(summary)
 

@@ -94,7 +94,7 @@ def gsm8k_tasks(
     answer_only: bool = False,
 ) -> List[dict]:
     rows = []
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         for line in fh:
             source = json.loads(line)
             match = re.search(r"####\s*([^\n]+)\s*$", source["answer"])
@@ -159,7 +159,7 @@ def mmlu_tasks(
     serial = 0
     for subject_no, subject in enumerate(MMLU_SUBJECTS):
         path = os.path.join(directory, f"{subject}_test.csv")
-        with open(path, newline="") as fh:
+        with open(path, newline="", encoding="utf-8") as fh:
             rows = [row for row in csv.reader(fh) if len(row) >= 6]
         picked = _stable_sample(
             rows,
@@ -209,7 +209,7 @@ def bbh_tasks(
     serial = 0
     for task_no, task_name in enumerate(BBH_TASKS):
         path = os.path.join(directory, f"{task_name}.json")
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             examples = json.load(fh)["examples"]
         picked = _stable_sample(
             examples,
@@ -247,7 +247,7 @@ def _write_json(path: str, payload) -> None:
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
 
@@ -308,7 +308,7 @@ def main() -> int:
     excluded_mmlu: Dict[str, set] = {}
     excluded_bbh: Dict[str, set] = {}
     if args.exclude_tasks:
-        with open(args.exclude_tasks) as fh:
+        with open(args.exclude_tasks, encoding="utf-8") as fh:
             prior_tasks = json.load(fh)
         for row in prior_tasks:
             metadata = row.get("metadata", {})

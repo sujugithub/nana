@@ -310,7 +310,7 @@ function renderArtifactNote(a) {
   if (!a.available) {
     el.classList.add("bad");
     el.textContent = "No usable artifact: " + a.detail;
-  } else if (a.pair_match === true) {
+  } else if (a.pair_match === true && a.verified && !(a.notices || []).length) {
     el.classList.add("ok");
     el.textContent = `Artifact ${a.version} trained for exactly this pair.`;
   } else if (a.pair_match === false) {

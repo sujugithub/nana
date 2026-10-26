@@ -196,6 +196,35 @@ post-generation confidence statistics, appends after every task (interrupted
 runs resume without re-paying), and leaves ungraded tasks in a work file for
 external grading (`--grades verdicts.json` merges them back).
 
+For a local Ollama tier, pass `--local-context-tokens N` (or set
+`LOCAL_CONTEXT_TOKENS`): without an explicit context the runtime's own
+default applies, is not recorded, and the resulting router is
+unverifiable. The collector writes four files next to `--out`:
+
+| File | Contents |
+|---|---|
+| `<out>.manifest.json` | `compatibility` (pair identity, label identity, canonical task-file hash) — compared on every resume; `provenance` (commit, hardware, Python/dependency/runtime versions, cost rates, budget, timestamps) — informational only; one entry per run |
+| `<out>.work.jsonl` | one row per attempt: `run_id`, `attempt_id`, `attempt_number`, `status`, `error`, raw and stripped answers, finish reasons, usage source, backend timings, grades and flags |
+| `<out>` | the dataset: completed and graded tasks only, with `pair_identity`, `label_identity` and the accounting in `meta` |
+| `<out>.summary.json` | attempted / completed / infrastructure-failed / graded / awaiting-review counts, failed attempts by tier, grade flags, and every rate with its numerator and denominator |
+
+Infrastructure failures (timeouts, HTTP errors, a stopped runtime) are
+recorded as failed attempts, never as wrong answers; if the cheap tier fails
+the strong tier is not called. A resumed run retries failed tasks with a new
+attempt ID and keeps the earlier failure rows. `--max-consecutive-failures`
+(default 3) stops a run during an outage. A resume is refused when the
+deployment identity, label definition or task file differs from the
+manifest, or when a work file has no manifest.
+
+Fingerprints: `file_sha256` is the exact bytes (use it to verify a
+transferred file; Git line-ending conversion changes it). The canonical
+fingerprint (`routing.identity.canonical_json_sha256`) hashes parsed JSON
+with sorted keys, compact separators and ASCII escapes, so file layout and
+CRLF/LF between tokens do not matter — but nothing inside strings is
+normalised: any change to a prompt or answer, including `\r\n` vs `\n` or
+Unicode composition, changes it. Pipeline files are written as UTF-8 with LF
+line endings on every OS.
+
 ### 2) Train
 
 ```bash
@@ -275,6 +304,92 @@ ROUTER_MODE=auto    python3 main.py ...   # fall back to heuristic, loudly
   that routed it.
 - Score direction is unchanged everywhere: **higher always means “the cheap
   tier is safer.”**
+
+### Compatibility rules: retrain vs revalidate
+
+A router is evidence only for the deployment whose outcomes trained it. The
+artifact carries that deployment's `pair_identity` (from the collector
+manifest); `routing/identity.py` compares it with the running configuration
+when the router loads, and the web UI shows the result.
+
+The generation fields are not assumed: they are read from the request each
+client would actually send (`ollama_client.build_chat_payload`,
+`remote_client.build_chat_payload` — the same builders generation uses),
+rendered for a fixed placeholder prompt. A change to the system prompt,
+message construction, temperature, thinking mode, tools or any other request
+field changes `request_sha256`; a change to the output cap or context window
+changes the revalidate fields.
+
+| Change | Class | Why | Current action |
+|---|---|---|---|
+| Tier mode; cheap or strong provider/model; cheap backend, model digest, quantisation, chat template or model parameters (`/api/show`); anything in the rendered request (system prompt, message construction, temperature, thinking mode, tools) | **Retrain** | The models' answers, and so the labels, change | Collect new outcomes, retrain, re-select the threshold, evaluate |
+| Grader version or quality threshold (label identity) | **Retrain** | The labels change for the same answers | Re-grade (raw answers are kept) and retrain; refuse to merge across label identities |
+| Cheap/strong output-token caps; local context window | **Revalidate** | Only long inputs/outputs can change; whether they did must be measured, not assumed | Refused at runtime. See "No revalidation-acceptance workflow" below |
+| Local runtime (Ollama) version | Informational, surfaced | Backend upgrades can change templating, kernels or runners | Recorded as provenance; not automatically compared, but changes may affect outputs and require review. A difference raises a visible notice (stderr, web status); it does not block |
+| Hardware, OS, timestamps, repository commit, Python/dependency versions, cost rates | Informational | Needed to reproduce and interpret results | Recorded as provenance; not automatically compared, but changes may affect outputs and require review |
+
+**No revalidation-acceptance workflow exists.** "Revalidation required"
+means the old artifact cannot be used with the changed settings: the runtime
+refuses it exactly as it refuses a retrain-class mismatch. Nothing in the
+code records a passed revalidation. The supported route to a usable artifact
+is to collect outcomes under the new settings and train a replacement. That
+is a statement about this codebase, not a claim that retraining is
+necessary in principle; a future, separately approved workflow could
+re-collect a sample, compare it with the old outcomes and record the result.
+
+**Runtime versions.** The final experiment must freeze the tested local
+runtime version (it is recorded per run in the manifest). A later version
+change requires review and the relevant checks; it is neither proof that
+outputs changed nor proof that the old evaluation remains valid, and an
+upgraded deployment must not be described as verified until those checks
+are done.
+
+**Ollama metadata.** `model_identity` hashes the `/api/show` template exactly
+as returned, and the parameters exactly as returned (text) or canonicalised
+with sorted keys (structured) — no string inside is altered. A field the
+response did not contain is recorded as `absent_in_runtime_response`; a
+field that could not be read is `None` (unknown). Identities recorded before
+these fields existed (identity version "1") are `unverifiable`, never
+guessed compatible. Follow-up: the probe runs on every `LearnedRouter`
+construction (the web UI builds one per hybrid request: three local HTTP
+calls); this patch does not change that.
+
+Statuses: `compatible` (accepted, with any notices shown), `retrain_required`
+and `revalidation_required` (always refused, including in mock and test
+use), `unverifiable` (an identity field is unknown on either side, an older
+identity version, a names-only artifact from before manifests, or an active
+request-scoped override), and `synthetic` (mock/toy training data).
+`unverifiable` and `synthetic` artifacts are accepted only in mock mode or
+with `LearnedRouter(..., allow_unverified=True)` in tests, with a warning;
+production learned routing refuses them. `ROUTER_MODE=learned` then fails
+at startup; `ROUTER_MODE=auto` falls back to the heuristic with a stderr
+warning naming the status, and every decision is logged as `heuristic`.
+
+**Batch routing is the initial validation target; learned Chat routing is
+pending.** Chat, agent and tool requests apply request-scoped overrides
+(conversation messages and style prompt, a 4,096-token output limit, context
+profiles, tools; `chat/service.py`, `generation_context.py`). Outcomes are
+collected without them, so whenever any override is active the identity is
+`unverifiable` and learned routing is refused for that request. Heuristic
+Chat is unchanged. Chat already maps `ROUTER_MODE=auto` to the heuristic
+router; each hybrid Chat API response now says so (`routing.router_requested`
+and `routing.router_note`), and `routing.router` reports `heuristic`.
+
+**Finish status vs correctness.** Finish reasons are recorded per attempt
+and summarised separately (`accounting.finish_reasons`). A reply with no
+usable answer — empty, a refusal, or cut off at the output cap — is graded
+0.0 with that flag: unsuccessful under the fixed generation budget, not
+evidence that the model lacks the knowledge.
+
+**Accounting.** `tasks_*` count unique tasks; `attempts_*` and
+`strong_calls` count attempt rows (a task retried on resume adds attempts,
+not tasks). Reported: attempted, completed, infrastructure-failed, usable
+paired outcomes (both tiers graded — the only rows that become training
+labels), unresolved reviews in total and per tier, failed attempts by tier,
+strong calls completed / failed / skipped with the skip reason
+(`cheap_tier_failed`: the paid strong call is not made when the cheap tier
+fails), grade flags and finish reasons. Quality means use
+`usable_paired_outcomes` as the denominator.
 
 ## Post-generation gate
 

@@ -58,7 +58,7 @@ ROUTE_ERROR = "error"
 
 def load_records(path: str) -> List[dict]:
     records = []
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, start=1):
             line = line.strip()
             if not line:
@@ -73,7 +73,7 @@ def load_records(path: str) -> List[dict]:
 
 def load_grades(path: str) -> Dict[str, float]:
     """Normalize true/false grades to 1.0/0.0; pass numeric scores through."""
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         raw = json.load(fh)
     return {str(k): (1.0 if v is True else 0.0 if v is False else float(v))
             for k, v in raw.items()}

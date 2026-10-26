@@ -17,6 +17,7 @@ from routing.dataset import (
     normalize_prompt,
     save_dataset,
 )
+from routing.identity import canonical_file_sha256
 
 
 COMPATIBLE_META = (
@@ -27,6 +28,10 @@ COMPATIBLE_META = (
     "system_prompt_sha256",
     "temperature",
     "cheap_max_tokens",
+    # Collector manifests (S2): full deployment and label definitions. Both
+    # are absent (None) in older datasets, so legacy merges are unchanged.
+    "pair_identity",
+    "label_identity",
 )
 
 
@@ -74,6 +79,7 @@ def merge(paths: List[str]) -> OutcomeDataset:
         {
             "path": path,
             "sha256": _sha256(path),
+            "canonical_sha256": canonical_file_sha256(path),
             "records": len(dataset.records),
             "strong_max_tokens": dataset.meta.get("strong_max_tokens"),
         }

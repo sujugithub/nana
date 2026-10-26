@@ -273,7 +273,7 @@ def validate_dataset(raw: Dict[str, Any]) -> List[str]:
 def load_dataset(path: str) -> OutcomeDataset:
     """Load + validate; raises DatasetError listing every problem found."""
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             raw = json.load(fh)
     except FileNotFoundError:
         raise DatasetError(f"dataset file not found: {path}")
@@ -345,5 +345,5 @@ def save_dataset(dataset: OutcomeDataset, path: str) -> None:
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=1)
