@@ -115,6 +115,7 @@ class Settings:
     # auto:      learned if the artifact loads, otherwise heuristic with a
     #            visible warning on stderr.
     router_mode: str = "heuristic"
+    arch_router_model: str = "hf.co/katanemo/Arch-Router-1.5B.gguf:Q4_K_M"
     # Path to the trained pre-router artifact (see routing/train.py).
     # SECURITY: joblib artifacts execute code on load — point this only at
     # files you trained yourself (routing/artifact.py docstring).
@@ -208,6 +209,7 @@ class Settings:
         s.max_retries = _env_int("MAX_RETRIES", s.max_retries)
         s.system_prompt = _env_str("SYSTEM_PROMPT", s.system_prompt)
         s.router_mode = _env_str("ROUTER_MODE", s.router_mode)
+        s.arch_router_model = _env_str("ARCH_ROUTER_MODEL", s.arch_router_model)
         s.router_artifact_path = _env_str("ROUTER_ARTIFACT", s.router_artifact_path)
         s.local_conf_stat = _env_str("LOCAL_CONF_STAT", s.local_conf_stat)
         s.confidence_threshold = _env_float("CONFIDENCE_THRESHOLD", s.confidence_threshold)

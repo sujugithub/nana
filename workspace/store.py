@@ -155,8 +155,10 @@ def preferences(payload=None):
             if not isinstance(payload, dict) or len(json.dumps(payload)) > 50_000:
                 raise ValueError("Invalid preferences")
             for key, value in payload.items():
-                if key not in {"theme", "agent_mode", "agent_model", "system_prompt", "searxng_url", "search_provider", "mcp_servers", "local_model", "local_backend"}:
+                if key not in {"theme", "agent_mode", "agent_model", "system_prompt", "searxng_url", "search_provider", "mcp_servers", "local_model", "local_backend", "router_kind"}:
                     raise ValueError("Unknown preference")
+                if key == "router_kind" and (not isinstance(value, str) or value not in {"heuristic", "learned", "arch"}):
+                    raise ValueError("Choose heuristic, learned, or arch for routing")
                 if key == "search_provider" and (not isinstance(value, str) or value not in {"off", "exa", "searxng"}):
                     raise ValueError("Choose off, exa, or searxng for web search")
                 conn.execute("INSERT OR REPLACE INTO preferences VALUES(?,?)", (key, json.dumps(value)))

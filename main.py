@@ -48,7 +48,7 @@ from token_tracker import TokenTracker
 
 
 def build_router(threshold: Optional[float] = None) -> Router:
-    """Construct the pre-router for ROUTER_MODE (heuristic | learned | auto).
+    """Construct the pre-router for ROUTER_MODE (heuristic | learned | arch | auto).
 
     - heuristic: keyword rules, no extra deps (the default).
     - learned:   trained artifact at ROUTER_ARTIFACT; any load problem is
@@ -61,10 +61,13 @@ def build_router(threshold: Optional[float] = None) -> Router:
     mode = settings.router_mode.strip().lower()
     if mode == "heuristic":
         return Router(threshold=threshold)
+    if mode == "arch":
+        from routing.arch_router import ArchRouter
+        return ArchRouter(threshold=threshold)
     if mode not in ("learned", "auto"):
         raise ValueError(
             f"ROUTER_MODE={settings.router_mode!r} invalid: expected "
-            f"heuristic | learned | auto"
+            f"heuristic | learned | arch | auto"
         )
     try:
         # Deferred import: heuristic mode (and the stdlib-only test harness)

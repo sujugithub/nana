@@ -35,8 +35,16 @@ def handle(handler, method):
                 local_error = None
             except Exception as exc:
                 local, local_error = [], str(exc)
+            from webui.service import DemoConfig, router_options
+            prefs = store.preferences()
+            routing_config = DemoConfig(
+                local_model=prefs.get("local_model", settings.local_model_name),
+                cheap_model=settings.cheap_model_name, strong_model=settings.strong_model_name,
+                hybrid_pair=settings.tier_mode, mock=not handler.server.allow_real)
             result = {"items": store.items(), "runs": [safe_run(r) for r in store.run_list()],
-                      "jobs": store.jobs(), "preferences": store.preferences(),
+                      "jobs": store.jobs(), "preferences": prefs,
+                      "router_kind": prefs.get("router_kind", settings.router_mode if settings.router_mode != "auto" else "heuristic"),
+                      "router_options": router_options(routing_config, local),
                       "tools": tools.TOOLS, "connections": connections.status(),
                       "local_models": local, "local_error": local_error,
                       "local_backend": store.preferences().get("local_backend", settings.local_backend),

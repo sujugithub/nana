@@ -1695,12 +1695,13 @@
           chatAttachments=[];syncAttachments();
           resizePrompt();
           status(
-            result.mock
+            (result.mock
               ? "Preview reply · No model call was made."
               : result.billable
                 ? "Estimated API cost $" +
                   Number(result.routing.estimated_cost_usd).toFixed(6)
-                : "Local reply · No API charge.",
+                : "Local reply · No API charge.") +
+              (result.warnings?.length ? " " + result.warnings.join(" ") : ""),
           );
           await loadList();
         } catch (error) {

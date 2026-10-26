@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config import ROUTE_LOCAL, ROUTE_REMOTE, settings
 from confidence import ConfidenceEstimator
@@ -61,7 +61,7 @@ _HEDGE_SCAN_CHARS = 120
 class RoutingDecision:
     target: str  # ROUTE_LOCAL or ROUTE_REMOTE
     confidence: float
-    signals: Dict[str, float]  # per-scorer breakdown, printed for debugging
+    signals: Dict[str, Any]  # scores, route labels and timing, retained in logs
     reason: str
     # Which router produced this decision ("heuristic" | "learned") and, for
     # learned routers, the artifact version — both land in the usage log so

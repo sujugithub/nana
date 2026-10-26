@@ -1,6 +1,11 @@
 # Plan: Arch-Router, newest-message routing, and learning from users
 
-Status: **proposed**, 14 October 2026. Nothing in this plan is implemented yet.
+Original plan: 14 October 2026. Updated status, 25 October 2026: Settings now
+offers Heuristic, Learned and an experimental Arch-Router adapter. The adapter
+uses bounded recent intent and reports heuristic fallback. Settings and adapter
+behavior were verified offline; a fresh live model run and current-pair quality,
+latency and cost evaluation remain outstanding. Feedback learning and the rest
+of this plan are unfinished. See [integration details](ARCH_ROUTER_NOTICE.md).
 
 ## Why
 

@@ -1864,15 +1864,35 @@
           "textarea",
           state.preferences.system_prompt || "",
         );
+        const routers = state.router_options || [
+          {value: "heuristic", label: "Heuristic — built-in rules", detail: "Ready."},
+          {value: "learned", label: "Learned — trained routing policy", detail: "Requires a compatible trained artifact."},
+          {value: "arch", label: "Arch-Router — local intent model (experimental)", detail: "Requires the installed local router model."},
+        ];
+        const router = select("Router", routers.map(r => [r.value, r.label]),
+          state.preferences.router_kind || state.router_kind || "heuristic");
+        const routerHelp = el("p");
+        routerHelp.id = "routerHelp";
+        routerHelp.setAttribute("aria-live", "polite");
+        router.input.setAttribute("aria-describedby", "routerHelp");
+        const showRouter = () => {
+          routerHelp.textContent = routers.find(r => r.value === router.input.value)?.detail || "";
+        };
+        router.input.onchange = showRouter;
+        showRouter();
         panel.append(
           theme.wrap,
           instructions.wrap,
+          router.wrap,
+          routerHelp,
+          el("p", "Applies to Auto/Hybrid chat and hybrid agents. Explicit local or cloud model choices bypass routing. Hybrid may use billable cloud models."),
           button(
             "Save preferences",
             async () => {
               await api("/preferences", "POST", {
                 theme: theme.input.value,
                 system_prompt: instructions.input.value,
+                router_kind: router.input.value,
               });
               await refresh();
               render();

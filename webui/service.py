@@ -34,7 +34,7 @@ from remote_client import (
 
 MODES = ("hybrid", "remote_only", "local_only")
 HYBRID_PAIRS = ("remote_pair", "local_remote")
-ROUTER_KINDS = ("heuristic", "learned")
+ROUTER_KINDS = ("heuristic", "learned", "arch")
 
 # Curated dropdown options. The UI also accepts free-text entries; whatever
 # is chosen is validated against ALLOWED_MODELS when that is configured —
@@ -246,6 +246,23 @@ def _learned_router_usable(
     return True, ""
 
 
+def router_options(cfg: DemoConfig, local_models) -> List[Dict[str, Any]]:
+    """Read-only readiness for Settings; no model loading or paid calls."""
+    usable, reason = _learned_router_usable(cfg, artifact_status(cfg))
+    arch_installed = any(m.get("name") == settings.arch_router_model for m in local_models)
+    return [
+        {"value": "heuristic", "label": "Heuristic — built-in rules", "available": True,
+         "detail": "Ready. Fast keyword rules; no extra router model. Quality depends on the workload."},
+        {"value": "learned", "label": "Learned — trained routing policy", "available": usable,
+         "detail": "Ready for the default pair; compatibility is checked again for each request." if usable else
+                   "Unavailable for the default model pair. A compatible trained artifact is required; incompatible hybrid requests are rejected."},
+        {"value": "arch", "label": "Arch-Router — local intent model (experimental)", "available": arch_installed,
+         "detail": ("Installed. Classifies intent locally, then releases router memory before answer generation. " if arch_installed else
+                    "Router model is not available in Ollama. No automatic download. ") +
+                   "Experimental: quality and savings are unproven. Unavailable/invalid routing uses a reported heuristic fallback."},
+    ]
+
+
 # ── Plain-language description of the active configuration ───────────────
 
 def describe(cfg: DemoConfig) -> Dict[str, Any]:
@@ -288,6 +305,9 @@ def describe(cfg: DemoConfig) -> Dict[str, Any]:
                 + (f" ({status['version']})" if status["available"] else "")
                 + ", not the slider."
             )
+        elif cfg.router_kind == "arch":
+            lines.append("Arch-Router classifies recent intent locally using Ollama. Experimental route mapping; no current-pair quality or savings claim.")
+            warnings.append("If Arch-Router is unavailable, heuristic fallback is reported explicitly. Preview mode simulates routing without loading Arch-Router.")
         else:
             lines.append(
                 f"Prompts scoring ≥ {cfg.confidence_threshold:.2f} on the "
@@ -448,6 +468,8 @@ def _run_hybrid(cfg: DemoConfig, prompt: str) -> Dict[str, Any]:
     rec = tracker.records[0]
 
     warnings = []
+    if result["router"] in {"heuristic-fallback", "arch-preview"}:
+        warnings.append(result["reason"])
     if cfg.router_kind == "learned" and status["pair_match"] is None:
         warnings.append(
             "learned decision came from a TOY artifact (synthetic training "

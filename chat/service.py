@@ -32,7 +32,7 @@ def conversation_config(mode: str, model: Optional[str], mock: bool) -> DemoConf
     payload = {
         "mode": mode_map[mode],
         "hybrid_pair": settings.tier_mode,
-        "router_kind": settings.router_mode if settings.router_mode != "auto" else "heuristic",
+        "router_kind": prefs.get("router_kind", settings.router_mode if settings.router_mode != "auto" else "heuristic"),
         "local_model": model if mode == "local" and model else prefs.get("local_model", settings.local_model_name),
         "local_backend": prefs.get("local_backend", settings.local_backend),
         "cheap_model": settings.cheap_model_name,
@@ -216,6 +216,7 @@ def send_message(
             "assistant_message": asdict(assistant_message),
             "mock": effective_mock,
             "billable": result["billable"],
+            "warnings": result.get("warnings", []),
             "web": result.get("web", {"enabled": False}),
             "routing": {
                 "route": result["route"],
