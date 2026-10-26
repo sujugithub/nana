@@ -5,8 +5,9 @@ Facts only; no secrets.
 
 ## 1. Timestamp
 
-2026-10-26 13:00 Australia/Sydney (AEDT). Milestone: S2 plus the approved
-S2 correction (A–H) complete; awaiting the revised S2 manual Git checkpoint.
+2026-10-26 16:00 Australia/Sydney (AEDT). Milestone: S3 (pilot preparation,
+licences, final-test isolation, runbook) complete; awaiting the S3 manual
+Git checkpoint.
 
 ## 2. Current objective
 
@@ -33,7 +34,7 @@ answering models are not.
 - S3: GSM8K/MMLU/BBH pilot workflow (~60 tasks, for checking collection and
   grading only); licences verified individually; final-test tasks isolated;
   runbook with unknown deployment values marked Pending; long-context
-  validation documented as a separate requirement.
+  validation documented as a separate requirement. **Done** (section 5).
 - Reporting rule for all stages: report all attempted tasks,
   completion/failure rates, grading coverage, and the denominator of every
   quality metric.
@@ -45,7 +46,9 @@ answering models are not.
 - Base: `8b44cf6` (= `origin/main`).
 - `b52d54b` "Add review-aware grading and regression tests" contains S0
   documents and S1 together (one commit, pushed by the owner).
-- S2 is uncommitted on top of `b52d54b`.
+- `79137c0` "Record attempt-level outcomes with verified pair identity"
+  contains S2 + correction (26 files, pushed by the owner).
+- S3 is uncommitted on top of `79137c0`.
 
 ## 5. Completed work
 
@@ -179,6 +182,51 @@ use the `-1` manual-grade path; one-sided verdicts accepted.
   knowledge; finish reasons summarised separately. Grading semantics
   unchanged.
 
+### S3 (pilot preparation; offline, no downloads, no model calls)
+
+- **Licences verified individually** (2026-10-26, each repository's LICENSE
+  file, URL-only fetches): GSM8K MIT (c) 2021 OpenAI; MMLU MIT (c) 2020 Dan
+  Hendrycks; BIG-Bench Hard MIT (c) 2022 suzgunmirac; **BBH's upstream
+  BIG-bench is Apache-2.0** (attribution/notice obligation). The historical
+  task manifests' "all MIT" is incomplete; left unchanged as history.
+- **No downloads:** `scripts/build_real_pilot.py` needs raw dataset copies,
+  so S3 partitions the 600 already-tracked graded tasks instead.
+- **`scripts/partition_tasks.py`** (deterministic, seed 26) ->
+  `tasks/pair_v2/`: `pilot.json` 60 (20 GSM8K, 20 MMLU, 5 per BBH
+  subtask), `development_remaining.json` 390, `final_test.json` 150
+  (50 per category: GSM8K 50, MMLU 50, causal 17, date 17, logical 16),
+  `manifest.json` (licences, exposure, contamination, quotas, fingerprints).
+  Refuses to overwrite without `--force`.
+  - Effective groups = declared groups merged across near-duplicates
+    (same rule/threshold as training): 523 groups. Final test uses whole
+    groups only; none straddles final test and development.
+  - Previous pair's test split reconstructed (seed 7, 70/15/15 -> 420/90/90,
+    matching the documented sizes; original `splits.json` unavailable):
+    its 90 tasks are excluded from the final test.
+  - Finding: all 50 `bbh-boolean_expressions` prompts form ONE
+    near-duplicate group (shared instruction template), so the subtask is
+    absent from the final test; the pilot samples development tasks
+    individually (pilot vs development is not an isolation boundary).
+- **`scripts/check_collection.py`**: `identity` (deployment identity report
+  for the inference machine; three local Ollama metadata calls, no
+  generation; key reported only as set/unset; exit 1 if any field unknown)
+  and `verify` (manifest/rows/dataset/summary consistency, task-file hash,
+  exact + canonical checksums, `--write-checksums` in `sha256sum -c` format).
+- **`docs/TRAINING_RUNBOOK.md`**: roles, Pending deployment values, Steps
+  A–D (identity, offline tests, mock dry run, BLOCKED pilot command with
+  approval facts, verification/review/transfer), final-test isolation,
+  long-context validation as a separate requirement, licences. Configured
+  ceilings at the repository's unverified rates: pilot $0.1544,
+  development $1.0018, final test $0.3862 (one attempt per task; excludes
+  transport retries and repeat attempts; not a worst case).
+- Runbook Step B executed here in mock mode (`local_remote`, ollama backend
+  configured, scratchpad output): 60/60 completed, 0 usable, 60 awaiting
+  review, collector exit 1, `verify` consistent — matches the runbook.
+- Recorded S4 requirement: `routing/train.py` splits one dataset 70/15/15
+  and `evaluation/run.py` evaluates that split's test part; training on
+  development outcomes and evaluating once on a separately collected final
+  test needs a separately approved change.
+
 Existing tests changed (no assertion weakened):
 - `tests/test_learned_router.py`: two synthetic-artifact constructions pass
   `allow_unverified=True`; `test_learned_mode_loads_artifact` now uses a
@@ -195,9 +243,17 @@ Existing tests changed (no assertion weakened):
 
 ## 6. Partially completed work
 
-None. S3 not started.
+None. S4 not started.
 
-## 7. Changed files (S2, uncommitted)
+## 7. Changed files
+
+S3 (uncommitted, all new): `scripts/partition_tasks.py`,
+`scripts/check_collection.py`, `tests/test_partition.py` (9 tests),
+`docs/TRAINING_RUNBOOK.md`, `tasks/pair_v2/pilot.json`,
+`tasks/pair_v2/development_remaining.json`, `tasks/pair_v2/final_test.json`,
+`tasks/pair_v2/manifest.json`, plus this file. No existing file modified.
+
+S2 (committed in `79137c0`):
 
 New: `routing/identity.py`, `tests/test_identity.py` (25 tests),
 `tests/test_collection.py` (20 tests).
@@ -257,6 +313,14 @@ PYTHONUTF8=1 .venv/Scripts/python.exe -m unittest discover -s tests -v
 ```
 
 ## 10. Actual test results
+
+### S3 (working tree on 79137c0)
+
+- `tests.test_partition`: 9/9 pass (UTF-8 mode off).
+- Harness: PASS.
+- Full suite: **329 run (320 + 9 new), 325 pass, 4 fail, 0 skipped** in
+  both encoding modes; the 4 are the S0 Windows platform failures. **No new
+  failures.**
 
 ### S2 + correction (working tree on b52d54b)
 
@@ -321,6 +385,19 @@ Committed (LF) content, `git cat-file -p HEAD:<path> | sha256sum`:
 | `tasks/real_pilot_qwen_pro.manifest.json` | `6d57986246df94283a4846411af7de7ceedd6f00fe2b7854277d8ecbdbcf1d32` |
 | `tasks/real_extension_fast_qwen_pro.manifest.json` | `9f9c2a245808cdc153ebe5d155f06d9d541adc64e4042379a9d8acd262b56692` |
 
+S3 partition (`tasks/pair_v2/`, as written on Windows with LF endings;
+canonical values are in `manifest.json` and checked by tests):
+
+| File | Exact SHA-256 | Canonical SHA-256 |
+|---|---|---|
+| `pilot.json` | `1de9c59494ec23a1702b26afe12e943fbd05b6f513b4389c6612a24ee71158f8` | `0fc2c6015035baf11b00254fed2f862ccd3338f225f2dbe7858297ab0d3fb17f` |
+| `development_remaining.json` | `8ab7eee397174aa2d6655e2893b69f343da0a526e74b1f267c88fe66051224d6` | `5c49307e9fc154985b06a8efc55b92f9a7d7930bbd86b8d45748c1a0969a7468` |
+| `final_test.json` | `18eb32672bff302a15ac6fffe0046842f8f8314e22d16b553e42c48dba2901b0` | `bdc681f514bec5d337915618521e9d0840c8f4563620f6a8d9e9f5760f6b89dd` |
+| `manifest.json` | `4e4090238cda0b63d5f8031c8c36cc9c0d18fb3706d7949fe4b91d8f912e5bda` | — |
+
+Exact values may change after a Git round trip on a CRLF checkout; the
+canonical values do not.
+
 Canonical (line-ending independent):
 - `tasks/real_pilot_qwen_pro.json`:
   `89c118518d41e1536894dc3b3a64c535ef2b80cab650eeda9de3cbf8d147c6cc`
@@ -340,11 +417,17 @@ None.
    working-tree changes (or the S2 commit, once the owner makes it).
 3. Use `.venv/Scripts/python.exe`. `PYTHONUTF8=1` is no longer required for
    the data pipeline but keeps console output safe.
-4. Re-run the suite; expect 316/320 with the four platform failures.
+4. Re-run the suite; expect 325/329 with the four platform failures.
 
 ## 15. Pending approvals
 
-- Revised S2 manual Git checkpoint, then S3 start.
+- S3 manual Git checkpoint.
+- Teammate Step A (identity report, offline tests, mock dry run) — no
+  paid calls; needs the owner to coordinate.
+- Pilot collection (runbook Step C): paid; needs verified pricing, an
+  explicit budget, the confirmed pair, and owner approval.
+- S4 change to train on development outcomes and evaluate a separate
+  final-test dataset once.
 - Paid collection stays blocked until retry/resume spending controls and
   the actual model-pair configuration are settled (owner instruction).
 - Not approved: real-model or paid collection, Fireworks calls, model or
@@ -380,10 +463,11 @@ None.
 
 ## 17. Exact next action
 
-Owner reviews S2 + correction and performs the revised S2 manual Git
-checkpoint, then approves S3 (pilot task preparation and runbook).
+Owner performs the S3 checkpoint, then sends runbook Steps A–B to the
+teammate and returns `identity.json` plus the test/dry-run results. Agent
+work after that: confirm the pair from `identity.json`, prepare the pilot
+approval request with verified pricing, and propose the S4 change.
 
 ## 18. Manual Git checkpoint due?
 
-Yes — revised S2 "Reproducibility and collection preparation" (S2 was not
-committed before the correction; one checkpoint covers both).
+Yes — S3 "Pilot preparation and runbook".

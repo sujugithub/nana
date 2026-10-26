@@ -1,0 +1,168 @@
+{
+ "kind": "nana-task-partition",
+ "partition_version": "1",
+ "seed": 26,
+ "inputs": [
+  {
+   "path": "tasks/real_pilot_qwen_pro.json",
+   "canonical_sha256": "89c118518d41e1536894dc3b3a64c535ef2b80cab650eeda9de3cbf8d147c6cc"
+  },
+  {
+   "path": "tasks/real_extension_fast_qwen_pro.json",
+   "canonical_sha256": "1f6c2ab2862045384f5213ce6481fa677c2cc07af22a3e4189192de7f42f1965"
+  }
+ ],
+ "grouping": {
+  "near_duplicate_threshold": 0.85,
+  "effective_groups": 523,
+  "rule": "declared group_id merged across near-duplicate prompts; a group never straddles final_test and development (pilot and development_remaining are both development and may share a group)",
+  "largest_groups": [
+   50,
+   6,
+   4,
+   4,
+   3
+  ],
+  "note": "all 50 bbh-boolean_expressions prompts share an instruction template and form one near-duplicate group; it cannot be split, so that subtask is absent from final_test"
+ },
+ "final_test_quota": {
+  "gsm8k-test": 50,
+  "mmlu-test": 50,
+  "bbh-causal_judgement": 17,
+  "bbh-date_understanding": 17,
+  "bbh-logical_deduction_five_objects": 16
+ },
+ "pilot_quota": {
+  "gsm8k-test": 20,
+  "mmlu-test": 20,
+  "bbh-boolean_expressions": 5,
+  "bbh-causal_judgement": 5,
+  "bbh-date_understanding": 5,
+  "bbh-logical_deduction_five_objects": 5
+ },
+ "prior_exposure": {
+  "dataset": "data/real_qwen_pro_600.json",
+  "exposed_test_tasks": 90,
+  "method": "test split of the previous pair reconstructed with routing.splits.make_splits defaults (seed 7, 70/15/15); sizes match the documented 420/90/90 but the original splits.json was not available to confirm identity",
+  "rule": "exposed tasks never enter final_test"
+ },
+ "parts": {
+  "pilot": {
+   "count": 60,
+   "canonical_sha256": "0fc2c6015035baf11b00254fed2f862ccd3338f225f2dbe7858297ab0d3fb17f",
+   "categories": {
+    "knowledge": 20,
+    "math": 20,
+    "reasoning": 20
+   },
+   "sources": {
+    "bbh-boolean_expressions": 5,
+    "bbh-causal_judgement": 5,
+    "bbh-date_understanding": 5,
+    "bbh-logical_deduction_five_objects": 5,
+    "gsm8k-test": 20,
+    "mmlu-test": 20
+   },
+   "graders": {
+    "choice": 40,
+    "numeric": 20
+   },
+   "prior_test_exposed": 21
+  },
+  "development_remaining": {
+   "count": 390,
+   "canonical_sha256": "5c49307e9fc154985b06a8efc55b92f9a7d7930bbd86b8d45748c1a0969a7468",
+   "categories": {
+    "knowledge": 130,
+    "math": 130,
+    "reasoning": 130
+   },
+   "sources": {
+    "bbh-boolean_expressions": 45,
+    "bbh-causal_judgement": 28,
+    "bbh-date_understanding": 28,
+    "bbh-logical_deduction_five_objects": 29,
+    "gsm8k-test": 130,
+    "mmlu-test": 130
+   },
+   "graders": {
+    "choice": 260,
+    "numeric": 130
+   },
+   "prior_test_exposed": 69
+  },
+  "final_test": {
+   "count": 150,
+   "canonical_sha256": "bdc681f514bec5d337915618521e9d0840c8f4563620f6a8d9e9f5760f6b89dd",
+   "categories": {
+    "knowledge": 50,
+    "math": 50,
+    "reasoning": 50
+   },
+   "sources": {
+    "bbh-causal_judgement": 17,
+    "bbh-date_understanding": 17,
+    "bbh-logical_deduction_five_objects": 16,
+    "gsm8k-test": 50,
+    "mmlu-test": 50
+   },
+   "graders": {
+    "choice": 100,
+    "numeric": 50
+   },
+   "prior_test_exposed": 0
+  }
+ },
+ "use": {
+  "pilot": "checking collection and grading only; not a statistical claim",
+  "development_remaining": "with pilot outcomes (same identity), the pool for training, calibration, validation",
+  "final_test": "RESERVED: collect and evaluate once, after the classifier, threshold, grading, split and model pair are frozen and the owner approves the final evaluation; do not inspect outcomes or tune on it"
+ },
+ "sources": [
+  {
+   "name": "GSM8K",
+   "url": "https://github.com/openai/grade-school-math",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2021 OpenAI",
+   "task_sources": [
+    "gsm8k-test"
+   ]
+  },
+  {
+   "name": "MMLU",
+   "url": "https://github.com/hendrycks/test",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2020 Dan Hendrycks",
+   "task_sources": [
+    "mmlu-test"
+   ]
+  },
+  {
+   "name": "BIG-Bench Hard",
+   "url": "https://github.com/suzgunmirac/BIG-Bench-Hard",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2022 suzgunmirac",
+   "upstream": {
+    "name": "BIG-bench",
+    "url": "https://github.com/google/BIG-bench",
+    "license": "Apache-2.0",
+    "note": "BBH tasks are derived from BIG-bench tasks; keep the Apache-2.0 attribution and notice when redistributing"
+   },
+   "task_sources": [
+    "bbh-boolean_expressions",
+    "bbh-causal_judgement",
+    "bbh-date_understanding",
+    "bbh-logical_deduction_five_objects"
+   ]
+  }
+ ],
+ "contamination": [
+  "GSM8K (2021), MMLU (2020) and BIG-Bench Hard (2022) are public and widely reproduced; both tiers may have seen them in training. Absolute accuracies may be inflated; the router study compares the two tiers on identical prompts. Not measurable here.",
+  "All 600 prompts were used with the previous model pair (Qwen2.5-1.5B-Instruct -> DeepSeek V4 Pro); its reconstructed test split is excluded from final_test."
+ ],
+ "limitations": [
+  "final_test has 150 tasks (50 per category); confidence intervals will be wide.",
+  "final_test contains no bbh-boolean_expressions tasks (one inseparable near-duplicate group).",
+  "No coding, extraction, summarisation, open-ended or long-context tasks (deferred by owner decision)."
+ ]
+}
