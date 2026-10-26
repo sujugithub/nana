@@ -2,6 +2,7 @@
 
 Package layout:
     dataset.py        versioned outcome-dataset format + validation
+    grading.py        deterministic answer grading with review/flag status
     features.py       pre-route feature extraction (prompt + safe metadata ONLY)
     splits.py         group-aware train/val/test splits, duplicate + leakage checks
     simulate.py       replay routing decisions against recorded outcomes

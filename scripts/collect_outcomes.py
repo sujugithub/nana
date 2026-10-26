@@ -20,11 +20,14 @@ Task file format (JSON list):
       "grader": "numeric"            # exact | numeric | contains | choice
     }
 
-Grading: programmatic wherever possible (EVALUATION.md). Tasks without a
-reference+grader are written with quality -1 sentinels into a SEPARATE
-ungraded file for manual/LLM grading; merge verdicts back with --grades
-(JSON {task_id: {"cheap": 0..1, "strong": 0..1}}). Legacy ``local`` and
-``remote`` verdict keys remain accepted.
+Grading: programmatic wherever possible (EVALUATION.md), via
+routing/grading.py. Tasks without a reference+grader, and answers the grader
+flags as ambiguous or contradictory, get quality -1 sentinels and need
+manual grading; merge verdicts back with --grades
+(JSON {task_id: {"cheap": 0..1, "strong": 0..1}}; either key may be omitted
+when only one tier needed review). Legacy ``local`` and ``remote`` verdict
+keys remain accepted. Each work row keeps the raw answers unchanged plus
+``local_grade``/``remote_grade`` status, flags and extracted answers.
 
 Cost model: Fireworks tiers use API usage counts at configured $/Mtoken
 rates. A truly local cheap tier uses wall-clock time at an amortised
@@ -43,7 +46,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import sys
 import time
 from typing import Any, Dict, List, Optional
@@ -74,8 +76,7 @@ from routing.dataset import (  # noqa: E402
     OutcomeRecord,
     save_dataset,
 )
-
-_NUM_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+from routing.grading import grade_answer  # noqa: E402
 
 
 def configured_api_cost_ceiling(
@@ -107,30 +108,10 @@ def configured_api_cost_ceiling(
 
 
 def grade(grader: str, reference: str, answer: str) -> float:
-    """Programmatic 0/1 grade. Deliberately strict-and-simple: these graders
-    must be unarguable, per EVALUATION.md."""
-    answer_norm = answer.strip().lower()
-    ref_norm = reference.strip().lower()
-    if grader == "exact":
-        return 1.0 if answer_norm == ref_norm else 0.0
-    if grader == "numeric":
-        nums = _NUM_RE.findall(answer)
-        if not nums:
-            return 0.0
-        try:
-            predicted = float(nums[-1].replace(",", ""))
-            expected = float(reference.replace(",", ""))
-            return 1.0 if abs(predicted - expected) < 1e-6 else 0.0
-        except ValueError:
-            return 0.0
-    if grader == "contains":
-        return 1.0 if ref_norm in answer_norm else 0.0
-    if grader == "choice":
-        # multiple-choice: the reference letter/word must appear as a whole
-        # token near the start of the answer
-        head = answer_norm[:80]
-        return 1.0 if re.search(rf"\b{re.escape(ref_norm)}\b", head) else 0.0
-    raise ValueError(f"unknown grader {grader!r}")
+    """Legacy 0/1 grade. Delegates to routing.grading.grade_answer; answers
+    that need human review score 0.0 here, so callers that must tell
+    "wrong" from "uncertain" use grade_answer directly (collect does)."""
+    return grade_answer(grader, reference, answer).score
 
 
 def _load_existing(path: str) -> Dict[str, dict]:
@@ -239,9 +220,23 @@ def collect(args: argparse.Namespace) -> int:
 
             grader = task.get("grader")
             reference = task.get("reference")
+            cheap_grade = strong_grade = None
             if grader and reference is not None:
-                cheap_q = grade(grader, str(reference), cheap_completion.text)
-                strong_q = grade(grader, str(reference), strong_completion.text)
+                # Grades are computed on a grading copy; the raw answers
+                # stored below are exactly what the models returned.
+                cheap_grade = grade_answer(
+                    grader, str(reference), cheap_completion.text,
+                    getattr(cheap_completion, "finish_reason", None),
+                )
+                strong_grade = grade_answer(
+                    grader, str(reference), strong_completion.text,
+                    getattr(strong_completion, "finish_reason", None),
+                )
+                # -1 sentinel = needs external (human) grading via --grades.
+                cheap_q = -1.0 if cheap_grade.needs_review else cheap_grade.score
+                strong_q = -1.0 if strong_grade.needs_review else strong_grade.score
+                if cheap_grade.needs_review or strong_grade.needs_review:
+                    ungraded.append(tid)
             else:
                 cheap_q = strong_q = -1.0  # sentinel: needs external grading
                 ungraded.append(tid)
@@ -264,6 +259,10 @@ def collect(args: argparse.Namespace) -> int:
                 "remote_answer": strong_completion.text,
                 "local_quality": cheap_q,
                 "remote_quality": strong_q,
+                # Grading status/flags (empty, refusal, truncated, review
+                # reasons) recorded separately from correctness.
+                "local_grade": cheap_grade.to_dict() if cheap_grade else None,
+                "remote_grade": strong_grade.to_dict() if strong_grade else None,
                 "local_prompt_tokens": cheap_completion.prompt_tokens,
                 "local_completion_tokens": cheap_completion.completion_tokens,
                 "remote_prompt_tokens": strong_completion.prompt_tokens,
@@ -281,9 +280,9 @@ def collect(args: argparse.Namespace) -> int:
 
     if ungraded:
         print(
-            f"{len(ungraded)} task(s) have no grader/reference — grade their "
-            f"answers (they are in {work_path}) and rerun with "
-            f"--grades verdicts.json"
+            f"{len(ungraded)} task(s) need human grading (no grader/reference, "
+            f"or an ambiguous/contradictory answer) — review their answers "
+            f"(they are in {work_path}) and rerun with --grades verdicts.json"
         )
 
     return finalize(args, done)
@@ -301,9 +300,14 @@ def finalize(args: argparse.Namespace, done: Dict[str, dict]) -> int:
     for tid, row in sorted(done.items()):
         cheap_q, strong_q = row["local_quality"], row["remote_quality"]
         if tid in grades:
+            # A verdict may cover only the tier that needed review.
             verdict = grades[tid]
-            cheap_q = float(verdict.get("cheap", verdict.get("local")))
-            strong_q = float(verdict.get("strong", verdict.get("remote")))
+            cheap_v = verdict.get("cheap", verdict.get("local"))
+            strong_v = verdict.get("strong", verdict.get("remote"))
+            if cheap_v is not None:
+                cheap_q = float(cheap_v)
+            if strong_v is not None:
+                strong_q = float(strong_v)
         if cheap_q < 0 or strong_q < 0:
             skipped += 1
             continue
