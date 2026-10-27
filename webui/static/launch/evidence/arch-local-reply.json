@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "mode": "hybrid",
+  "hybrid_pair": "local_remote",
+  "mock": false,
+  "answer": "Hi there!",
+  "final_model": "qwen3.5:4b",
+  "provider": "local",
+  "route": "cheap",
+  "escalated": false,
+  "routing": {
+    "kind": "arch",
+    "confidence": 1.0,
+    "threshold": 0.55,
+    "artifact_version": null,
+    "reason": "Arch-Router intent route: local; experimental mapping, not a calibrated quality probability.",
+    "signals": {
+      "route": "local",
+      "router_latency_s": 1.1227061249664985,
+      "router_prompt_tokens": 140,
+      "router_completion_tokens": 7
+    },
+    "local_confidence": null
+  },
+  "billable": false,
+  "would_bill": false,
+  "estimated_cost_usd": 0.0,
+  "mock_estimated_cost_usd": 0.0,
+  "tokens": {
+    "cheap_prompt": 338,
+    "cheap_completion": 3,
+    "strong_prompt": 0,
+    "strong_completion": 0,
+    "billable": 0
+  },
+  "latency_s": 9.175,
+  "problems": [],
+  "warnings": []
+}

@@ -1,0 +1,112 @@
+diff --git a/tests/test_webui.py b/tests/test_webui.py
+index 22d3871..c33381f 100644
+--- a/tests/test_webui.py
++++ b/tests/test_webui.py
+@@ -7,6 +7,7 @@ from __future__ import annotations
+ 
+ import json
+ import os
++import re
+ import tempfile
+ import threading
+ import unittest
+@@ -367,6 +368,31 @@ class TestHttpFlow(SettingsCase):
+         self.assertIn("Try Nana", body)
+         self.assertIn("How it works", body)
+ 
++    def test_launch_page_and_game_served(self):
++        base = f"http://127.0.0.1:{self.port}"
++        with urllib.request.urlopen(f"{base}/launch") as res:
++            body = res.read().decode()
++        self.assertIn("Nana", body)
++        self.assertIn('"launch/games/reef-rally/"', body)
++        with urllib.request.urlopen(f"{base}/launch/games/reef-rally/") as res:
++            self.assertTrue(res.headers["Content-Type"].startswith("text/html"))
++            assets = re.findall(r'src="\./(assets/[^"]+\.js)"', res.read().decode())
++        self.assertTrue(assets)
++        with urllib.request.urlopen(f"{base}/launch/games/reef-rally/{assets[0]}") as res:
++            self.assertTrue(res.headers["Content-Type"].startswith("text/javascript"))
++
++    def test_launch_folder_redirects_and_escapes_rejected(self):
++        base = f"http://127.0.0.1:{self.port}"
++        with urllib.request.urlopen(f"{base}/launch/games/reef-rally") as res:
++            self.assertTrue(res.url.endswith("/launch/games/reef-rally/"))
++        with urllib.request.urlopen(f"{base}/launch/") as res:
++            self.assertTrue(res.url.endswith("/launch"))
++        for path in ("/launch/../server.py", "/launch/%2e%2e/chat.html",
++                     "/launch/games/../../launch.html", "/launch/missing.js"):
++            with self.assertRaises(urllib.error.HTTPError) as caught:
++                urllib.request.urlopen(base + path)
++            self.assertEqual(caught.exception.code, 404, path)
++
+     def test_run_mock_hybrid_round_trip(self):
+         status, result = self._post("/api/run", {
+             "config": {"mode": "hybrid", "hybrid_pair": "remote_pair",
+diff --git a/webui/server.py b/webui/server.py
+index 7a18608..57c534f 100644
+--- a/webui/server.py
++++ b/webui/server.py
+@@ -49,6 +49,18 @@ _load_dotenv()
+ from webui import service  # noqa: E402
+ 
+ _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
++_LAUNCH_TYPES = {
++    ".html": "text/html; charset=utf-8",
++    ".js": "text/javascript; charset=utf-8",
++    ".css": "text/css; charset=utf-8",
++    ".json": "application/json",
++    ".png": "image/png",
++    ".jpg": "image/jpeg",
++    ".webp": "image/webp",
++    ".svg": "image/svg+xml",
++    ".mp4": "video/mp4",
++    ".woff2": "font/woff2",
++}
+ _MAX_BODY = 1 << 20  # 1 MiB — a demo prompt, not an upload endpoint
+ 
+ 
+@@ -128,6 +140,10 @@ class DemoHandler(BaseHTTPRequestHandler):
+         self.account = auth.session(self.headers)
+         store.USER.set(self.account["user_id"] if self.account else "local")
+         parsed = urlsplit(self.path)
++        if self.command == "GET" and (parsed.path == "/launch" or parsed.path.startswith("/launch/")):
++            # The launch page is a public static showcase: no account data.
++            self._send_launch(parsed.path)
++            return False
+         if parsed.path == "/api/workspace/google/callback":
+             query = parse_qs(parsed.query)
+             state = (query.get("state") or [""])[0]
+@@ -466,6 +482,33 @@ class DemoHandler(BaseHTTPRequestHandler):
+         except Exception:
+             self._send_json({"error": "Chat request failed"}, status=500)
+ 
++    def _send_launch(self, path: str) -> None:
++        """Serve /launch and the files under static/launch, refusing path escapes."""
++        if path == "/launch":
++            self._send_static("launch.html", "text/html; charset=utf-8")
++            return
++        if path == "/launch/":
++            # The page uses relative asset URLs, which resolve from /launch.
++            self.send_response(301)
++            self.send_header("Location", "/launch")
++            self.end_headers()
++            return
++        root = os.path.realpath(os.path.join(_STATIC_DIR, "launch"))
++        target = os.path.realpath(os.path.join(root, path[len("/launch/"):]))
++        if os.path.isdir(target) and target.startswith(root + os.sep):
++            if not path.endswith("/"):
++                # Relative asset URLs inside the folder need the trailing slash.
++                self.send_response(301)
++                self.send_header("Location", path + "/")
++                self.end_headers()
++                return
++            target = os.path.join(target, "index.html")
++        kind = _LAUNCH_TYPES.get(os.path.splitext(target)[1].lower())
++        if not target.startswith(root + os.sep) or kind is None or not os.path.isfile(target):
++            self._send_json({"error": "Not found"}, 404)
++            return
++        self._send_static(os.path.relpath(target, _STATIC_DIR), kind)
++
+     def _send_static(self, name: str, content_type: str) -> None:
+         path = os.path.join(_STATIC_DIR, name)
+         try:

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reef Rally</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="./assets/index-BatmMRY5.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/engine-DylqztiA.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-DwRfFist.css">
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="ui">
+      <div id="letterbox" class="off"></div>
+
+      <div id="hud" class="hidden shadow-text">
+        <div class="hud-pos"><span id="hud-pos-num">4</span><span id="hud-pos-suf">th</span><span class="of">/6</span></div>
+        <div class="hud-timer"><label>Coral Cove GP</label><b id="hud-time">00:00.000</b></div>
+        <div class="hud-lap"><label>Lap</label><b><span id="hud-lap">1</span><small>/3</small></b></div>
+        <div class="hud-map"><canvas id="hud-minimap" width="440" height="440"></canvas><label>Coral Cove</label></div>
+        <div class="hud-speed">
+          <div id="hud-boost">BOOST</div>
+          <div class="row"><b id="hud-speed">000</b><span>KM/H</span></div>
+          <div class="meter"><i id="hud-drift"></i></div>
+        </div>
+        <div class="hud-laps" id="hud-laptimes"></div>
+      </div>
+
+      <div id="banner" class="shadow-text"></div>
+      <div id="countdown" class="hidden shadow-text"><span class="num"></span><div class="tip"></div></div>
+      <div id="wrongway" class="hidden">WRONG WAY</div>
+      <div id="skip-hint" class="hidden shadow-text"><span class="key">Enter</span> &nbsp;skip</div>
+      <div id="flash"></div>
+
+      <div id="title" class="screen shadow-text">
+        <div class="left">
+          <div class="kicker">Coral Coast Cup · Race 01</div>
+          <h1 class="logo"><span class="a">REEF</span><span class="b">RALLY</span><i class="sun"></i></h1>
+          <p class="tagline">Six racers. One island. Drift hard, boost harder.</p>
+          <button class="btn start" id="btn-start">Start race <span class="key">Enter</span></button>
+          <p class="touch-note">No keyboard here, so Kit races on autopilot while you watch. Open this link on a computer, or connect a gamepad, to drive yourself.</p>
+          <div class="hints">
+            <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span><em>Drive</em></span>
+            <span><span class="key">Space</span><em>Drift</em></span>
+            <span><span class="key">R</span><em>Respawn</em></span>
+            <span><span class="key">Esc</span><em>Pause</em></span>
+            <span><span class="key">M</span><em>Mute</em></span>
+          </div>
+        </div>
+        <div class="right">
+          <h3>The field</h3>
+          <div class="field" id="field"></div>
+          <div class="course">
+            <div class="no">01</div>
+            <div>
+              <div class="label">Today's course</div>
+              <div class="cname">Coral Cove</div>
+              <div class="info">3 laps · 1.6 km · 6 racers</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pause" class="screen hidden shadow-text">
+        <div class="panel">
+          <h2>Paused</h2>
+          <div class="stack">
+            <button class="btn" id="btn-resume">Resume <span class="key">Esc</span></button>
+            <button class="btn ghost" id="btn-restart">Restart race</button>
+            <button class="btn ghost" id="btn-quit">Quit to title</button>
+          </div>
+          <label class="slider">MUSIC <input type="range" id="vol-music" min="0" max="1" step="0.05" /></label>
+          <label class="slider">EFFECTS <input type="range" id="vol-sfx" min="0" max="1" step="0.05" /></label>
+          <div class="quality">GRAPHICS <button data-q="high">High</button><button data-q="low">Low</button></div>
+        </div>
+      </div>
+
+      <div id="results" class="screen hidden shadow-text">
+        <div class="panel">
+          <div class="place"><b id="res-place">1</b><span id="res-suffix">st place</span></div>
+          <div class="sub" id="res-sub"></div>
+          <div class="standings" id="res-standings"></div>
+          <div class="row-btns">
+            <button class="btn" id="btn-again">Race again <span class="key">Enter</span></button>
+            <button class="btn ghost" id="btn-title">Title</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="loading">
+      <div class="load-logo"><span class="a">REEF</span><span class="b">RALLY</span></div>
+      <div class="load-bar"><i id="load-bar"></i></div>
+      <div id="load-label">Loading…</div>
+    </div>
+    <div id="perf" class="hidden"></div>
+  </body>
+</html>

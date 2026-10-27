@@ -1,0 +1,319 @@
+{
+  "live_local": true,
+  "success": true,
+  "recorded_at": "2026-10-27T23:00:32.413610+11:00",
+  "run": {
+    "id": "ac6e556f76fc4e37ac94f5d69fc60a35",
+    "kind": "agent",
+    "status": "completed",
+    "payload": {
+      "kind": "agent",
+      "mode": "local",
+      "model": "qwen3.5:4b",
+      "mock": false,
+      "tools": [
+        "read_file",
+        "save_item"
+      ],
+      "prompt": "Prepare our Nana project follow-up checklist. First read the workspace file nana-project-facts-20261027-225654.txt. Then save exactly three separate task records: 1. Rehearse the Nana launch-page demo - include the existing game zoom, a real local agent run, the routing chart and speaker handovers. 2. Evaluate routing on the current model pair - collect graded outcomes, retrain the pair-specific artifact and compare with matched-rate random. 3. Verify Google and MCP integrations - retest the previously blocked Google connection and verify a specific configured MCP server before claiming it works. Use save_item with kind task for each, with brief practical acceptance criteria under 50 words. Do not mark any task completed. Do not schedule reminders or call external services. Finish with the three task titles. One tool at a time.",
+      "real_allowed": true
+    },
+    "result": {
+      "answer": "Rehearse the Nana launch-page demo  \nEvaluate routing on the current model pair  \nVerify Google and MCP integrations",
+      "failed_tools": 0,
+      "sources": [],
+      "usage": {
+        "requests": 5,
+        "model_steps": 5,
+        "tokens": 11133,
+        "cost_usd": 0.0,
+        "active_seconds": 38.421393373049796,
+        "validation_errors": 0
+      },
+      "usage_complete": true
+    },
+    "steps": [
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_pdqc8wcc",
+            "function": {
+              "index": 0,
+              "name": "read_file",
+              "arguments": {
+                "path": "nana-project-facts-20261027-225654.txt"
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 1204,
+          "completion": 45,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 5.3280214160331525,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "read_file",
+        "arguments": {
+          "path": "nana-project-facts-20261027-225654.txt"
+        },
+        "action_id": "762ef08643d0660fedb45e6c3cfb396b3ac3d13f79c34ac5c22824c59e94c2cf",
+        "output": {
+          "path": "nana-project-facts-20261027-225654.txt",
+          "content": "Nana project facts, checked against code, GitHub contributions and recorded evaluation evidence on 27 October 2026.\nNana combines a persistent SQLite chat backend with a workspace agent. Local inference uses Ollama. The local default for demonstrations is qwen3.5:4b. Use local mode for these preparation runs; do not call a cloud model.\nThe workspace agent chooses one tool, validates arguments, requests review if required, executes the tool and reads the result. It has 16 tools. Shell, browser and MCP calls require review. Limits: 8 model requests, 20,000 tokens, $0.10 estimated API cost, 180 active seconds and 3 invalid decisions.\nCurrent-pair benchmark: qwen3.5:4b versus Fireworks gpt-oss-120b; 60 automatically graded questions. Always local quality 53%, cloud usage 0%. Keyword router quality 67%, cloud usage 38%. Random at matched cloud rate quality 68%, cloud usage 38%. Always cloud quality 90%, cloud usage 100%. Hindsight oracle quality 90%, cloud usage 37%. The oracle is not a deployed router. The keyword router did not demonstrate an advantage over random on this sample.\nA learned router exists but its historical artifact uses an older answer-model pair. Retrain and evaluate for the current pair. Arch-Router has live smoke evidence but no demonstrated quality or savings improvement.\n276 automated tests and the offline routing harness passed on 27 October 2026. Tests cover mode isolation, approval, budgets, cancellation and data scoping; they do not establish general model accuracy. Google access previously returned HTTP 403. Further live integration checks remain open.\nPresentation team order: Sujay, Bhavin, Kezia, Mim, Aryan, Spandan. Launch page order after Reef Rally: real workflow, architecture, tools, local-first chat, routers, results, verification and stewardship, reflection, questions. Keep the original title-to-game scroll animation.\nLocal inference has no API charge, but electricity and hardware have a cost. Energy savings have not been measured. Use 4B by default; 27B trials exposed latency and memory pressure.\n"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.0047937079798430204
+      },
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_afn27rxu",
+            "function": {
+              "index": 0,
+              "name": "save_item",
+              "arguments": {
+                "kind": "task",
+                "title": "Rehearse the Nana launch-page demo",
+                "content": "Include the existing game zoom, a real local agent run, the routing chart and speaker handovers. Acceptance: all four components demonstrated live with correct transitions and timing."
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 1895,
+          "completion": 90,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 8.444233958027326,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "arguments": {
+          "kind": "task",
+          "title": "Rehearse the Nana launch-page demo",
+          "content": "Include the existing game zoom, a real local agent run, the routing chart and speaker handovers. Acceptance: all four components demonstrated live with correct transitions and timing."
+        },
+        "action_id": "a542470f20175b34407128292f6e5dcf3c202de0d4013ea08440640bcaa9a6b4",
+        "output": {
+          "id": "7bb219af9e7243d6956f08733cb10b11",
+          "kind": "task",
+          "title": "Rehearse the Nana launch-page demo",
+          "content": "Include the existing game zoom, a real local agent run, the routing chart and speaker handovers. Acceptance: all four components demonstrated live with correct transitions and timing.",
+          "meta": {
+            "origin": "agent",
+            "scope": "user",
+            "provenance": "agent tool save_item"
+          },
+          "created": "2026-10-27T11:59:32.576129+00:00",
+          "updated": "2026-10-27T11:59:32.576129+00:00"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.005377583031076938
+      },
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_kcdaq5mj",
+            "function": {
+              "index": 0,
+              "name": "save_item",
+              "arguments": {
+                "kind": "task",
+                "title": "Evaluate routing on the current model pair",
+                "content": "Collect graded outcomes from qwen3.5:4b vs Fireworks gpt-oss-120b, retrain the pair-specific artifact, and compare with matched-rate random baseline. Acceptance: new artifact shows improved accuracy over random on same test set."
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 2315,
+          "completion": 109,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 10.26426604198059,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "arguments": {
+          "kind": "task",
+          "title": "Evaluate routing on the current model pair",
+          "content": "Collect graded outcomes from qwen3.5:4b vs Fireworks gpt-oss-120b, retrain the pair-specific artifact, and compare with matched-rate random baseline. Acceptance: new artifact shows improved accuracy over random on same test set."
+        },
+        "action_id": "906fd6558da12de1cab594b700a927de9242733a0b2712b676a72e5b385dc87c",
+        "output": {
+          "id": "525aae3f83e248b5b0a97b8e339baf1a",
+          "kind": "task",
+          "title": "Evaluate routing on the current model pair",
+          "content": "Collect graded outcomes from qwen3.5:4b vs Fireworks gpt-oss-120b, retrain the pair-specific artifact, and compare with matched-rate random baseline. Acceptance: new artifact shows improved accuracy over random on same test set.",
+          "meta": {
+            "origin": "agent",
+            "scope": "user",
+            "provenance": "agent tool save_item"
+          },
+          "created": "2026-10-27T11:59:42.853436+00:00",
+          "updated": "2026-10-27T11:59:42.853436+00:00"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.005004875012673438
+      },
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_yhe7g4kq",
+            "function": {
+              "index": 0,
+              "name": "save_item",
+              "arguments": {
+                "kind": "task",
+                "title": "Verify Google and MCP integrations",
+                "content": "Retest the previously blocked Google connection (HTTP 403) and verify a specific configured MCP server. Acceptance: both services respond with expected status codes and functional endpoints accessible."
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 2773,
+          "completion": 90,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 9.835049125016667,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "arguments": {
+          "kind": "task",
+          "title": "Verify Google and MCP integrations",
+          "content": "Retest the previously blocked Google connection (HTTP 403) and verify a specific configured MCP server. Acceptance: both services respond with expected status codes and functional endpoints accessible."
+        },
+        "action_id": "2addf6410be36279bfb2f28f5f429d9f693ee33bf0751bc1429ba3ecbbe5e142",
+        "output": {
+          "id": "0869cafad090439ca4bc29ed39abe935",
+          "kind": "task",
+          "title": "Verify Google and MCP integrations",
+          "content": "Retest the previously blocked Google connection (HTTP 403) and verify a specific configured MCP server. Acceptance: both services respond with expected status codes and functional endpoints accessible.",
+          "meta": {
+            "origin": "agent",
+            "scope": "user",
+            "provenance": "agent tool save_item"
+          },
+          "created": "2026-10-27T11:59:52.704264+00:00",
+          "updated": "2026-10-27T11:59:52.704264+00:00"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.007861541002057493
+      },
+      {
+        "type": "model",
+        "answer": "Rehearse the Nana launch-page demo  \nEvaluate routing on the current model pair  \nVerify Google and MCP integrations",
+        "tool_calls": [],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 2588,
+          "completion": 24,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 4.526785124966409,
+        "attempts": 1
+      }
+    ],
+    "created": "2026-10-27T11:59:18.775901+00:00",
+    "updated": "2026-10-27T11:59:57.240184+00:00"
+  },
+  "items": [
+    {
+      "id": "7bb219af9e7243d6956f08733cb10b11",
+      "kind": "task",
+      "title": "Rehearse the Nana launch-page demo",
+      "content": "Include the existing game zoom, a real local agent run, the routing chart and speaker handovers. Acceptance: all four components demonstrated live with correct transitions and timing.",
+      "meta": {
+        "origin": "agent",
+        "scope": "user",
+        "provenance": "agent tool save_item"
+      },
+      "created": "2026-10-27T11:59:32.576129+00:00",
+      "updated": "2026-10-27T11:59:32.576129+00:00"
+    },
+    {
+      "id": "525aae3f83e248b5b0a97b8e339baf1a",
+      "kind": "task",
+      "title": "Evaluate routing on the current model pair",
+      "content": "Collect graded outcomes for qwen3.5:4b and Fireworks gpt-oss-120b. Retrain a pair-specific artifact and compare against matched-rate random on a held-out test split. Acceptance: report quality, cloud usage and uncertainty, including inconclusive or negative findings.",
+      "meta": {
+        "origin": "agent",
+        "scope": "user",
+        "provenance": "agent tool save_item",
+        "review_note": "Acceptance criteria clarified after reviewing the local-model draft."
+      },
+      "created": "2026-10-27T11:59:42.853436+00:00",
+      "updated": "2026-10-27T12:00:53.373201+00:00"
+    },
+    {
+      "id": "0869cafad090439ca4bc29ed39abe935",
+      "kind": "task",
+      "title": "Verify Google and MCP integrations",
+      "content": "Retest the blocked Google connection and verify a specific configured MCP server. Acceptance: authenticated read-only Gmail/Calendar checks and a harmless MCP tool call return the expected data; record failures and remaining limits. Do not send messages or publish events.",
+      "meta": {
+        "origin": "agent",
+        "scope": "user",
+        "provenance": "agent tool save_item",
+        "review_note": "Acceptance criteria clarified after reviewing the local-model draft."
+      },
+      "created": "2026-10-27T11:59:52.704264+00:00",
+      "updated": "2026-10-27T12:00:53.377376+00:00"
+    }
+  ],
+  "external_publications": 0,
+  "purpose": "Real presentation-preparation workflow, executed in Nana using the local 4B model.",
+  "review_note": "The saved task drafts were reviewed for neutral evaluation criteria and read-only integration checks. Original model/tool steps remain unchanged."
+}

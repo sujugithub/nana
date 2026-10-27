@@ -1,0 +1,338 @@
+{
+  "live_local": true,
+  "success": true,
+  "counts": {
+    "note": 1,
+    "draft": 1,
+    "event": 1
+  },
+  "run": {
+    "id": "c90c0c0f5c3c41758ef8fecba63cc587",
+    "kind": "research",
+    "status": "completed",
+    "payload": {
+      "mode": "local",
+      "model": "qwen3.5:4b",
+      "prompt": "Read https://example.com/ and save a note titled Example source with a short factual summary and its source URL. Then create an email draft titled Example briefing, addressed to nobody@example.com, summarizing the note. Then create a local calendar event draft titled Review example, starting 2026-10-10T10:00:00+11:00 and ending 2026-10-10T10:30:00+11:00. Finally report the items saved. Do not send or publish anything. Use one tool per turn.",
+      "tools": [
+        "read_url",
+        "save_item"
+      ]
+    },
+    "result": {
+      "answer": "**Items saved:**\n1. **Note**: \"Example source\" - Summary of https://example.com/ with source URL included.\n2. **Draft**: \"Example briefing\" - Email draft addressed to nobody@example.com summarizing the note content.\n3. **Event**: \"Review example\" - Local calendar event scheduled for 2026-10-10 from 10:00 to 10:30 UTC+11.",
+      "failed_tools": 0,
+      "sources": [
+        "https://example.com/"
+      ],
+      "usage": {
+        "requests": 5,
+        "model_steps": 5,
+        "tokens": 9091,
+        "cost_usd": 0.0,
+        "active_seconds": 21.124561918026302,
+        "validation_errors": 0
+      },
+      "usage_complete": true
+    },
+    "steps": [
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_tynbgq2g",
+            "function": {
+              "index": 0,
+              "name": "read_url",
+              "arguments": {
+                "url": "https://example.com/"
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 1068,
+          "completion": 28,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 6.088820917007979,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "read_url",
+        "arguments": {
+          "url": "https://example.com/"
+        },
+        "action_id": "00d554e42318ec255c64cfd7c47ded953e584cc8b69b7b76f6459d4de4c4a5ab",
+        "output": {
+          "url": "https://example.com/",
+          "content": "Example DomainThis domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.\n\n"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.056454792007571086
+      },
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_oqdsaeqp",
+            "function": {
+              "index": 0,
+              "name": "save_item",
+              "arguments": {
+                "kind": "note",
+                "title": "Example source",
+                "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/"
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 1254,
+          "completion": 84,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 3.30453516599664,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "arguments": {
+          "kind": "note",
+          "title": "Example source",
+          "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/"
+        },
+        "action_id": "19723b4d4cc6e467da20ec3ad6304c546b919358071f26cb5c6c705cbb818da8",
+        "output": {
+          "id": "8487339d3e204f7184af64682a38d554",
+          "kind": "note",
+          "title": "Example source",
+          "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/",
+          "meta": {
+            "origin": "agent",
+            "scope": "user",
+            "provenance": "agent tool save_item"
+          },
+          "created": "2026-10-08T21:54:13.816516+00:00",
+          "updated": "2026-10-08T21:54:13.816516+00:00"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.001957708998816088
+      },
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_ljgpuekl",
+            "function": {
+              "index": 0,
+              "name": "save_item",
+              "arguments": {
+                "kind": "draft",
+                "title": "Example briefing",
+                "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/",
+                "meta": {
+                  "to": "nobody@example.com"
+                }
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 1664,
+          "completion": 104,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 3.509220042004017,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "arguments": {
+          "kind": "draft",
+          "title": "Example briefing",
+          "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/",
+          "meta": {
+            "to": "nobody@example.com"
+          }
+        },
+        "action_id": "68131dd8d3f9c21164843512ee6694e8304acee0841af307d1099226130dc070",
+        "output": {
+          "id": "2efb9cc90ba648b99775e56218ed67c7",
+          "kind": "draft",
+          "title": "Example briefing",
+          "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/",
+          "meta": {
+            "to": "nobody@example.com",
+            "origin": "agent",
+            "scope": "user",
+            "provenance": "agent tool save_item"
+          },
+          "created": "2026-10-08T21:54:17.334036+00:00",
+          "updated": "2026-10-08T21:54:17.334036+00:00"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.005119875000673346
+      },
+      {
+        "type": "model",
+        "answer": "",
+        "tool_calls": [
+          {
+            "id": "call_zlt5n9co",
+            "function": {
+              "index": 0,
+              "name": "save_item",
+              "arguments": {
+                "kind": "event",
+                "title": "Review example",
+                "content": "Review the Example source note and draft.",
+                "meta": {
+                  "end": "2026-10-10T10:30:00+11:00",
+                  "start": "2026-10-10T10:00:00+11:00"
+                }
+              }
+            }
+          }
+        ],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 2097,
+          "completion": 125,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 4.32933237501129,
+        "attempts": 1
+      },
+      {
+        "type": "tool",
+        "tool": "save_item",
+        "arguments": {
+          "kind": "event",
+          "title": "Review example",
+          "content": "Review the Example source note and draft.",
+          "meta": {
+            "end": "2026-10-10T10:30:00+11:00",
+            "start": "2026-10-10T10:00:00+11:00"
+          }
+        },
+        "action_id": "7a50eaf1ddb82477ff86f88d5666e04533a3b368e36e322ec61ff5a5cac72108",
+        "output": {
+          "id": "ccdf2a0a85b54c409febca6120dc27a2",
+          "kind": "event",
+          "title": "Review example",
+          "content": "Review the Example source note and draft.",
+          "meta": {
+            "end": "2026-10-10T10:30:00+11:00",
+            "start": "2026-10-10T10:00:00+11:00",
+            "origin": "agent",
+            "scope": "user",
+            "provenance": "agent tool save_item"
+          },
+          "created": "2026-10-08T21:54:21.670496+00:00",
+          "updated": "2026-10-08T21:54:21.670496+00:00"
+        },
+        "ok": true,
+        "error": null,
+        "duration_s": 0.0019737499969778582
+      },
+      {
+        "type": "model",
+        "answer": "**Items saved:**\n1. **Note**: \"Example source\" - Summary of https://example.com/ with source URL included.\n2. **Draft**: \"Example briefing\" - Email draft addressed to nobody@example.com summarizing the note content.\n3. **Event**: \"Review example\" - Local calendar event scheduled for 2026-10-10 from 10:00 to 10:30 UTC+11.",
+        "tool_calls": [],
+        "protocol": "native",
+        "model": "qwen3.5:4b",
+        "provider": "local",
+        "route": "local",
+        "tokens": {
+          "prompt": 2570,
+          "completion": 97,
+          "billable": 0
+        },
+        "cost": 0.0,
+        "mock": false,
+        "duration_s": 3.827147292002337,
+        "attempts": 1
+      }
+    ],
+    "created": "2026-10-08T21:54:04.359805+00:00",
+    "updated": "2026-10-08T21:54:25.504467+00:00"
+  },
+  "items": [
+    {
+      "id": "ccdf2a0a85b54c409febca6120dc27a2",
+      "kind": "event",
+      "title": "Review example",
+      "content": "Review the Example source note and draft.",
+      "meta": {
+        "end": "2026-10-10T10:30:00+11:00",
+        "start": "2026-10-10T10:00:00+11:00",
+        "origin": "agent",
+        "scope": "user",
+        "provenance": "agent tool save_item"
+      },
+      "created": "2026-10-08T21:54:21.670496+00:00",
+      "updated": "2026-10-08T21:54:21.670496+00:00"
+    },
+    {
+      "id": "2efb9cc90ba648b99775e56218ed67c7",
+      "kind": "draft",
+      "title": "Example briefing",
+      "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/",
+      "meta": {
+        "to": "nobody@example.com",
+        "origin": "agent",
+        "scope": "user",
+        "provenance": "agent tool save_item"
+      },
+      "created": "2026-10-08T21:54:17.334036+00:00",
+      "updated": "2026-10-08T21:54:17.334036+00:00"
+    },
+    {
+      "id": "8487339d3e204f7184af64682a38d554",
+      "kind": "note",
+      "title": "Example source",
+      "content": "This domain is for use in documentation examples without needing permission. It is not a service; avoid relying on it for testing and monitoring purposes. Source: https://example.com/",
+      "meta": {
+        "origin": "agent",
+        "scope": "user",
+        "provenance": "agent tool save_item"
+      },
+      "created": "2026-10-08T21:54:13.816516+00:00",
+      "updated": "2026-10-08T21:54:13.816516+00:00"
+    }
+  ],
+  "external_publications": 0
+}

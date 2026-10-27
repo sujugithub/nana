@@ -1,0 +1,28 @@
+[
+  {
+    "case": "greeting",
+    "router": "arch",
+    "target": "cheap",
+    "reason": "Arch-Router intent route: local; experimental mapping, not a calibrated quality probability.",
+    "signals": {
+      "route": "local",
+      "router_latency_s": 2.703519500035327,
+      "router_prompt_tokens": 137,
+      "router_completion_tokens": 7
+    },
+    "wall_s": 2.704
+  },
+  {
+    "case": "reasoning",
+    "router": "arch",
+    "target": "strong",
+    "reason": "Arch-Router intent route: strong; experimental mapping, not a calibrated quality probability.",
+    "signals": {
+      "route": "strong",
+      "router_latency_s": 0.9948984580114484,
+      "router_prompt_tokens": 155,
+      "router_completion_tokens": 7
+    },
+    "wall_s": 0.995
+  }
+]
