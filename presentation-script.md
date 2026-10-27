@@ -1,7 +1,7 @@
 # Nana: presentation script (under 10 minutes)
 
-Shown from the launch page in presentation mode: `http://127.0.0.1:8642/launch?present`.
-→ / Space for the next slide, ← to go back.
+Present from `http://127.0.0.1:8642/launch` and scroll between sections.
+The numbered slides below also match the backup PowerPoint deck.
 
 | # | Slide | Speaker | Time |
 |---|---|---|---|
@@ -27,19 +27,21 @@ when read at a normal speed.
 > Hi everyone, we're the Nana team. Our project is Nana, an AI assistant that
 > runs on your own laptop.
 
-**[Slide 2: the words join; "An agent harness that runs on your Mac"]**
+**[Slide 2: "Why pay for every request?"]**
 
-> Here's the problem we started with. Small AI models can run on your own
-> computer. They're private and free, but they get hard questions wrong. Big
-> cloud models are much better, but every question costs money and your data
-> leaves your machine. In our tests, the small local model got 53% of
-> questions right, and the cloud model got 90%.
+> Why pay cloud API costs for every request? Rewriting a sentence or
+> summarising a short note still uses paid tokens when you send it to a
+> cloud API. A local model can handle some everyday tasks without those
+> charges, but difficult requests can need a stronger model. Nana explores
+> that trade-off: what can stay local, and when is cloud access worth the cost?
 
 **[Slide 3: What Nana is]**
 
-> Nana is our answer. It's a harness: the software around the model. It
-> decides which model should answer, gives the model tools like web search
-> and files, and asks you before doing anything risky. Sujay will show you.
+> Nana is our approach. It's a harness: the software around the model. You
+> can run requests locally, choose a cloud model, or use hybrid routing to
+> select a tier. Nana records the model, tokens and cost, so you can see
+> what you spent. It also gives the model tools and asks for approval before
+> selected actions. Sujay will show you.
 
 ---
 
@@ -52,7 +54,7 @@ when read at a normal speed.
 > our page right now.
 
 *(Click Start race, drive for about 20 seconds, then click outside the game
-and press → to continue.)*
+and scroll down to continue.)*
 
 > Everything, the island, the karts, the music, is generated in code.
 
@@ -126,8 +128,7 @@ and press → to continue.)*
 **[Slide 10: Testing and stewardship]**
 
 > I worked on keeping the project clean and reliable. I cleaned up our GitHub
-> repository by removing outdated documents from an earlier competition
-> version, so the documentation matches the system we have now. Nana has 276
+> repository by removing outdated documents from an earlier version, so the documentation matches the system we have now. Nana has 276
 > automated tests. They check the things that matter most: that local mode
 > never calls the cloud, that costs are reported honestly, and that routing
 > behaves as designed.
@@ -166,7 +167,7 @@ to Aryan or Mim, the chat backend to Bhavin.)*
 ## Before presenting
 
 - Start the server: `.venv/bin/python scripts/start_workspace.py --real`
-- Open `http://127.0.0.1:8642/launch?present` in Chrome, then press F for full screen.
+- Open `http://127.0.0.1:8642/launch` in Chrome and use the browser’s full-screen option.
 - Run through the demo once: the game should already be loaded when slide 4 arrives.
 - Mim's line says the router training is in progress. Update it if the work is
   finished, or soften it if it hasn't started by presentation day.
