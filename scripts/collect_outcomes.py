@@ -54,6 +54,13 @@ SAFETY RAILS
 - Stops after --max-consecutive-failures failed attempts in a row, so an
   outage cannot keep spending.
 - If the cheap tier fails, the strong tier is not called for that attempt.
+- --max-api-cost-usd is a TOTAL budget across every run of the same --out.
+  Each attempt row records its spend (``api_spend``); calls whose billing is
+  unknown (failed after sending, or usage omitted) are charged at their full
+  per-call ceiling. A run is refused if already-charged + the ceiling for
+  unfinished tasks exceeds the budget, and stops (exit 4) before any task
+  whose ceiling could cross it. Transport retries inside remote_client
+  (429/5xx/connection errors) are assumed unbilled; that is not verified.
 """
 from __future__ import annotations
 
@@ -121,21 +128,74 @@ def configured_api_cost_ceiling(
     because it has no API charge.
     """
     remaining = [t for t in tasks if str(t["task_id"]) not in done]
-    input_upper = sum(
-        len((settings.system_prompt + "\n" + t["prompt"]).encode("utf-8")) + 64
-        for t in remaining
-    )
-    strong = (
-        input_upper * args.strong_in_per_mtok
-        + len(remaining) * settings.strong_max_tokens * args.strong_out_per_mtok
-    ) / 1e6
+    return sum(sum(_call_ceilings(t["prompt"], args)) for t in remaining)
+
+
+def _call_ceilings(prompt: str, args: argparse.Namespace) -> Tuple[float, float]:
+    """(cheap, strong) configured cost ceiling of ONE paid call for a prompt:
+    full output cap, each UTF-8 input byte (plus system prompt) as a token.
+    The cheap ceiling is 0 when the cheap tier is local (no API charge)."""
+    input_upper = len((settings.system_prompt + "\n" + prompt).encode("utf-8")) + 64
+    strong = (input_upper * args.strong_in_per_mtok
+              + settings.strong_max_tokens * args.strong_out_per_mtok) / 1e6
     if settings.tier_mode.strip().lower() != "remote_pair":
-        return strong
-    cheap = (
-        input_upper * args.cheap_in_per_mtok
-        + len(remaining) * settings.cheap_max_tokens * args.cheap_out_per_mtok
-    ) / 1e6
-    return strong + cheap
+        return 0.0, strong
+    cheap = (input_upper * args.cheap_in_per_mtok
+             + settings.cheap_max_tokens * args.cheap_out_per_mtok) / 1e6
+    return cheap, strong
+
+
+def row_spend(row: dict, args: argparse.Namespace) -> Dict[str, Any]:
+    """API spend of one attempt row, for the cumulative budget.
+
+    A paid call with provider-reported usage is charged at usage x configured
+    rates. A paid call whose billing is unknown — it failed after being
+    sent, or the provider omitted usage (estimated counts) — is charged at
+    its full per-call ceiling. Calls never made (skipped strong call, local
+    cheap tier) cost 0. Rates are the configured ones, not provider invoices.
+    """
+    cheap_cap, strong_cap = _call_ceilings(row.get("prompt", ""), args)
+    error_tier = (row.get("error") or {}).get("tier")
+    calls = []  # (made, usage_source, prompt_tokens, completion_tokens, in, out, cap)
+    if row.get("cheap_provider") == "fireworks":
+        calls.append((True, row.get("local_usage_source") if error_tier != "cheap" else None,
+                      row.get("local_prompt_tokens"), row.get("local_completion_tokens"),
+                      args.cheap_in_per_mtok, args.cheap_out_per_mtok, cheap_cap))
+    strong_call = row.get("strong_call") or ("completed" if row.get("status", "complete")
+                                             == "complete" else "failed")
+    if strong_call != "skipped":
+        calls.append((True, row.get("remote_usage_source") if strong_call == "completed" else None,
+                      row.get("remote_prompt_tokens"), row.get("remote_completion_tokens"),
+                      args.strong_in_per_mtok, args.strong_out_per_mtok, strong_cap))
+    recorded = charged = 0.0
+    unknown = 0
+    for _made, source, p_tok, c_tok, rate_in, rate_out, cap in calls:
+        if source in ("provider", "mock") and p_tok is not None and c_tok is not None:
+            cost = (p_tok * rate_in + c_tok * rate_out) / 1e6
+            recorded += cost
+            charged += cost
+        else:
+            unknown += 1
+            charged += cap
+    return {"recorded_usd": round(recorded, 9), "charged_for_budget_usd": round(charged, 9),
+            "unknown_billing_calls": unknown, "paid_calls": len(calls)}
+
+
+def spend_summary(attempts: List[dict], args: argparse.Namespace,
+                  budget: Optional[float]) -> Dict[str, Any]:
+    rows = [row_spend(r, args) for r in attempts]
+    return {
+        "budget_usd": budget,
+        "recorded_usd": round(sum(r["recorded_usd"] for r in rows), 9),
+        "charged_for_budget_usd": round(sum(r["charged_for_budget_usd"] for r in rows), 9),
+        "paid_calls": sum(r["paid_calls"] for r in rows),
+        "unknown_billing_calls": sum(r["unknown_billing_calls"] for r in rows),
+        "mock": bool(settings.mock_mode),
+        "basis": ("provider-reported usage x configured rates; calls with unknown "
+                  "billing (failed after sending, or usage omitted) charged at "
+                  "their full per-call ceiling; cumulative over all runs of this "
+                  "--out; not a provider invoice"),
+    }
 
 
 def grade(grader: str, reference: str, answer: str) -> float:
@@ -344,30 +404,34 @@ def collect(args: argparse.Namespace) -> int:
         print(f"resuming: {len(done)} task(s) completed, "
               f"{len(attempts)} attempt row(s) in {work_path}")
 
+    budget = getattr(args, "max_api_cost_usd", None)
+    spent = spend_summary(attempts, args, budget)["charged_for_budget_usd"]
     if not settings.mock_mode:
+        # --max-api-cost-usd is the TOTAL budget for this --out, across every
+        # run and resume, not a per-run allowance.
         ceiling = configured_api_cost_ceiling(tasks, done, args)
-        budget = getattr(args, "max_api_cost_usd", None)
         if budget is None:
             print(
-                f"refusing paid collection: the configured API-cost ceiling "
-                f"for unfinished tasks is ${ceiling:.4f} (one paid attempt "
-                "per tier at the full output cap; excludes transport "
-                "retries). Pass --max-api-cost-usd with an explicit budget at "
-                "least this large.",
+                f"refusing paid collection: already charged ${spent:.4f}; the "
+                f"configured API-cost ceiling for unfinished tasks is "
+                f"${ceiling:.4f} (one paid attempt per tier at the full output "
+                "cap; excludes transport retries). Pass --max-api-cost-usd with "
+                "the TOTAL budget for this collection, at least the sum.",
                 file=sys.stderr,
             )
             return 2
-        if budget <= 0 or ceiling > budget + 1e-12:
+        if budget <= 0 or spent + ceiling > budget + 1e-12:
             print(
-                f"refusing paid collection: configured API-cost ceiling "
-                f"${ceiling:.4f} exceeds --max-api-cost-usd ${budget:.4f}.",
+                f"refusing paid collection: already charged ${spent:.4f} + "
+                f"ceiling ${ceiling:.4f} for unfinished tasks exceeds the total "
+                f"budget --max-api-cost-usd ${budget:.4f}.",
                 file=sys.stderr,
             )
             return 2
         print(
-            f"paid-collection guard: {len(tasks) - len(done)} unfinished "
-            f"task(s), configured API-cost ceiling ${ceiling:.4f} <= "
-            f"budget ${budget:.4f}",
+            f"paid-collection guard: charged so far ${spent:.4f} + ceiling "
+            f"${ceiling:.4f} for {len(tasks) - len(done)} unfinished task(s) "
+            f"<= total budget ${budget:.4f}",
             file=sys.stderr,
         )
 
@@ -451,6 +515,12 @@ def collect(args: argparse.Namespace) -> int:
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "repository_commit": _git("rev-parse", "HEAD"),
         "local_runtime_version": facts.get("runtime_version"),
+        "total_budget_usd": budget,
+        "charged_before_run_usd": round(spent, 9),
+        "rates_per_mtok": {
+            "cheap_in": args.cheap_in_per_mtok, "cheap_out": args.cheap_out_per_mtok,
+            "strong_in": args.strong_in_per_mtok, "strong_out": args.strong_out_per_mtok,
+        },
     })
     _write_json(manifest_path, manifest)
 
@@ -458,6 +528,7 @@ def collect(args: argparse.Namespace) -> int:
     max_failures = getattr(args, "max_consecutive_failures", 3) or 0
     consecutive_failures = 0
     stopped = False
+    budget_stop = False
     ungraded: List[str] = []
     with open(work_path, "a", encoding="utf-8", newline="\n") as work:
         for i, task in enumerate(tasks):
@@ -465,6 +536,17 @@ def collect(args: argparse.Namespace) -> int:
             if tid in done:
                 continue
             prompt = task["prompt"]
+            if not settings.mock_mode and budget is not None:
+                # Defence in depth: never start a task whose ceiling could
+                # cross the total budget (unknown-billing failures in this run
+                # are charged at their ceiling, which can exhaust it).
+                task_cap = sum(_call_ceilings(prompt, args))
+                if spent + task_cap > budget + 1e-12:
+                    print(f"stopping: charged ${spent:.4f}; the next task's ceiling "
+                          f"${task_cap:.4f} would exceed the total budget "
+                          f"${budget:.4f}", file=sys.stderr)
+                    budget_stop = True
+                    break
             attempt_counts[tid] += 1
             print(f"[{i + 1}/{len(tasks)}] {tid} (attempt {attempt_counts[tid]})",
                   flush=True)
@@ -528,6 +610,8 @@ def collect(args: argparse.Namespace) -> int:
                 consecutive_failures += 1
                 print(f"  attempt failed ({row['error']['tier']}: "
                       f"{row['error']['type']})", file=sys.stderr)
+            row["api_spend"] = row_spend(row, args)
+            spent += row["api_spend"]["charged_for_budget_usd"]
             work.write(json.dumps(row, ensure_ascii=False) + "\n")
             work.flush()
             if max_failures and consecutive_failures >= max_failures:
@@ -545,6 +629,8 @@ def collect(args: argparse.Namespace) -> int:
         )
 
     code = finalize(args, done)
+    if budget_stop:
+        return 4
     return 3 if stopped else code
 
 
@@ -742,6 +828,8 @@ def finalize(args: argparse.Namespace, done: Dict[str, dict]) -> int:
     except (OSError, ValueError, KeyError, TypeError):
         task_ids = None
     accounting = account(task_ids, attempts, done, final_quality)
+    accounting["api_spend"] = spend_summary(attempts, args,
+                                            getattr(args, "max_api_cost_usd", None))
 
     manifest: Dict[str, Any] = {}
     manifest_path = _manifest_path(args.out)
@@ -823,6 +911,16 @@ def _print_accounting(a: Dict[str, Any]) -> None:
         f" | strong calls skipped: {a['strong_calls']['skipped']}"
         + (f" {a['strong_calls']['skipped_by_reason']}" if a['strong_calls']['skipped'] else "")
     )
+    spend = a.get("api_spend")
+    if spend:
+        print(
+            f"api spend{' (MOCK token counts)' if spend['mock'] else ''}: "
+            f"recorded ${spend['recorded_usd']:.4f}, charged against budget "
+            f"${spend['charged_for_budget_usd']:.4f}"
+            + (f" of ${spend['budget_usd']:.4f}" if spend["budget_usd"] is not None else "")
+            + f" | {spend['paid_calls']} paid call(s), "
+            f"{spend['unknown_billing_calls']} with unknown billing"
+        )
 
 
 def main() -> int:
@@ -845,8 +943,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--max-api-cost-usd", type=float, default=None,
-        help="required for paid collection; must cover the configured "
-        "API-cost ceiling of unfinished tasks",
+        help="required for paid collection: the TOTAL budget for this --out "
+        "across all runs and resumes; must cover the amount already charged "
+        "plus the configured ceiling of unfinished tasks",
     )
     parser.add_argument(
         "--local-context-tokens", type=int, default=None,

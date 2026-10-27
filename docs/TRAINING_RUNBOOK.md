@@ -1,9 +1,10 @@
 # Training runbook — outcome collection for the new model pair
 
-Status (2026-10-26): **preparation only.** Paid collection is blocked until
-the owner approves it, the actual model-pair configuration is confirmed
-(Step A), and retry/resume spending controls are settled. Nothing here has
-been run against a real model.
+Status (2026-10-28): Steps A–B done on the inference machine; model pair
+recorded (§2); context frozen at 2,048; prices verified; cumulative
+spending control in place. **The paid pilot (Step C) is still blocked until
+the owner approves the exact command and budget.** Nothing here has been run
+against a real model.
 
 Related: `docs/LEARNED_ROUTING.md` (pipeline, compatibility rules),
 `docs/AGENT_HANDOFF.md` (progress), `tasks/pair_v2/manifest.json`
@@ -23,19 +24,29 @@ All Git operations are done by the owner or teammate, not by an agent.
 
 ## 2. Deployment values
 
+Step A identity report received 2026-10-28 (`identity.json`, generated
+2026-10-27 on the inference machine: macOS 26.6 arm64, Python 3.14.8). It
+has no unknown fields, and its rendered request hashes for both tiers equal
+those produced by commit `1772fdd`, so the machine runs the same request
+code and system prompts.
+
 | Value | Status |
 |---|---|
-| Local model tag (reported as Qwen3.5-27B) | **Pending** — the checkout only contains `qwen3.8:27b` (verified at 2,048 context). Step A records the exact tag |
-| Digest, quantisation, template and parameter hashes | **Pending** — recorded by Step A |
-| Local backend | **Pending** — expected `ollama`; confirm in Step A |
-| Local context window (`LOCAL_CONTEXT_TOKENS`) | **Pending** — must be set explicitly; no evidence beyond 2,048 tokens for the 27B model (see §8) |
-| Local output cap (`LOCAL_MAX_NEW_TOKENS`) | Default 512 in code — confirm before the pilot |
-| Thinking mode | `think: false` (sent by `ollama_client.build_chat_payload`) |
-| Temperature | 0 for both tiers |
-| Strong model | **Pending** — code default `accounts/fireworks/models/gpt-oss-120b`; confirm on the inference machine |
-| Strong output cap (`STRONG_MAX_TOKENS`) | Default 4096 — confirm |
-| Fireworks prices | **Pending verification** — repository values are $0.15 in / $0.60 out per million tokens for the strong tier; unverified |
-| Ollama runtime version | **Pending** — recorded by Step A; freeze it for the final experiment |
+| Local model | **Recorded:** exact Ollama tag `qwen3.8:27b` (teammate: do not rename it); Ollama reports family `qwen3_5`, 27.8B parameters, safetensors format. Reports should name the exact tag and cite the family as Ollama metadata |
+| Digest | `47951e4a666180bc2aedfc93c169472f2de783696fe196efbf063f5730ecf163` |
+| Quantisation | `nvfp4` |
+| Template / parameters SHA-256 | `b507b9c2…fb315` / `3c1eabbc…00980` (full values in `identity.json`) |
+| Local backend | `ollama`, loopback host |
+| Local context window | **Frozen at 2,048** for this study (owner decision 2026-10-28; the only tested value). Not a large-context configuration (see §8). Estimated (chars/4, not a tokenizer count) largest pilot request ≈ 391 system + 572 prompt + 512 output ≈ 1,475 tokens |
+| Local output cap | 512 |
+| Thinking mode / temperature | `think: false` / 0 |
+| Strong model | `accounts/fireworks/models/gpt-oss-120b`, output cap 4096, temperature 0 |
+| Ollama runtime version | 0.40.0 — freeze for the final experiment |
+| Fireworks key on the inference machine | **Not set** (reported as unset) — required before Step C; set privately in the ignored `.env` |
+| Fireworks prices | **Verified 2026-10-28** on fireworks.ai/models/fireworks/gpt-oss-120b: $0.15 input / $0.015 cached input / $0.60 output per million tokens (131k context). Equal to the repository rates; the ceiling charges all input at $0.15 (never the cached rate) |
+| Offline tests on the inference machine | **Received** (teammate report, 2026-10-27): harness passed; 329 tests, OK (the 4 Windows-only failures pass on macOS) |
+| Step B mock dry run | **Received:** 60/60 completed, 0 usable, 60 awaiting review per tier, collector exit 1, `verify` consistent — as expected |
+| Source used | Commit `1772fdd` exported without `.git` (read-only blob export), so a manifest written there records `repository_commit: null`. For Step C, run from a real checkout of the approved commit so the manifest records it |
 
 ## 3. Step A — identity report and offline checks (no paid calls)
 
@@ -92,33 +103,45 @@ collector ("no graded records"), `consistent` from `verify`, and a
 Purpose: check collection, grading and accounting on 60 tasks (20 GSM8K, 20
 MMLU, 5 from each of four BBH subtasks). It is **not** a statistical result.
 
-Command for the approval request (do not run before approval):
+Run from a real Git checkout of the approved commit (so the manifest
+records it), with the Step A exports set and a Fireworks key in the ignored
+`.env`. Command for the approval request (do not run before approval):
 
 ```sh
 .venv/bin/python scripts/collect_outcomes.py --tasks tasks/pair_v2/pilot.json \
-  --out data/pilot_v2.json --run-paid-calls --max-api-cost-usd '<approved budget>' \
-  --local-context-tokens "$LOCAL_CONTEXT_TOKENS" --max-consecutive-failures 3
+  --out data/pilot_v2.json --run-paid-calls --max-api-cost-usd 0.50 \
+  --local-context-tokens 2048 --max-consecutive-failures 3
 ```
+
+`--max-api-cost-usd` is the **total budget for this `--out` across every
+run and resume**. Each attempt records its spend; a call that failed after
+being sent, or whose usage the provider omitted, is charged at its full
+per-call ceiling. A run is refused when already-charged + the ceiling for
+unfinished tasks exceeds the budget, and stops (exit 4) before a task that
+could cross it.
 
 Facts for the approval request:
 
 | Item | Value |
 |---|---|
-| Models | Local tier: Pending (Step A). Strong tier: Pending Fireworks model |
-| Data sent externally | The 60 pilot prompts (public benchmark items) and the system prompt, to Fireworks only |
-| Calls | 60 local generations; 60 Fireworks calls (one attempt per task), plus any transport retries inside `remote_client` (429/5xx/connection errors, up to `MAX_RETRIES=3`) |
-| Configured cost ceiling | $0.1544 at the repository's unverified rates, assuming every reply uses the full 4,096-token cap. Excludes transport retries and repeat attempts on resume; not a worst case. Verify prices first |
-| Runtime | Pending — not measured for these prompts on the 27B model |
+| Models | Cheap: local Ollama `qwen3.8:27b` (digest `47951e4a…ecf163`, nvfp4, Ollama 0.40.0), context 2,048, output cap 512, think off, temperature 0. Strong: Fireworks `accounts/fireworks/models/gpt-oss-120b`, output cap 4,096, temperature 0 |
+| Data sent externally | The 60 pilot prompts (public GSM8K/MMLU/BBH items) and the base system prompt, to Fireworks only. No chat data, uploads or credentials |
+| Calls | 60 local generations (free; local compute); 60 Fireworks calls, one attempt per task. Transport retries inside `remote_client` (429/5xx/connection errors, up to 3) are possible and assumed unbilled — not verified |
+| Cost | Configured ceiling $0.1544 at verified prices, assuming every reply uses the full 4,096-token cap and every input byte is a token. Typical spend should be far lower (the previous 60-task 4B pilot spent $0.0075), but that is not a prediction for this pair |
+| Budget ceiling | Proposed total $0.50: the full ceiling plus room to retry failed tasks on resume (failed calls are charged at their ceiling) |
+| Runtime | Not measured for these prompts. Earlier smoke tests on this model: ~29 s cold load; ~7 output tokens/s (25 tokens in 3.5 s; 45 in 7.1 s). At 512 output tokens a local answer could take ~75 s; a rough pilot range is 20–90 minutes |
+| Known risk | The Ollama request timeout is 120 s: a cold model load plus a long answer can time out and be recorded as an infrastructure failure. Warm the model first. Earlier 27B trials showed heavy swap growth and one runtime outage on the 24 GB Mac — keep other large apps closed |
 | Output | `data/pilot_v2.json` plus `.manifest.json`, `.work.jsonl`, `.summary.json` (all Git-ignored) |
-| Resume | Rerun the same command: completed tasks are skipped, failed ones retried with a new attempt ID. Refused if the deployment, label definition or task file changed |
-| Stops | Budget check fails before any call; 3 consecutive failed attempts (exit 3); Ctrl-C (rows already written are kept) |
+| Resume | Rerun the same command: completed tasks are skipped, failed ones retried with a new attempt ID; refused if the deployment, label definition or task file changed, or if the cumulative budget would be exceeded |
+| Stops | Budget refusal before any call; 3 consecutive failed attempts (exit 3); budget reached mid-run (exit 4); Ctrl-C (rows already written are kept) |
 
 The cheap tier runs first; if it fails, the Fireworks call is skipped and
 recorded (`strong_skipped_reason: cheap_tier_failed`).
 
 Larger runs, for later approval: `development_remaining.json` has 390 tasks
-(configured ceiling $1.0018); `final_test.json` has 150 (configured ceiling
-$0.3862, reserved — see §7).
+(configured ceiling $1.0018 at the verified prices); `final_test.json` has
+150 (configured ceiling $0.3862, reserved — see §7). Use a separate `--out`
+and budget for each.
 
 ## 6. Step D — verification, review and transfer
 

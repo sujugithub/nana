@@ -305,6 +305,114 @@ class TestAccountingSummary(SettingsCase):
         self.assertEqual(acc["usable_paired_outcomes"], 1)
 
 
+class TestCumulativeBudget(SettingsCase):
+    """Paid-mode budget across runs, with patched (offline) Fireworks clients."""
+
+    def setUp(self):
+        super().setUp()
+        settings.mock_mode = False  # paid path; generate() is patched below
+
+    @staticmethod
+    def _completion(client, completion_tokens=5):
+        from schemas import Completion
+
+        return Completion(text="answer to it", prompt_tokens=10,
+                          completion_tokens=completion_tokens, source="x",
+                          model_name=client.model_name, provider="fireworks",
+                          usage_source="provider")
+
+    def _patched(self, strong_fails=(), strong_tokens=5):
+        def cheap(client, prompt):
+            return self._completion(client)
+
+        def strong(client, prompt):
+            if any(f"({t})" in prompt for t in strong_fails):
+                raise RemoteError("simulated read timeout")
+            return self._completion(client, strong_tokens)
+        return (mock.patch.object(CheapRemoteClient, "generate", cheap),
+                mock.patch.object(StrongRemoteClient, "generate", strong))
+
+    def _cap(self, args, task_id):
+        return sum(co._call_ceilings(f"Name a colour ({task_id}).", args))
+
+    def test_row_spend_charges_unknown_billing_at_ceiling(self):
+        args = self.args(self.write_tasks(tasks("a")))
+        base = {"prompt": "Name a colour (a).", "cheap_provider": "fireworks",
+                "local_usage_source": "provider", "local_prompt_tokens": 10,
+                "local_completion_tokens": 5}
+        cheap_cap, strong_cap = co._call_ceilings(base["prompt"], args)
+        cheap_cost = (10 * args.cheap_in_per_mtok + 5 * args.cheap_out_per_mtok) / 1e6
+        failed = co.row_spend(dict(base, status="error", strong_call="failed",
+                                   error={"tier": "strong"}), args)
+        self.assertAlmostEqual(failed["charged_for_budget_usd"], cheap_cost + strong_cap)
+        self.assertAlmostEqual(failed["recorded_usd"], cheap_cost)
+        self.assertEqual((failed["paid_calls"], failed["unknown_billing_calls"]), (2, 1))
+        skipped = co.row_spend({"prompt": base["prompt"], "cheap_provider": "fireworks",
+                                "status": "error", "strong_call": "skipped",
+                                "error": {"tier": "cheap"}}, args)
+        self.assertAlmostEqual(skipped["charged_for_budget_usd"], cheap_cap)  # cheap only
+        self.assertEqual(skipped["paid_calls"], 1)
+        estimated = co.row_spend(dict(base, status="complete", strong_call="completed",
+                                      remote_usage_source="estimated",
+                                      remote_prompt_tokens=1, remote_completion_tokens=1), args)
+        self.assertEqual(estimated["unknown_billing_calls"], 1)
+        local = co.row_spend({"prompt": base["prompt"], "cheap_provider": "local",
+                              "status": "error", "strong_call": "skipped",
+                              "error": {"tier": "cheap"}}, args)
+        self.assertEqual((local["paid_calls"], local["charged_for_budget_usd"]), (0, 0.0))
+
+    def test_budget_is_cumulative_across_resumed_runs(self):
+        path = self.write_tasks(tasks("a", "b"))
+        args = self.args(path, max_consecutive_failures=0)
+        args.max_api_cost_usd = self._cap(args, "a") + self._cap(args, "b") + 1e-9
+        cheap, strong = self._patched(strong_fails=("a", "b"))
+        with cheap, strong:
+            self.assertEqual(self.run_collect(args)[0], 1)  # ran; nothing graded
+        spend = self.read(args, ".summary.json")["accounting"]["api_spend"]
+        self.assertEqual(spend["unknown_billing_calls"], 2)
+        # A per-run check would allow this resume (unfinished ceiling <= budget);
+        # the cumulative check refuses it because failures were charged.
+        before = open(args.out + ".work.jsonl", "rb").read()
+        cheap, strong = self._patched()
+        with cheap, strong:
+            code, err = self.run_collect(args)
+        self.assertEqual(code, 2)
+        self.assertIn("already charged", err)
+        self.assertEqual(open(args.out + ".work.jsonl", "rb").read(), before)
+
+    def test_budget_required_and_recorded(self):
+        args = self.args(self.write_tasks(tasks("a")))
+        args.max_api_cost_usd = None
+        code, err = self.run_collect(args)
+        self.assertEqual(code, 2)
+        self.assertIn("TOTAL budget", err)
+        args.max_api_cost_usd = 1.0
+        cheap, strong = self._patched()
+        with cheap, strong:
+            self.assertEqual(self.run_collect(args)[0], 0)
+        run = self.read(args, ".manifest.json")["runs"][0]
+        self.assertEqual((run["total_budget_usd"], run["charged_before_run_usd"]), (1.0, 0.0))
+        spend = self.read(args, ".summary.json")["accounting"]["api_spend"]
+        self.assertEqual((spend["budget_usd"], spend["paid_calls"], spend["mock"]),
+                         (1.0, 2, False))
+        self.assertGreater(spend["recorded_usd"], 0)
+        row = co._load_attempts(args.out + ".work.jsonl")[0]
+        self.assertEqual(row["api_spend"]["unknown_billing_calls"], 0)
+
+    def test_run_stops_before_a_task_that_could_cross_the_budget(self):
+        args = self.args(self.write_tasks(tasks("a", "b")))
+        args.max_api_cost_usd = self._cap(args, "a") + self._cap(args, "b") + 1e-9
+        # Provider reports more tokens than the configured cap (an anomaly):
+        # actual charges exceed the reservation, so task "b" must not start.
+        cheap, strong = self._patched(strong_tokens=10_000_000)
+        with cheap, strong:
+            code, err = self.run_collect(args)
+        self.assertEqual(code, 4)
+        self.assertIn("would exceed the total budget", err)
+        self.assertEqual([r["task_id"] for r in co._load_attempts(args.out + ".work.jsonl")],
+                         ["a"])
+
+
 class TestProvenanceRecorded(SettingsCase):
     """S2 correction H: the provenance fields already collected are present."""
 
@@ -327,7 +435,8 @@ class TestProvenanceRecorded(SettingsCase):
                          {"runtime_version", "format", "family", "parameter_size"})
         run = manifest["runs"][0]
         self.assertEqual(set(run), {"run_id", "started_at", "repository_commit",
-                                    "local_runtime_version"})
+                                    "local_runtime_version", "total_budget_usd",
+                                    "charged_before_run_usd", "rates_per_mtok"})
         self.assertIn("informational", manifest["compatibility"]["pair_identity"])
 
 

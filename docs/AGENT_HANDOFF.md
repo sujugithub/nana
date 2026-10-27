@@ -5,9 +5,8 @@ Facts only; no secrets.
 
 ## 1. Timestamp
 
-2026-10-26 16:00 Australia/Sydney (AEDT). Milestone: S3 (pilot preparation,
-licences, final-test isolation, runbook) complete; awaiting the S3 manual
-Git checkpoint.
+2026-10-28 Australia/Sydney (AEDT). Milestone: S3 committed and pushed
+(`1772fdd`); teammate identity report received and recorded (§16).
 
 ## 2. Current objective
 
@@ -227,6 +226,24 @@ use the `-1` manual-grade path; one-sided verdicts accepted.
   development outcomes and evaluating once on a separately collected final
   test needs a separately approved change.
 
+### S3.1 cumulative spending control (owner-approved 2026-10-28)
+
+- `scripts/collect_outcomes.py`: `--max-api-cost-usd` is now the TOTAL
+  budget for an `--out` across all runs and resumes. `row_spend()` records
+  per-attempt `api_spend` (recorded cost from provider usage x configured
+  rates; calls that failed after sending, or with estimated usage, charged
+  at their full per-call ceiling; skipped/local calls 0). Run refused when
+  already-charged + unfinished ceiling > budget; mid-run stop (exit 4)
+  before a task whose ceiling could cross it. Run entries record
+  `total_budget_usd`, `charged_before_run_usd`, `rates_per_mtok`; summary
+  adds `accounting.api_spend`. Mock runs are not budget-enforced (as
+  before). Transport retries assumed unbilled (not verified).
+- `tests/test_collection.py`: 4 new tests (row spend classes, cumulative
+  refusal on resume, budget required/recorded, mid-run stop); provenance
+  test's expected run-entry keys extended.
+- Results: 333 run (329 + 4 new), 329 pass, same 4 Windows failures, both
+  encoding modes; harness PASS.
+
 Existing tests changed (no assertion weakened):
 - `tests/test_learned_router.py`: two synthetic-artifact constructions pass
   `allow_unverified=True`; `test_learned_mode_loads_artifact` now uses a
@@ -436,14 +453,35 @@ None.
 
 ## 16. Blockers and open decisions
 
-- **Pending — teammate evidence:** exact local model identity (tag,
-  digest, quantisation, backend), intended context length, generation
-  settings. Checkout contains no Qwen3.5-27B configuration; only
-  `qwen3.8:27b` (verified at 2,048 context). `ollama_client.model_identity`
-  can now record digest/quantisation on the inference machine.
-- **Pending — teammate evidence:** large-context capability (none beyond
-  2,048 tokens evidenced).
-- **Pending:** strong model actually configured on the inference machine.
+- **Identity received (2026-10-28, `identity.json`, not committed):**
+  `qwen3.8:27b` via Ollama 0.40.0 (family `qwen3_5`, 27.8B, nvfp4,
+  safetensors), digest `47951e4a…ecf163`, context 2,048, output cap 512,
+  think false, temperature 0 -> `accounts/fireworks/models/gpt-oss-120b`
+  (cap 4096). No unknown fields. Compared offline with this checkout:
+  `compatible`, both request hashes equal; strong system prompt hash equals
+  the previous pair's collection. Recorded in `docs/TRAINING_RUNBOOK.md` §2.
+- **Steps A–B report received** (`steps-ab-report.md`, 2026-10-28;
+  `identity.json` SHA-256 `d1265249…8c96f` verified): run from commit
+  `1772fdd` exported without `.git`; harness passed; 329 tests OK on macOS
+  (the 4 Windows failures are platform-only); mock dry run matched the
+  runbook. Teammate states the exact tag is `qwen3.8:27b` and must not be
+  renamed; reports use that tag plus Ollama's family `qwen3_5`.
+  Teammate env differs informationally (numpy 2.5.3, fastapi 0.142.2;
+  scikit-learn 1.9.1 equal). For Step C, run from a real checkout so the
+  manifest records the commit.
+- **Decided 2026-10-28 (owner):** context frozen at 2,048 tokens.
+  Estimated (chars/4) largest pilot request ≈ 1,475 tokens.
+- **Prices verified 2026-10-28** (Fireworks model page for
+  `accounts/fireworks/models/gpt-oss-120b`): $0.15 in / $0.015 cached in /
+  $0.60 out per 1M tokens; equal to repository rates.
+- **Cumulative spending control added (owner-approved):** see §5 S3.1.
+- **Pending:** Fireworks key on the inference machine (reported unset);
+  owner approval of the exact pilot command and budget (runbook §5;
+  proposed total budget $0.50, configured ceiling $0.1544).
+- **Known pilot risk:** Ollama request timeout is 120 s
+  (`ollama_client.request`); cold load (~29 s observed) plus a 512-token
+  answer at ~7 tokens/s can approach it — warm the model first; failures
+  are recorded as infrastructure failures.
 - No outcomes exist for any current model pair.
 - **Learned Chat routing: pending.** Batch routing is the initial
   validation target. Any request-scoped override makes the path
@@ -463,11 +501,13 @@ None.
 
 ## 17. Exact next action
 
-Owner performs the S3 checkpoint, then sends runbook Steps A–B to the
-teammate and returns `identity.json` plus the test/dry-run results. Agent
-work after that: confirm the pair from `identity.json`, prepare the pilot
-approval request with verified pricing, and propose the S4 change.
+Owner commits S3.1, then approves or declines the pilot (runbook §5:
+exact command, budget $0.50 proposed). If approved: teammate adds the key
+privately, warms the model, runs from a real checkout of the committed
+branch, verifies, and transfers the files per runbook §6. Agent does not run
+it.
 
 ## 18. Manual Git checkpoint due?
 
-Yes — S3 "Pilot preparation and runbook".
+Yes — S3.1 "Cumulative spending control and confirmed pair" (collector,
+tests, runbook, handoff).
