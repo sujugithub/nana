@@ -161,8 +161,7 @@ fixtures; `logs/usage.jsonl` is the append-only audit trail; `data/`,
 `data/real_qwen_pro_600.json` evidence set is committed so the pilot is
 reproducible; other datasets, trained routers, and reports remain gitignored
 working products. See `docs/LEARNED_ROUTING.md`. `docs/HANDOFF.md` is the
-current-state takeover note; `docs/history/` is archival provenance and is
-not current guidance.
+current-state takeover note.
 
 One more sharp edge: **`artifacts/*.joblib` are executables.** joblib is
 pickle-based, so loading an artifact runs code embedded in it. Only ever

@@ -4,10 +4,6 @@ Point a new session (or a new teammate) at this file. It says what exists,
 what the measured evidence actually supports, what is safe to run, and what
 to do next. Last updated **2026-10-02**.
 
-For the earlier competition-era handoff see
-[`history/HANDOFF.md`](history/HANDOFF.md)
-— that describes rules that no longer apply and is provenance only.
-
 ---
 
 ## 0. One-paragraph status

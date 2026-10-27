@@ -36,11 +36,9 @@ See [`EVALUATION.md`](EVALUATION.md) for how we intend to answer that,
 [`ROADMAP.md`](ROADMAP.md) for what we're building next.
 
 > **Project history.** This began as a 4-day prototype for an AMD developer
-> competition. The competition-era documents are archived in
-> [`docs/history/`](docs/history/) for provenance — including the measured
-> results — but they describe rules that no longer apply. In particular the
-> competition scored local tokens as **zero**; the capstone replaces that with
-> a real cost model.
+> competition, whose rules no longer apply. In particular the competition
+> scored local tokens as **zero**; the capstone replaces that with a real cost
+> model. The competition-era documents remain in Git history.
 
 ## Design rationale
 
