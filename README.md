@@ -5,6 +5,19 @@ connect the T7 and run `.venv/bin/python scripts/start_workspace.py --real`.
 See [handoff.md](handoff.md) for the current application state and next steps,
 and [workspace setup](docs/WORKSPACE.md) for installation and connections.
 
+## Video walkthrough
+
+[Watch or download the Nana stakeholder video (1080p, 10 minutes)](https://github.com/sujugithub/nana/releases/tag/stakeholder-demo-2026-10-21).
+It demonstrates a complete local workflow, the workspace, architecture and the
+code behind an ordinary request and a reviewed tool action.
+[Transcript](https://github.com/sujugithub/nana/releases/download/stakeholder-demo-2026-10-21/transcript.md)
+and [English captions](https://github.com/sujugithub/nana/releases/download/stakeholder-demo-2026-10-21/nana-stakeholder.srt)
+are included. Recorded **21 October 2026** using real screenshots, animated
+diagrams and edited Google Notebook synthetic narration. It is a dated project
+snapshot; see [current router notes](docs/ARCH_ROUTER_NOTICE.md) for later work.
+
+## Routing research
+
 A learned routing layer that decides, **per request**, whether the configured
 cheap tier is likely to be adequate or the task needs the strong tier. It has
 two selectable deployments, so the same FYP can be demonstrated cheaply now
